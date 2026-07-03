@@ -233,12 +233,9 @@ export default function Dashboard() {
   const confidenceBlocks = Math.round(confidencePct / 10);
   const confidenceBar = Array.from({length: 10}).map((_, i) => i < confidenceBlocks ? "▰" : "▱").join("");
 
-  let marketSummary = "Market conditions are favorable for trend continuation. Confidence remains high.";
-  if (primaryRej === "ATR_LOW") {
-    marketSummary = "Low volatility conditions detected across major pairs. Momentum confirmations remain weak, causing elevated rejection rates. Current market regime favors capital preservation until volatility expansion occurs.";
-  } else if (primaryRej === "MOMENTUM") {
-    marketSummary = "Momentum is fading or contradictory across multiple timeframes. Trend strength is inadequate for high-probability setups. Awaiting clear directional volume.";
-  }
+  const marketSummary = totalEvals > 0
+    ? `${acceptedCount} opportunities, ${filteredCount} filtered. Top rejection: ${primaryRej}${secondaryRej !== "NONE" ? ` | Next: ${secondaryRej}` : ""}.`
+    : "Waiting for live market evaluations.";
 
   const evaluatedCount = isWeekend() ? 10 : 20;
   const momentumRejCount = rejectionStats["MOMENTUM"] || 0;
@@ -396,7 +393,7 @@ export default function Dashboard() {
                      <span className="text-[#8A95A5]">
                        {state.confidenceHistory && state.confidenceHistory.length > 0 
                          ? state.confidenceHistory.map(h => `${h}%`).join(' | ') 
-                         : "AWAITING DATA"}
+                          : `${stats.scanCycles} scans | ${(state.activeOpportunities || []).length} active`}
                      </span>
                   </div>
                </div>
@@ -404,11 +401,11 @@ export default function Dashboard() {
             <div className="flex flex-col items-end text-right font-mono text-[10px] gap-1">
                <div className="flex items-center gap-2">
                   <span className="text-[#8A95A5]">CURRENT REGIME:</span>
-                  <span className="text-white font-bold">{volatility} {riskEnvironment === "PRESERVATION" ? "(PRESERVATION)" : ""}</span>
+                   <span className="text-white font-bold">{primaryRej === "NONE" ? "LIVE" : primaryRej}</span>
                </div>
                <div className="flex items-center gap-2">
                   <span className="text-[#8A95A5]">TREND:</span>
-                  <span className="text-[#3B82F6] font-bold">{trendStrength}</span>
+                   <span className="text-[#3B82F6] font-bold">{secondaryRej === "NONE" ? "LIVE" : secondaryRej}</span>
                </div>
                <div className="flex items-center gap-2">
                   <span className="text-[#8A95A5]">THROUGHPUT:</span>
@@ -730,7 +727,7 @@ export default function Dashboard() {
                <div className="flex items-center justify-between mb-2">
                  <span className="text-[#8A95A5] block text-[10px] uppercase font-sans tracking-widest">FILTER ANALYTICS</span>
                  <span className="text-[#FF4D6D] text-[10px] font-mono border border-[#FF4D6D]/20 bg-[#FF4D6D]/10 px-1 rounded-sm">
-                   {primaryRej === "EMA_FLAT" ? "MODE: 4X-FILTER" : `PRI: ${primaryRej === "ATR_LOW" ? "RANGE COMPRESSION" : primaryRej === "MOMENTUM" ? "SIGNAL CONFLICT" : primaryRej === "STOCHASTIC" ? "SIGNAL FADE" : primaryRej === "VWAP" ? "DIRECTION LOCK" : primaryRej === "COUNTER_TREND" ? "REVERSAL BLOCK" : primaryRej === "ACTIVE_TRADE_EXISTS" ? "POSITION ACTIVE" : primaryRej}`}
+                    {primaryRej === "NONE" ? "PRI: LIVE" : `PRI: ${primaryRej === "ATR_LOW" ? "RANGE COMPRESSION" : primaryRej === "MOMENTUM" ? "SIGNAL CONFLICT" : primaryRej === "STOCHASTIC" ? "SIGNAL FADE" : primaryRej === "VWAP" ? "DIRECTION LOCK" : primaryRej === "COUNTER_TREND" ? "REVERSAL BLOCK" : primaryRej === "ACTIVE_TRADE_EXISTS" ? "POSITION ACTIVE" : primaryRej}`}
                  </span>
                </div>
                <div className="flex flex-col gap-1.5 font-mono text-[10px]">
@@ -749,7 +746,7 @@ export default function Dashboard() {
                </div>
                {rejectionData.length >= 2 && totalRejections > 0 && (
                  <div className="mt-3 text-[9px] font-sans text-[#8A95A5] border-t border-[#1A2332] pt-2">
-                   Top 2 causes explain {Math.round(((rejectionData[0].value + rejectionData[1].value) / totalRejections) * 100)}% of all filtered evaluations
+                    Top 2 causes explain {Math.round(((rejectionData[0].value + rejectionData[1].value) / totalRejections) * 100)}% of filtered evaluations
                  </div>
                )}
             </div>
