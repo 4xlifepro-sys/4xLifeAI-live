@@ -201,13 +201,15 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   ];
 
   if (!APPROVED_PAIRS.includes(pair)) {
-    return { signal: null, scores: null, regime: 'UNKNOWN' };
+    return { signal: null, scores: null, regime: 'UNKNOWN', regimeReason: `Pair ${pair} is not in the approved list` };
   }
 
   const htf = filterClosedCandles(htfRaw, 4 * 60 * 60 * 1000);
   const setup = filterClosedCandles(setupRaw, 5 * 60 * 1000);
 
-  if (htf.length < 50 || setup.length < 50) return { signal: null, scores: null, regime: 'UNKNOWN' };
+  if (htf.length < 50 || setup.length < 50) {
+    return { signal: null, scores: null, regime: 'UNKNOWN', regimeReason: `Insufficient candles (H4=${htf.length}, M5=${setup.length})` };
+  }
 
   // 1. 4H Trend Bias
   const htfCloses = htf.map(c => c.close);
@@ -225,7 +227,7 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
      }
   }
 
-  if (last4HEma === null) return { signal: null, scores: null, regime: 'UNKNOWN' };
+  if (last4HEma === null) return { signal: null, scores: null, regime: 'UNKNOWN', regimeReason: 'H4 EMA50 unavailable' };
 
   let bias: 'BUY' | 'SELL' | 'NONE' = 'NONE';
   const isRising = emaSlopePercent > 0.01 && htfEma50[lastHtfIdx]! > htfEma50[lastHtfIdx - 5]!;
@@ -259,7 +261,9 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   const currentAtr = atr14[lastIdx];
   const currentVwap = vwap[lastIdx];
 
-  if (currentEma === null || currentK === null || currentD === null || currentAtr === null || currentVwap === null) return { signal: null, scores: null, regime: 'UNKNOWN' };
+  if (currentEma === null || currentK === null || currentD === null || currentAtr === null || currentVwap === null) {
+    return { signal: null, scores: null, regime: 'UNKNOWN', regimeReason: 'M5 indicators unavailable (EMA/K/D/ATR/VWAP)' };
+  }
 
   const currentCandleRange = Math.abs(current5M.high - current5M.low);
   const body = Math.abs(current5M.close - current5M.open);
@@ -315,7 +319,7 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   const scores = { strengthScore, momentumScore, atrScore, trendScore, emaCrosses };
 
   if (bias === 'NONE') {
-     return { signal: null, scores, regime, regimeReason };
+     return { signal: null, scores, regime, regimeReason: regimeReason || 'HTF bias neutral' };
   }
 
   const direction: 'LONG' | 'SHORT' = bias === 'BUY' ? 'LONG' : 'SHORT';

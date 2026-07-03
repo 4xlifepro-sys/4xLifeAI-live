@@ -17,6 +17,7 @@ export interface MarketState {
   trendScore?: number;
   regime?: string;
   regimeReason?: string;
+  rejectionReason?: string;
 }
 
 export interface PairScanStatus {

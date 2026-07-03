@@ -610,7 +610,8 @@ export async function startScanner() {
         atrScore: scores?.atrScore ?? 0,
         trendScore: scores?.trendScore ?? 0,
         regime: regime,
-        regimeReason: regimeReason
+        regimeReason: regimeReason,
+        rejectionReason: finalSignal ? (finalSignal.rejection_reason || finalSignal.aiReason || '') : (regimeReason || 'NO_SIGNAL')
       });
 
       if (finalSignal) {
@@ -648,6 +649,12 @@ export async function startScanner() {
 
         if (isDuplicate) {
             scannerState.stats.duplicateEvents++;
+        }
+
+        if (signal.tier === 'Reject') {
+          console.log(`REJECTED - ${pair} - ${signal.aiReason || signal.rejection_reason || regimeReason || 'unknown reason'}`);
+        } else {
+          console.log(`[SCAN] ${pair} - ${signal.direction} - ${signal.tier} - ${signal.aiConfidence}%`);
         }
 
         if (!isDuplicate) {
@@ -867,7 +874,8 @@ export async function startScanner() {
         atrScore: 0,
         trendScore: 0,
         regime: 'UNKNOWN',
-        regimeReason: 'Stale / API Error'
+        regimeReason: 'Stale / API Error',
+        rejectionReason: e.message || 'API_ERROR'
       });
       if (e.message.includes('unavailable') || e.message.includes('Rate limit')) {
          scannerState.stats.consecutiveApiErrors = (scannerState.stats.consecutiveApiErrors || 0) + 1;

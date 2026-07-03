@@ -638,7 +638,7 @@ export default function Dashboard() {
                    let bgColor = "bg-[#1A2332]/30 border-[#1A2332]";
                    let textColor = "text-[#5D6B80]";
                    let intensityScore = s.strengthScore ?? 0;
-                   let tooltip = `${s.pair}\nRegime: ${s.regime || 'UNKNOWN'}\nBias: ${s.direction}\nMarket Activity Score: ${intensityScore}%\nVolatility Engine: ${s.atrScore ?? 0}\nMomentum Engine: ${s.momentumScore ?? 0}\nLast Sweep: ${new Date(s.timestamp || Date.now()).toLocaleTimeString([], { hour12: false })}`;
+                   let tooltip = `${s.pair}\nRegime: ${s.regime || 'UNKNOWN'}\nBias: ${s.direction}\nReason: ${s.rejectionReason || s.regimeReason || 'N/A'}\nMarket Activity Score: ${intensityScore}%\nVolatility Engine: ${s.atrScore ?? 0}\nMomentum Engine: ${s.momentumScore ?? 0}\nLast Sweep: ${new Date(s.timestamp || Date.now()).toLocaleTimeString([], { hour12: false })}`;
                    
                    if (s.tier !== "STALE") {
                      if (s.regime === "TRENDING") {
