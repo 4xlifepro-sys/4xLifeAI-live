@@ -510,6 +510,44 @@ async function startServer() {
     });
   });
 
+  const priceCache: { timestamp: number; data: any } = { timestamp: 0, data: [] };
+  const PRICE_CACHE_TTL = 5000;
+
+  app.get("/api/prices", async (req, res) => {
+    if (priceCache.data.length > 0 && Date.now() - priceCache.timestamp < PRICE_CACHE_TTL) {
+      return res.json({ prices: priceCache.data, cached: true });
+    }
+
+    try {
+      const liveModule: any = await import('./server/live-market-feed.js');
+      const client = await liveModule.getClient();
+      const symbols = await client.getSymbols();
+      const approved = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY', 'EURAUD', 'EURNZD', 'GBPAUD', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOTUSD'];
+      const targets = symbols.filter((s: any) => approved.includes(s.symbolName));
+      const results = await Promise.all(targets.map(async (s: any) => {
+        try {
+          const spot = await client.getSymbolInfo(s.symbolName);
+          const detail: any = spot as any;
+          const price = Number(detail?.lastClose ?? detail?.close ?? detail?.bidDecimal ?? detail?.askDecimal ?? 0);
+          return {
+            pair: s.symbolName,
+            price: Number.isFinite(price) ? price : null,
+            digits: detail?.digits ?? null,
+            timestamp: Date.now()
+          };
+        } catch {
+          return { pair: s.symbolName, price: null, digits: null, timestamp: Date.now() };
+        }
+      }));
+
+      priceCache.timestamp = Date.now();
+      priceCache.data = results;
+      res.json({ prices: results, cached: false });
+    } catch (error: any) {
+      res.status(500).json({ error: 'Failed to fetch prices', message: error?.message || String(error) });
+    }
+  });
+
   app.get("/api/config", (req, res) => {
     res.json({
       USDT_TRC20_ADDRESS: process.env.USDT_TRC20_ADDRESS || "TN3zCR5gACd16f7iDJH97GMB7mKRg3opXe",

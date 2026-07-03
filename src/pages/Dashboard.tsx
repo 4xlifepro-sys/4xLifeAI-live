@@ -68,6 +68,8 @@ export default function Dashboard() {
     rejectionStats?: any;
     activeOpportunities?: any[];
     confidenceHistory?: number[];
+    prices?: Record<string, number>;
+    pricesTimestamp?: number;
   }>({
     stats: null,
     pairStatuses: [],
@@ -79,6 +81,8 @@ export default function Dashboard() {
     rejectionStats: {},
     activeOpportunities: [],
     confidenceHistory: [],
+    prices: {},
+    pricesTimestamp: 0,
   });
 
   const [activeTab, setActiveTab] = useState<"ALL" | "OPPORTUNITY" | "ARCHIVE" | "FILTERED" | "STALE" | "LONG" | "SHORT">("ALL");
@@ -111,12 +115,28 @@ export default function Dashboard() {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
-      
+
       if (data) {
         setState(prev => ({ ...prev, activeOpportunities: data }));
       }
     };
     fetchSignals();
+
+    // 2b. Live prices from cTrader-backed endpoint
+    const fetchPrices = async () => {
+      try {
+        const res = await fetch('/api/prices');
+        if (!res.ok) return;
+        const data = await res.json();
+        const map: Record<string, number> = {};
+        (data.prices || []).forEach((p: any) => {
+          if (p.pair && typeof p.price === 'number') map[p.pair] = p.price;
+        });
+        setState(prev => ({ ...prev, prices: map, pricesTimestamp: Date.now() }));
+      } catch {}
+    };
+    fetchPrices();
+    const priceInterval = setInterval(fetchPrices, 6000);
 
     // 3. Supabase Realtime for signals
     let channel: any;
@@ -146,6 +166,7 @@ export default function Dashboard() {
     return () => {
       eventSource.close();
       if (channel) supabase!.removeChannel(channel);
+      clearInterval(priceInterval);
     };
   }, []);
 
@@ -543,6 +564,7 @@ export default function Dashboard() {
                      <thead className="sticky top-0 bg-[#0D1017] z-10 border-b border-[#1A2332] shadow-sm">
                        <tr className="text-[#5D6B80] text-[9px] uppercase font-sans tracking-widest text-left">
                          <th onClick={() => handleSort('pair')} className="py-1.5 px-3 font-medium cursor-pointer hover:text-white transition-colors">Pair {sortConfig.key === 'pair' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                          <th onClick={() => handleSort('price')} className="py-1.5 px-3 font-medium cursor-pointer hover:text-white transition-colors">Price</th>
                          <th onClick={() => handleSort('regime')} className="py-1.5 px-3 font-medium cursor-pointer hover:text-white transition-colors">Regime {sortConfig.key === 'regime' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
                          <th onClick={() => handleSort('direction')} className="py-1.5 px-3 font-medium cursor-pointer hover:text-white transition-colors">Direction {sortConfig.key === 'direction' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
                          <th onClick={() => handleSort('confidence')} className="py-1.5 px-3 font-medium cursor-pointer hover:text-white transition-colors">Confidence {sortConfig.key === 'confidence' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
@@ -554,6 +576,7 @@ export default function Dashboard() {
                        {displaySignals.map((s, i) => (
                          <tr key={s.id || i} className="border-b border-[#1A2332]/50 hover:bg-[#1A2332]/40 transition-colors group">
                            <td className="py-1 px-3 text-white font-bold">{s.pair}</td>
+                            <td className="py-1 px-3 text-[#3B82F6] font-mono">{(state.prices && state.prices[s.pair]) ? state.prices[s.pair] : '-'}</td>
                            <td className="py-1 px-3 relative group/regime">
                              {s.regime ? (
                                <span className={cn(
