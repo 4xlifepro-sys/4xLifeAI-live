@@ -13,6 +13,34 @@ function getPeriod(interval: '1min' | '5min' | '15min' | '4h') {
   return TrendbarPeriod.H4;
 }
 
+function toCandle(bar: any): Candle | null {
+  const baseOpen = Number(bar.open ?? bar.openPrice ?? bar.deltaOpen ?? 0);
+  const baseHigh = Number(bar.high ?? bar.highPrice ?? 0);
+  const baseLow = Number(bar.low ?? bar.lowPrice ?? 0);
+  const baseClose = Number(bar.close ?? bar.closePrice ?? bar.deltaClose ?? 0);
+
+  if (![baseOpen, baseHigh, baseLow, baseClose].every(Number.isFinite)) {
+    return null;
+  }
+
+  const timestampCandidate =
+    bar.timestamp ??
+    bar.time ??
+    (typeof bar.utcTimestampInMinutes === 'number' ? bar.utcTimestampInMinutes * 60000 : null);
+
+  const parsedTimestamp = typeof timestampCandidate === 'number'
+    ? new Date(timestampCandidate)
+    : new Date(timestampCandidate ? String(timestampCandidate) : Date.now());
+
+  return {
+    timestamp: parsedTimestamp.toISOString(),
+    open: baseOpen,
+    high: baseHigh,
+    low: baseLow,
+    close: baseClose
+  };
+}
+
 async function getClient() {
   if (ctClient) return ctClient;
   if (connectingPromise) return connectingPromise;
@@ -47,26 +75,22 @@ export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15
 
   try {
     const client = await getClient();
-    const result = await client.getTrendbars(pair, {
+    const symbols = await client.getSymbols();
+    const symbol = symbols.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
+    const symbolId = symbol?.symbolId ?? pair;
+
+    const result = await client.raw.market.getTrendbars({
+      symbolId,
       period: getPeriod(interval),
       count: 100
     });
 
-    const bars = Array.isArray(result) ? result : result?.trendbars || result?.bars || [];
+    const bars = Array.isArray(result) ? result : result?.trendbars || [];
     if (!bars.length) return null;
 
-    const fetchedCandles = bars.map((bar: any) => ({
-      timestamp: new Date(bar.timestamp || bar.time || bar.utcTimestampInMinutes * 60000 || Date.now()).toISOString(),
-      open: Number(bar.open ?? bar.openDecimal ?? bar.low + (bar.high - bar.low) / 2),
-      high: Number(bar.high ?? bar.highDecimal),
-      low: Number(bar.low ?? bar.lowDecimal),
-      close: Number(bar.close ?? bar.closeDecimal)
-    })).filter((bar: Candle) => (
-      Number.isFinite(bar.open) &&
-      Number.isFinite(bar.high) &&
-      Number.isFinite(bar.low) &&
-      Number.isFinite(bar.close)
-    ));
+    const fetchedCandles = bars
+      .map(toCandle)
+      .filter((bar): bar is Candle => Boolean(bar));
     
     if (interval === '4h' && fetchedCandles.length > 0) {
         htfCache[pair] = { data: fetchedCandles, timestamp: Date.now() };
