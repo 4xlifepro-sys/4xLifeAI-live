@@ -19,7 +19,7 @@ async function getClient() {
 
   const accountId = Number(process.env.CTRADER_ACCOUNT_ID);
   const accessToken = process.env.CTRADER_ACCESS_TOKEN;
-  const environment = process.env.CTRADER_ENVIRONMENT || 'demo';
+  const environment = (process.env.CTRADER_ENVIRONMENT || 'demo') as any;
 
   if (!accountId || !accessToken) {
     throw new Error('Live market feed credentials missing');

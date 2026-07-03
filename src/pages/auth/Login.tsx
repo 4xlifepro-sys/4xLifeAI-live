@@ -23,9 +23,11 @@ export default function Login() {
     setLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedPassword = password.trim();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: normalizedEmail,
+        password: normalizedPassword,
       });
 
       if (error) throw error;
@@ -34,7 +36,7 @@ export default function Login() {
          await supabase.from('admin_audit_logs').insert([{
            user_id: data.user.id,
            action: 'USER_LOGIN',
-           details: { method: 'password', email }
+           details: { method: 'password', email: normalizedEmail }
          }]);
       }
       

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -24,6 +25,92 @@ function savePrompts(prompts: any) {
   fs.writeFileSync(path.join(process.cwd(), 'prompts.json'), JSON.stringify(prompts, null, 2), 'utf8');
 }
 
+async function ensureAdminUser() {
+  if (!supabase) {
+    console.warn('[AUTH] Admin bootstrap skipped: Supabase client is not configured.');
+    return;
+  }
+
+  const adminEmail = (process.env.AUTH_ADMIN_EMAIL || '').trim();
+  const adminPassword = (process.env.AUTH_ADMIN_PASSWORD || '').trim();
+
+  if (!adminEmail || !adminPassword) {
+    console.warn('[AUTH] Admin bootstrap skipped: AUTH_ADMIN_EMAIL or AUTH_ADMIN_PASSWORD is missing.');
+    return;
+  }
+
+  const { data: userList, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (listError) {
+    console.error('[AUTH] Failed to read Supabase auth users:', listError.message);
+    return;
+  }
+
+  const users = ((userList as any)?.users || []) as Array<{
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, any>;
+  }>;
+  const existingUser = users.find(user => (user.email || '').toLowerCase() === adminEmail.toLowerCase());
+  let adminUserId = existingUser?.id || null;
+
+  if (!existingUser) {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email: adminEmail,
+      password: adminPassword,
+      email_confirm: true,
+      user_metadata: {
+        full_name: 'Admin',
+        role: 'admin'
+      }
+    });
+
+    if (error || !data.user) {
+      console.error('[AUTH] Failed to auto-create admin user:', error?.message || 'Unknown error');
+      return;
+    }
+
+    adminUserId = data.user.id;
+    console.log(`[AUTH] Admin user auto-created in Supabase users table: ${adminEmail}`);
+  } else {
+    const { error } = await supabase.auth.admin.updateUserById(existingUser.id, {
+      email: adminEmail,
+      password: adminPassword,
+      email_confirm: true,
+      user_metadata: {
+        ...(existingUser.user_metadata || {}),
+        full_name: existingUser.user_metadata?.full_name || 'Admin',
+        role: 'admin'
+      }
+    });
+
+    if (error) {
+      console.error('[AUTH] Failed to sync admin password:', error.message);
+      return;
+    }
+
+    console.log(`[AUTH] Admin user password synchronized in Supabase users table: ${adminEmail}`);
+  }
+
+  if (!adminUserId) {
+    return;
+  }
+
+  const { error: profileError } = await supabase.from('profiles').upsert([{
+    id: adminUserId,
+    full_name: 'Admin',
+    avatar_url: null,
+    plan: 'FREE',
+    is_admin: true
+  }], { onConflict: 'id' });
+
+  if (profileError) {
+    console.error('[AUTH] Failed to ensure admin profile row:', profileError.message);
+    return;
+  }
+
+  console.log(`[AUTH] Admin profile ensured in Supabase users table: ${adminEmail}`);
+}
+
 process.on('uncaughtException', (err) => {
   if (!err?.message?.includes('terminated')) {
     console.error('Uncaught Exception:', err);
@@ -43,6 +130,8 @@ async function startServer() {
 
   // Initialize Gemini
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+  await ensureAdminUser();
 
   // Start the background scanner
   await startScanner();
@@ -104,6 +193,13 @@ async function startServer() {
     let recentSignals: any[] = [];
     let activeSignalsCount = 0;
     let signalsTodayCount = 0;
+    const scannerSummary = {
+      isRunning: false,
+      lastScanTime: null as string | null,
+      scansLastHour: 0,
+      activeSignals: 0,
+      isDegraded: false
+    };
 
     if (supabase) {
       const { data } = await supabase
@@ -154,7 +250,16 @@ async function startServer() {
       signalsTodayCount = validMem.filter(s => new Date(s.timestamp).toDateString() === new Date().toDateString()).length;
     }
 
+    const lastScanAge = scannerState.stats.lastScanTime ? Date.now() - scannerState.stats.lastScanTime : -1;
+    scannerSummary.isRunning = lastScanAge >= 0 && lastScanAge < 30000;
+    scannerSummary.lastScanTime = scannerState.stats.lastScanTime ? new Date(scannerState.stats.lastScanTime).toISOString() : null;
+    scannerSummary.scansLastHour = scannerState.stats.scanCycles;
+    scannerSummary.activeSignals = scannerState.signals.length;
+    scannerSummary.isDegraded = scannerState.stats.isDegraded;
+
     res.json({
+        scanner: scannerSummary,
+        opportunities: scannerState.activeOpportunities || [],
         stats: scannerState.stats,
         pairStatuses: scannerState.pairStatuses,
         latestSignal: recentSignals.find(s => s.status !== 'REJECTED' && s.tier !== 'Reject') || null,

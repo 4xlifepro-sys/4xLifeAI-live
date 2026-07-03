@@ -11,7 +11,7 @@ export default function AdminRoute({ children }: { children: React.ReactNode }) 
   }
 
   if (!user || !isAdmin) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={user ? "/dashboard" : "/login"} replace />;
   }
 
   return children;
