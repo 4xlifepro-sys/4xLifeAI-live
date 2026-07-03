@@ -1,0 +1,40 @@
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+--- 1. AUDIT LOG EXISTS? ---
+{
+  code: 'PGRST205',
+  details: null,
+  hint: "Perhaps you meant the table 'public.signal_results'",
+  message: "Could not find the table 'public.signal_audit_log' in the schema cache"
+}
+
+--- 2. ELITE USER CHECK ---
+Elite Users: [
+  {
+    id: '47a00fbd-6e93-4b98-80e0-216be63870b2',
+    full_name: 'tofi',
+    plan: 'ELITE',
+    is_admin: true
+  }
+]
+
+--- 3. APPROVED PAYMENTS CHECK ---
+Approved Payments: [
+  {
+    id: '7a9c4509-1c3f-4b49-b9de-c7e3a9c4ab13',
+    email: 'test@example.com',
+    status: 'APPROVED',
+    user_id: null
+  },
+  {
+    id: '7da35bf5-5396-4ef2-97fa-dfef3261fcd3',
+    email: 'test_trigger@example.com',
+    status: 'APPROVED',
+    user_id: null
+  },
+  {
+    id: '7f360296-12c9-4553-b366-d5d4a4a494a5',
+    email: 'test_trigger@example.com',
+    status: 'APPROVED',
+    user_id: '47a00fbd-6e93-4b98-80e0-216be63870b2'
+  }
+]

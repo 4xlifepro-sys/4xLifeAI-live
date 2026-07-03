@@ -1,0 +1,6 @@
+{
+  "name": "4xLifeAI",
+  "description": "Institutional Market Structure Validation and real-time quantitative AI trading signals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
