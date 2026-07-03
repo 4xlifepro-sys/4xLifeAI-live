@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+  const supabase = createClient("undefined", "fakekey");
+  supabase.auth.signInWithPassword({ email: 'test@test.com', password: 'test' }).then(console.log).catch(console.error);
+</script>
+</body>
+</html>
