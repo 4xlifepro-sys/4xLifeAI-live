@@ -29,8 +29,11 @@ export function getPipMultiplier(pair: string) {
 export function filterClosedCandles(candles: Candle[], intervalMs: number): Candle[] {
   const now = Date.now();
   return candles.filter(c => {
-    // API returns values like "2026-06-20 20:00:00" (which is the start time).
-    const startMs = new Date(c.timestamp + 'Z').getTime();
+    const rawTimestamp = c.timestamp as unknown as string | number;
+    let startMs = typeof rawTimestamp === 'number' ? rawTimestamp : Date.parse(rawTimestamp);
+    if (!Number.isFinite(startMs) && typeof rawTimestamp === 'string') {
+      startMs = Date.parse(rawTimestamp.endsWith('Z') ? rawTimestamp : `${rawTimestamp}Z`);
+    }
     return (startMs + intervalMs) <= now;
   });
 }
