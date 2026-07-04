@@ -594,8 +594,8 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
           regimeState: regime,
           pathTrace: `Input -> Regime(${regime}) -> Filter(REJECTED: ${hardReject}) -> Dedup(N/A) -> Active Check(N/A)`,
           // Expose computed values for diagnostics
-          stochK: stochK[stochK.length - 1],
-          stochD: stochD[stochD.length - 1],
+          stochK: currentK,
+          stochD: currentD,
           ema50: ema50[ema50.length - 1],
           currentPrice: current5M.close,
           priceEmaDistance: Math.abs(current5M.close - ema50[ema50.length - 1]),
