@@ -4,30 +4,25 @@ import { supabase } from "../lib/supabase";
 
 const APPROVED_PAIRS = ['EURUSD', 'USDJPY', 'USDCAD', 'NZDUSD', 'EURJPY', 'GBPJPY', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD'];
 
-function StatCard({ label, value, color = "#ffffff" }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="bg-[#0d1220] border border-[#1a2332] rounded-lg px-4 py-3">
-      <span className="text-[10px] text-[#5d6b80] uppercase tracking-wider font-bold block mb-1">{label}</span>
-      <span className="text-xl font-mono font-bold" style={{ color }}>{value}</span>
-    </div>
-  );
+function getIcon(pair: string) {
+  if (['BTCUSD', 'ETHUSD'].includes(pair)) return '₿';
+  if (['XAUUSD', 'XAGUSD'].includes(pair)) return '◆';
+  if (pair.includes('EUR')) return '€';
+  if (pair.includes('GBP')) return '£';
+  if (pair.includes('JPY')) return '¥';
+  if (pair.includes('AUD')) return 'A$';
+  if (pair.includes('NZD')) return 'NZ$';
+  if (pair.includes('CAD')) return 'C$';
+  if (pair.includes('CHF')) return 'CHF';
+  return '$';
 }
 
-function PriceBox({ label, value, pair, highlight = false, danger = false, success = false }: { label: string; value: number; pair: string; highlight?: boolean; danger?: boolean; success?: boolean }) {
-  const fmt = (v: number) => {
-    if (v === 0) return '--';
-    if (pair.includes('JPY')) return v.toFixed(3);
-    if (pair === 'XAUUSD' || pair === 'XAGUSD') return v.toFixed(2);
-    if (v > 100) return v.toFixed(2);
-    return v.toFixed(5);
-  };
-  const clr = danger ? '#ff4d6d' : success ? '#00e08a' : highlight ? '#3b82f6' : '#ffffff';
-  return (
-    <div className="bg-[#0a0e17] border border-[#1a2332] rounded-lg px-3 py-2.5">
-      <span className="text-[10px] text-[#5d6b80] uppercase tracking-wider block mb-1">{label}</span>
-      <span className="text-base font-mono font-bold" style={{ color: clr }}>{fmt(value)}</span>
-    </div>
-  );
+function fmtPrice(price: number, pair: string) {
+  if (!price || price === 0) return '--';
+  if (pair.includes('JPY')) return price.toFixed(3);
+  if (pair === 'XAUUSD' || pair === 'XAGUSD' || price > 1000) return price.toFixed(2);
+  if (price > 100) return price.toFixed(2);
+  return price.toFixed(5);
 }
 
 const isWeekend = () => {
@@ -40,21 +35,15 @@ const isWeekend = () => {
   return false;
 };
 
-function getPairCategory(pair: string) {
-  if (['BTCUSD', 'ETHUSD'].includes(pair)) return 'Crypto';
-  if (['XAUUSD', 'XAGUSD'].includes(pair)) return 'Metals';
-  return 'Forex';
-}
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const [state, setState] = useState<any>({ stats: null, pairStatuses: [], signals: [], marketStates: [], rejectionStats: {}, activeOpportunities: [], prices: {} });
-  const [tab, setTab] = useState<'SIGNALS' | 'MARKET' | 'PAIRS'>('SIGNALS');
 
   useEffect(() => {
     const es = new EventSource("/api/stream");
     es.onmessage = (e) => { try { setState(prev => ({ ...prev, ...JSON.parse(e.data) })); } catch {} };
     const fetchSignals = async () => { if (!supabase) return; const { data } = await supabase.from('signals').select('*').order('created_at', { ascending: false }).limit(50); if (data) setState(prev => ({ ...prev, activeOpportunities: data })); };
+    fetchSignals();
     const fetchPrices = async () => { try { const res = await fetch('/api/prices'); if (!res.ok) return; const data = await res.json(); const map: Record<string, number> = {}; (data.prices || []).forEach((p: any) => { if (p.pair && typeof p.price === 'number') map[p.pair] = p.price; }); setState(prev => ({ ...prev, prices: map })); } catch {} };
     fetchPrices();
     const priceInterval = setInterval(fetchPrices, 6000);
@@ -70,137 +59,104 @@ export default function Dashboard() {
   const activeSignals = allSignals.filter((s: any) => APPROVED_PAIRS.includes(s.pair) && ['ACTIVE', 'TP1 HIT', 'TP2 HIT'].includes(s.status));
   const closedSignals = allSignals.filter((s: any) => APPROVED_PAIRS.includes(s.pair) && ['CLOSED', 'TP3 HIT', 'SL HIT', 'EXPIRED'].includes(s.status));
 
+  const pairsWithSignals = APPROVED_PAIRS.map(pair => {
+    const active = activeSignals.find((s: any) => s.pair === pair);
+    const closed = closedSignals.find((s: any) => s.pair === pair);
+    const ms = marketStates.find((m: any) => m.pair === pair);
+    return { pair, active, closed, ms };
+  });
+
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-white">
-      <header className="border-b border-[#1a2332] bg-[#0d1220] px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div><h1 className="text-2xl font-bold tracking-tight">4xLifeAI</h1><p className="text-xs text-[#5d6b80] mt-0.5">Professional Signal Provider</p></div>
+    <div className="min-h-screen bg-[#0a0e17] text-white font-mono">
+      <header className="border-b border-[#1a2332] bg-[#0d1220] px-6 py-3">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">4xLifeAI</h1>
+            <p className="text-[10px] text-[#5d6b80]">Professional Signal Provider</p>
+          </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#00e08a] animate-pulse" /><span className="text-xs text-[#00e08a] font-mono">LIVE</span></div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#00e08a] animate-pulse" />
+              <span className="text-xs text-[#00e08a]">LIVE</span>
+            </div>
             <button onClick={() => navigate('/trades')} className="text-xs bg-[#1a2332] hover:bg-[#243044] px-3 py-1.5 rounded border border-[#2a3a50] transition-colors">Trade Monitor</button>
           </div>
         </div>
       </header>
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Engine Status" value={stats.isDegraded ? "DEGRADED" : "OPERATIONAL"} color={stats.isDegraded ? "#ff4d6d" : "#00e08a"} />
-          <StatCard label="Active Pairs" value={`${stats.activeAssets || APPROVED_PAIRS.length} / ${stats.totalAssetsConfigured || APPROVED_PAIRS.length}`} />
-          <StatCard label="Active Signals" value={String(activeSignals.length)} color={activeSignals.length > 0 ? "#00e08a" : "#5d6b80"} />
-          <StatCard label="Last Scan" value={stats.lastScanTime ? new Date(stats.lastScanTime).toLocaleTimeString('en-US', { hour12: false, timeZone: 'UTC' }) + ' UTC' : '--'} />
+
+      {isWeekend() && (
+        <div className="bg-[#f5a524]/10 border-b border-[#f5a524]/30 text-center text-[#f5a524] text-xs py-2 animate-pulse">
+          WEEKEND MODE — Crypto & Gold Only | Forex Resumes Monday 00:00 UTC
         </div>
-        {isWeekend() && (<div className="bg-[#f5a524]/10 border border-[#f5a524]/30 rounded-lg px-4 py-3 text-center text-[#f5a524] text-sm font-mono animate-pulse">WEEKEND MODE — Crypto &amp; Gold Only | Forex Resumes Monday 00:00 UTC</div>)}
-        <div className="flex gap-1 bg-[#0d1220] p-1 rounded-lg border border-[#1a2332] w-fit">
-          {(['SIGNALS', 'MARKET', 'PAIRS'] as const).map(t => (<button key={t} onClick={() => setTab(t)} className={`px-5 py-2 text-xs font-bold tracking-wider rounded transition-all ${tab === t ? 'bg-[#1a2332] text-white' : 'text-[#5d6b80] hover:text-[#8a95a5]'}`}>{t}</button>))}
+      )}
+
+      <div className="max-w-6xl mx-auto">
+        <div className="border-b border-[#1a2332] bg-[#0d1220] px-6 py-2 flex items-center justify-between text-[10px] text-[#5d6b80]">
+          <span>{stats.activeAssets || APPROVED_PAIRS.length} pairs monitored</span>
+          <span>Active: <span className="text-[#00e08a]">{activeSignals.length}</span></span>
+          <span>Last: {stats.lastScanTime ? new Date(stats.lastScanTime).toLocaleTimeString('en-US', { hour12: false, timeZone: 'UTC' }) + ' UTC' : '--'}</span>
         </div>
-        {tab === 'SIGNALS' && (
-          <div className="space-y-4">
-            {activeSignals.length === 0 ? (
-              <div className="bg-[#0d1220] border border-[#1a2332] rounded-lg p-12 text-center"><p className="text-[#5d6b80] text-lg mb-2">No Active Signals</p><p className="text-[#5d6b80] text-xs">Scanner is monitoring {APPROVED_PAIRS.length} pairs. Signals will appear here when a setup is confirmed.</p></div>
-            ) : (
-              <div className="grid gap-3">
-                {activeSignals.map((s: any) => {
-                  const isBuy = s.direction === 'LONG' || s.signal === 'BUY';
-                  const price = prices[s.pair] || s.entry || 0;
-                  const sl = s.sl || 0; const tp1 = s.tp1 || 0; const tp2 = s.tp2 || 0; const tp3 = s.tp3 || 0;
-                  const statusColor = s.status === 'ACTIVE' ? '#f5a524' : s.status?.includes('TP') ? '#00e08a' : '#ff4d6d';
-                  return (
-                    <div key={s.id} className="bg-[#0d1220] border border-[#1a2332] rounded-lg p-5">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg font-bold">{s.pair}</span>
-                          <span className={`px-2.5 py-1 rounded text-xs font-bold ${isBuy ? 'bg-[#00e08a]/10 text-[#00e08a]' : 'bg-[#ff4d6d]/10 text-[#ff4d6d]'}`}>{isBuy ? 'BUY' : 'SELL'}</span>
-                          <span className="px-2 py-1 rounded text-[10px] font-mono border" style={{ borderColor: statusColor + '40', color: statusColor, background: statusColor + '10' }}>{s.status || 'ACTIVE'}</span>
-                        </div>
-                        <span className="text-xs text-[#5d6b80] font-mono">{s.timestamp ? new Date(s.timestamp).toLocaleString('en-US', { hour12: false }) : ''}</span>
-                      </div>
-                      <div className="grid grid-cols-5 gap-3 text-center">
-                        <PriceBox label="Entry" value={price} pair={s.pair} highlight />
-                        <PriceBox label="Stop Loss" value={sl} pair={s.pair} danger />
-                        <PriceBox label="TP 1" value={tp1} pair={s.pair} success />
-                        <PriceBox label="TP 2" value={tp2} pair={s.pair} success />
-                        <PriceBox label="TP 3" value={tp3} pair={s.pair} success />
-                      </div>
-                      {s.aiReason && <p className="mt-3 text-xs text-[#8a95a5] border-t border-[#1a2332] pt-3">{s.aiReason}</p>}
+
+        <div className="divide-y divide-[#1a2332]/50">
+          {pairsWithSignals.map(({ pair, active, closed, ms }) => {
+            const price = prices[pair] || 0;
+            const hasActive = !!active;
+            const hasClosed = !!closed;
+            
+            let statusIcon = '○';
+            let statusColor = '#5d6b80';
+            let statusText = 'Monitoring';
+            
+            if (hasActive) {
+              const dir = active.direction === 'LONG' || active.signal === 'BUY' ? 'BUY' : 'SELL';
+              const isWin = active.status?.includes('TP');
+              statusIcon = dir === 'BUY' ? '▲' : '▼';
+              statusColor = isWin ? '#00e08a' : '#f5a524';
+              statusText = active.status || dir;
+            } else if (hasClosed) {
+              const result = closed.result || (closed.status === 'TP3 HIT' ? 'WIN' : 'LOSS');
+              statusIcon = result === 'WIN' ? '✓' : '✗';
+              statusColor = result === 'WIN' ? '#00e08a' : '#ff4d6d';
+              statusText = result;
+            } else if (ms?.direction === 'LONG') {
+              statusIcon = '▲';
+              statusColor = '#00e08a';
+              statusText = 'BULL';
+            } else if (ms?.direction === 'SHORT') {
+              statusIcon = '▼';
+              statusColor = '#ff4d6d';
+              statusText = 'BEAR';
+            }
+
+            const change = price > 0 ? ((price - (active?.entry || 0)) / price * 100) : 0;
+            const changeColor = change > 0 ? '#00e08a' : change < 0 ? '#ff4d6d' : '#5d6b80';
+
+            return (
+              <div key={pair} className="px-6 py-3 hover:bg-[#1a2332]/30 transition-colors cursor-pointer" onClick={() => hasActive && navigate('/trades')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <span className="text-[#5d6b80] text-lg w-6">{getIcon(pair)}</span>
+                    <span className="font-bold text-sm">{pair}</span>
+                  </div>
+                  <div className="flex items-center gap-6 flex-1 justify-end">
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-[#3b82f6]">{fmtPrice(price, pair)}</div>
+                      {active?.entry && <div className="text-[10px] text-[#5d6b80]">Entry: {fmtPrice(active.entry, pair)}</div>}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-            {closedSignals.length > 0 && (
-              <div><h3 className="text-xs text-[#5d6b80] uppercase tracking-wider mb-3 font-bold">Recently Closed</h3>
-                <div className="grid gap-2">
-                  {closedSignals.slice(0, 5).map((s: any) => {
-                    const isBuy = s.direction === 'LONG' || s.signal === 'BUY';
-                    const result = s.result || (s.status === 'TP3 HIT' ? 'WIN' : s.status === 'TP2 HIT' ? 'PARTIAL WIN' : 'LOSS');
-                    const isWin = result === 'WIN' || result === 'PARTIAL WIN';
-                    return (
-                      <div key={s.id} className="bg-[#0d1220] border border-[#1a2332] rounded-lg px-4 py-3 flex items-center justify-between">
-                        <div className="flex items-center gap-3"><span className="font-bold text-sm">{s.pair}</span><span className={`text-xs ${isBuy ? 'text-[#00e08a]' : 'text-[#ff4d6d]'}`}>{isBuy ? 'BUY' : 'SELL'}</span></div>
-                        <div className="flex items-center gap-4">
-                          {s.pips_won !== undefined && <span className="text-[#00e08a] text-xs font-mono">+{Number(s.pips_won).toFixed(1)}p</span>}
-                          {s.pips_lost !== undefined && <span className="text-[#ff4d6d] text-xs font-mono">-{Number(s.pips_lost).toFixed(1)}p</span>}
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isWin ? 'bg-[#00e08a]/10 text-[#00e08a]' : 'bg-[#ff4d6d]/10 text-[#ff4d6d]'}`}>{result}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        {tab === 'MARKET' && (
-          <div className="grid gap-4 md:grid-cols-2">
-            {marketStates.map((s: any) => {
-              const isBuy = s.direction === 'LONG'; const isSell = s.direction === 'SHORT';
-              const biasColor = isBuy ? '#00e08a' : isSell ? '#ff4d6d' : '#5d6b80';
-              const regimeColor = s.regime === 'TRENDING' ? '#00e08a' : s.regime === 'CHOP' ? '#ff4d6d' : s.regime === 'VOLATILE' ? '#f5a524' : '#5d6b80';
-              return (
-                <div key={s.pair} className="bg-[#0d1220] border border-[#1a2332] rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2"><span className="font-bold">{s.pair}</span><span className="text-[10px] text-[#5d6b80] bg-[#1a2332] px-1.5 py-0.5 rounded">{getPairCategory(s.pair)}</span></div>
-                    <span className="text-[#5d6b80] text-xs font-mono">{s.timestamp ? new Date(s.timestamp).toLocaleTimeString('en-US', { hour12: false }) : '--'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div><span className="text-[10px] text-[#5d6b80] block">BIAS</span><span className="font-bold text-sm" style={{ color: biasColor }}>{isBuy ? 'BUY' : isSell ? 'SELL' : 'NONE'}</span></div>
-                    <div><span className="text-[10px] text-[#5d6b80] block">REGIME</span><span className="font-bold text-sm" style={{ color: regimeColor }}>{s.regime || 'UNKNOWN'}</span></div>
-                    <div><span className="text-[10px] text-[#5d6b80] block">PRICE</span><span className="font-bold text-sm text-[#3b82f6]">{prices[s.pair] || '-'}</span></div>
+                    <div className="text-right w-20">
+                      <div className="text-sm font-bold" style={{ color: statusColor }}>{statusIcon} {statusText}</div>
+                      {active && <div className="text-[10px] text-[#5d6b80]">{active.direction === 'LONG' || active.signal === 'BUY' ? 'BUY' : 'SELL'}</div>}
+                    </div>
+                    <div className="text-right w-16">
+                      <div className="text-sm font-bold" style={{ color: changeColor }}>{change > 0 ? '+' : ''}{change.toFixed(2)}%</div>
+                      {active?.tp1 && <div className="text-[10px] text-[#00e08a]">TP: {fmtPrice(active.tp1, pair)}</div>}
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-        {tab === 'PAIRS' && (
-          <div className="bg-[#0d1220] border border-[#1a2332] rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#1a2332]">
-                  <th className="text-left text-[10px] text-[#5d6b80] uppercase tracking-wider font-bold px-4 py-3">Pair</th>
-                  <th className="text-left text-[10px] text-[#5d6b80] uppercase tracking-wider font-bold px-4 py-3">Category</th>
-                  <th className="text-right text-[10px] text-[#5d6b80] uppercase tracking-wider font-bold px-4 py-3">Price</th>
-                  <th className="text-right text-[10px] text-[#5d6b80] uppercase tracking-wider font-bold px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {APPROVED_PAIRS.map((pair) => {
-                  const category = getPairCategory(pair);
-                  const price = prices[pair];
-                  const hasActiveSignal = activeSignals.some((s: any) => s.pair === pair);
-                  const catColor = category === 'Crypto' ? '#f5a524' : category === 'Metals' ? '#3b82f6' : '#00e08a';
-                  return (
-                    <tr key={pair} className="border-b border-[#1a2332]/50 hover:bg-[#1a2332]/30 transition-colors">
-                      <td className="px-4 py-3 font-bold text-sm">{pair}</td>
-                      <td className="px-4 py-3"><span className="text-xs font-mono px-2 py-0.5 rounded" style={{ color: catColor, background: catColor + '15' }}>{category}</span></td>
-                      <td className="px-4 py-3 text-right font-mono text-sm text-[#3b82f6]">{price ? (pair.includes('JPY') ? price.toFixed(3) : (pair === 'XAUUSD' || pair === 'XAGUSD' || price > 100) ? price.toFixed(2) : price.toFixed(5)) : '--'}</td>
-                      <td className="px-4 py-3 text-right">{hasActiveSignal ? <span className="text-xs font-bold text-[#00e08a] bg-[#00e08a]/10 px-2 py-0.5 rounded">ACTIVE</span> : <span className="text-xs text-[#5d6b80]">Monitoring</span>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
