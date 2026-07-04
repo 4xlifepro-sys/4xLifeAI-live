@@ -409,13 +409,13 @@ async function runBacktest(): Promise<BacktestResult> {
 }
 
 // Run backtest
-runBacktest().then(result => {
+runBacktest().then(async result => {
   // Save trades to JSON for analysis
-  const fs = require('fs');
-  const path = require('path');
+  const fs = await import('fs');
+  const path = await import('path');
   
-  const outputPath = path.join(process.cwd(), 'backtest-results.json');
-  fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+  const outputPath = path.default.join(process.cwd(), 'backtest-results.json');
+  fs.default.writeFileSync(outputPath, JSON.stringify(result, null, 2));
   
   console.log(`\n[BACKTEST] Results saved to: ${outputPath}`);
   process.exit(0);

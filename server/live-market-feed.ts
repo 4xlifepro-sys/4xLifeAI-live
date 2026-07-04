@@ -219,13 +219,19 @@ export async function fetchHistoricalCandles(
         .map((bar: any) => decodeTrendbar(bar, digits))
         .filter((bar): bar is Candle => Boolean(bar));
 
+      // Prepend to build array in chronological order (oldest first)
       allCandles.unshift(...decoded);
 
+      // If we got fewer bars than requested, we've reached the end
       if (bars.length < batchSize) break;
 
-      const oldestTs = decoded[0]?.timestamp;
-      if (!oldestTs) break;
-      toTimestamp = new Date(oldestTs).getTime() / (60 * 1000);
+      // Get the OLDEST timestamp (last element in decoded array)
+      // API returns bars newest-first, so decoded[length-1] is oldest
+      const oldestBar = decoded[decoded.length - 1];
+      if (!oldestBar?.timestamp) break;
+      
+      // Set toTimestamp to fetch data BEFORE this oldest bar
+      toTimestamp = new Date(oldestBar.timestamp).getTime() / (60 * 1000);
 
       remaining -= decoded.length;
 
