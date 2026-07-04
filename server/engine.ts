@@ -195,12 +195,8 @@ export interface EngineResult {
 
 export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], setupRaw: Candle[], entryTfRaw?: Candle[]): EngineResult {
   const APPROVED_PAIRS = [
-    'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD',
-    'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'GBPJPY',
-    'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY', 'EURAUD',
-    'EURNZD', 'GBPAUD', 'XAUUSD', 'XAGUSD', 'BTCUSD',
-    'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD',
-    'LTCUSD', 'DOTUSD'
+    'EURUSD', 'USDJPY', 'USDCAD', 'NZDUSD', 'EURJPY', 'GBPJPY',
+    'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD'
   ];
 
   if (!APPROVED_PAIRS.includes(pair)) {
