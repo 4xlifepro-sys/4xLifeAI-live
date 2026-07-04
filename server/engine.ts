@@ -384,10 +384,14 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   let pullbackExtreme = current5M.close;
 
   if (!hardReject) {
+      // Counter-trend tolerance: allow price to be within ~3 pips of EMA before rejecting
+      // This handles the case where price is right at EMA but still essentially aligned
+      const counterTrendBuffer = 3 * pipsMultiplier;
+      
       if (bias === 'BUY') {
           confidence += 3; cb.trend = 3; reason.push('+3 4H Trend Bullish');
           
-          if (current5M.close > currentEma) {
+          if (current5M.close > (currentEma - counterTrendBuffer)) {
              confidence += 2; cb.ema = 2; reason.push('+2 EMA Alignment');
           } else {
              hardReject = 'REJECT_COUNTER_TREND';
@@ -454,7 +458,7 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
       } else if (bias === 'SELL') {
           confidence += 3; cb.trend = 3; reason.push('+3 4H Trend Bearish');
           
-          if (current5M.close < currentEma) {
+          if (current5M.close < (currentEma + counterTrendBuffer)) {
              confidence += 2; cb.ema = 2; reason.push('+2 EMA Alignment');
           } else {
              hardReject = 'REJECT_COUNTER_TREND';

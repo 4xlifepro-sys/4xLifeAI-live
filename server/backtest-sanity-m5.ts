@@ -165,8 +165,8 @@ Object.entries(failureCounts).sort((a,b) => Number(a[0]) - Number(b[0])).forEach
 console.log('\n=== SAMPLE STOCHASTIC REJECTIONS ===');
 if (stochasticExamples.length > 0) {
   stochasticExamples.forEach((ex, idx) => {
-    const k = ex.stochasticK?.toFixed(2) || 'N/A';
-    const d = ex.stochasticD?.toFixed(2) || 'N/A';
+    const k = ex.stochK?.toFixed(2) || 'N/A';
+    const d = ex.stochD?.toFixed(2) || 'N/A';
     const kRequired = ex.bias === 'BULLISH' ? '<=30' : '>=70';
     console.log(`\nSTOCHASTIC Example ${idx + 1}:`);
     console.log(`  Candle index: ${ex.candleIndex}`);
