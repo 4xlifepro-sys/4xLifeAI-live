@@ -119,9 +119,20 @@ console.log(`\n--- Last ${sampleCount} M5 candles evaluated ---`);
 console.log(`ACTIVE signals: ${activeCount} (${((activeCount/sampleCount)*100).toFixed(1)}%)`);
 console.log(`REJECTED:     ${rejectCount} (${((rejectCount/sampleCount)*100).toFixed(1)}%)`);
 console.log(`Max confidence seen: ${maxConf}`);
-console.log(`\nRejection breakdown:`);
+
+console.log(`\n=== PRIMARY REJECTION (first failure) ===`);
+Object.entries(primaryRejectReasons).sort((a,b) => b[1]-a[1]).forEach(([reason, count]) => {
+  console.log(`  ${reason}: ${count} (${((count/rejectCount)*100).toFixed(1)}%)`);
+});
+
+console.log(`\n=== ALL FAILURES (every condition that failed) ===`);
 Object.entries(rejectReasons).sort((a,b) => b[1]-a[1]).forEach(([reason, count]) => {
   console.log(`  ${reason}: ${count} (${((count/rejectCount)*100).toFixed(1)}%)`);
+});
+
+console.log(`\n=== FAILURE COUNT DISTRIBUTION (how many filters failed per candle) ===`);
+Object.entries(failureCounts).sort((a,b) => Number(a[0]) - Number(b[0])).forEach(([count, num]) => {
+  console.log(`  ${count} filter(s) failed: ${num} candles (${((num/rejectCount)*100).toFixed(1)}%)`);
 });
 
 console.log('\n=== DONE ===');
