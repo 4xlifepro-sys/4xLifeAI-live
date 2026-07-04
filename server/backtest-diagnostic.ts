@@ -38,7 +38,7 @@ for (const pair of PAIRS) {
     const slice = h4Filtered.slice(0, i);
     const result = detectTrendMomentumScannerV5(pair, slice, slice, slice);
     
-    console.log(`  [i=${i}] regime=${result.regime} reason="${result.regimeReason}" bias=${result.signal?.bias || 'N/A'} conf=${result.signal?.aiConfidence || 0} tier=${result.signal?.tier || 'N/A'}`);
+    console.log(`  [i=${i}] regime=${result.regime} reason="${result.regimeReason}" bias=${result.signal?.bias || 'N/A'} conf=${result.signal?.aiConfidence || 0} tier=${result.signal?.tier || 'N/A'} status=${result.signal?.status || 'N/A'} aiReason="${result.signal?.aiReason || 'N/A'}"`);
     
     if (i > 200) break; // Just sample a few
   }
