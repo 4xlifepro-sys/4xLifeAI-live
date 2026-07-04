@@ -13,13 +13,20 @@ function getPeriod(interval: '1min' | '5min' | '15min' | '4h') {
   return TrendbarPeriod.H4;
 }
 
-function toCandle(bar: any): Candle | null {
-  const baseOpen = Number(bar.open ?? bar.openPrice ?? bar.deltaOpen ?? 0);
-  const baseHigh = Number(bar.high ?? bar.highPrice ?? 0);
-  const baseLow = Number(bar.low ?? bar.lowPrice ?? 0);
-  const baseClose = Number(bar.close ?? bar.closePrice ?? bar.deltaClose ?? 0);
+function decodePrice(value: any, digits: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return NaN;
+  if (n === 0) return 0;
+  return n / Math.pow(10, digits);
+}
 
-  if (![baseOpen, baseHigh, baseLow, baseClose].every(Number.isFinite)) {
+function decodeTrendbar(bar: any, digits: number): { timestamp: string; open: number; high: number; low: number; close: number } | null {
+  const open = decodePrice(bar.open ?? bar.openPrice ?? bar.deltaOpen, digits);
+  const high = decodePrice(bar.high ?? bar.highPrice ?? bar.deltaHigh, digits);
+  const low  = decodePrice(bar.low  ?? bar.lowPrice  ?? bar.deltaLow, digits);
+  const close = decodePrice(bar.close ?? bar.closePrice ?? bar.deltaClose, digits);
+
+  if (![open, high, low, close].every(Number.isFinite)) {
     return null;
   }
 
@@ -34,11 +41,16 @@ function toCandle(bar: any): Candle | null {
 
   return {
     timestamp: parsedTimestamp.toISOString(),
-    open: baseOpen,
-    high: baseHigh,
-    low: baseLow,
-    close: baseClose
+    open,
+    high,
+    low,
+    close
   };
+}
+
+function toCandle(bar: any): Candle | null {
+  const digits = Number(bar.digits ?? 5);
+  return decodeTrendbar(bar, digits);
 }
 
 async function getClient() {
@@ -68,6 +80,50 @@ async function getClient() {
   return connectingPromise;
 }
 
+export async function getLatestPrice(pair: string): Promise<{ pair: string; price: number | null; digits: number | null; timestamp: number; error?: string }> {
+  const result: { pair: string; price: number | null; digits: number | null; timestamp: number; error?: string } = {
+    pair,
+    price: null,
+    digits: null,
+    timestamp: Date.now()
+  };
+
+  try {
+    const client = await getClient();
+    const symbols = await client.getSymbols();
+    const symbol = symbols.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
+    if (!symbol) {
+      result.error = 'symbol_not_found';
+      return result;
+    }
+    const symbolId = symbol.symbolId;
+    const trendbarResp = await client.raw.market.getTrendbars({
+      symbolId,
+      period: TrendbarPeriod.M1,
+      count: 2
+    });
+    const bars = Array.isArray(trendbarResp) ? trendbarResp : trendbarResp?.trendbars || [];
+    if (!bars.length) {
+      result.error = 'no_trendbars';
+      return result;
+    }
+    const last = bars[bars.length - 1];
+    const full = await client.getSymbolInfo(pair).catch(() => null);
+    const digits = Number(full?.digits ?? 5);
+    result.digits = digits;
+    const close = decodePrice(last.close ?? last.closePrice ?? last.deltaClose, digits);
+    if (Number.isFinite(close)) {
+      result.price = close;
+    } else {
+      result.error = 'invalid_close';
+    }
+    return result;
+  } catch (error: any) {
+    result.error = error?.message || 'unknown';
+    return result;
+  }
+}
+
 export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15min' | '4h'): Promise<Candle[] | null> {
   if (interval === '4h' && htfCache[pair] && (Date.now() - htfCache[pair].timestamp < HTF_CACHE_TTL)) {
       return htfCache[pair].data;
@@ -78,6 +134,7 @@ export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15
     const symbols = await client.getSymbols();
     const symbol = symbols.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
     const symbolId = symbol?.symbolId ?? pair;
+    const digits = Number(symbol?.digits ?? 5);
 
     const result = await client.raw.market.getTrendbars({
       symbolId,
@@ -89,13 +146,13 @@ export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15
     if (!bars.length) return null;
 
     const fetchedCandles = bars
-      .map(toCandle)
+      .map((bar: any) => decodeTrendbar(bar, digits))
       .filter((bar): bar is Candle => Boolean(bar));
-    
+
     if (interval === '4h' && fetchedCandles.length > 0) {
         htfCache[pair] = { data: fetchedCandles, timestamp: Date.now() };
     }
-    
+
     return fetchedCandles;
   } catch (error: any) {
     if (!error?.message?.includes('terminated')) {

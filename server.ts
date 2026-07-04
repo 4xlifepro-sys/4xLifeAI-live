@@ -520,25 +520,8 @@ async function startServer() {
 
     try {
       const liveModule: any = await import('./server/live-market-feed.js');
-      const client = await liveModule.getClient();
-      const symbols = await client.getSymbols();
       const approved = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY', 'EURAUD', 'EURNZD', 'GBPAUD', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOTUSD'];
-      const targets = symbols.filter((s: any) => approved.includes(s.symbolName));
-      const results = await Promise.all(targets.map(async (s: any) => {
-        try {
-          const spot = await client.getSymbolInfo(s.symbolName);
-          const detail: any = spot as any;
-          const price = Number(detail?.lastClose ?? detail?.close ?? detail?.bidDecimal ?? detail?.askDecimal ?? 0);
-          return {
-            pair: s.symbolName,
-            price: Number.isFinite(price) ? price : null,
-            digits: detail?.digits ?? null,
-            timestamp: Date.now()
-          };
-        } catch {
-          return { pair: s.symbolName, price: null, digits: null, timestamp: Date.now() };
-        }
-      }));
+      const results = await Promise.all(approved.map(async (pair: string) => liveModule.getLatestPrice(pair)));
 
       priceCache.timestamp = Date.now();
       priceCache.data = results;
