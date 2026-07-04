@@ -84,8 +84,9 @@ async function getClient() {
   connectingPromise = connect({
     environment,
     accountId,
-    accessToken
-  }).then(client => {
+    accessToken,
+    requestTimeoutMs: 45000
+  } as any).then(client => {
     ctClient = client;
     console.log(`[MarketFeed] Connected (${environment})`);
     return client;
