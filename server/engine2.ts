@@ -162,7 +162,7 @@ export function detectSignalV2(
     const distanceFromEma = currentPrice - pullbackZone;
 
     if (currentPrice > pullbackZone + currentAtr * 0.5) return null;
-    if (currentEma9 <= currentEma20) return null;
+    // EMA9 filter removed - pullbacks naturally break short-term momentum
 
     const entry = currentPrice;
     const sl = entry - risk;
@@ -197,7 +197,7 @@ export function detectSignalV2(
     const distanceFromEma = pullbackZone - currentPrice;
 
     if (currentPrice < pullbackZone - currentAtr * 0.5) return null;
-    if (currentEma9 >= currentEma20) return null;
+    // EMA9 filter removed - pullbacks naturally break short-term momentum
 
     const entry = currentPrice;
     const sl = entry + risk;
