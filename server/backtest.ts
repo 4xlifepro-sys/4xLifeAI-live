@@ -269,7 +269,7 @@ async function runBacktest(): Promise<BacktestResult> {
           tp1: result.signal.tp1,
           tp2: result.signal.tp2,
           tp3: result.signal.tp3,
-          entryTime: result.signal.timestamp,
+          entryTime: m5[i].timestamp,  // Use ACTUAL candle timestamp, not engine's wall-clock time
           confidence: result.signal.aiConfidence,
           tier: result.signal.tier,
           timeframe: 'M5'

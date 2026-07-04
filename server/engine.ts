@@ -528,8 +528,8 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
 
   const entryPrice = current5M.close;
   
-  // WIDER, ATR-BASED SL: 1.5x ATR instead of fixed pips
-  const slDistance = currentAtr * 1.5;
+  // TIGHTER SL: 1.2x ATR instead of 1.5x (reduces risk per trade)
+  const slDistance = currentAtr * 1.2;
   let slPrice = entryPrice;
   
   if (direction === 'LONG') {
@@ -544,9 +544,10 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   }
 
   const riskValue = Math.abs(entryPrice - slPrice);
-  const tp1 = direction === 'LONG' ? entryPrice + (riskValue * 1.0) : entryPrice - (riskValue * 1.0);
-  const tp2 = direction === 'LONG' ? entryPrice + (riskValue * 2.0) : entryPrice - (riskValue * 2.0);
-  const tp3 = direction === 'LONG' ? entryPrice + (riskValue * 3.0) : entryPrice - (riskValue * 3.0);
+  // WIDER TPs: 2x/3x/5x ATR instead of 1x/2x/3x (increases reward per trade)
+  const tp1 = direction === 'LONG' ? entryPrice + (riskValue * 2.0) : entryPrice - (riskValue * 2.0);
+  const tp2 = direction === 'LONG' ? entryPrice + (riskValue * 3.0) : entryPrice - (riskValue * 3.0);
+  const tp3 = direction === 'LONG' ? entryPrice + (riskValue * 5.0) : entryPrice - (riskValue * 5.0);
 
   let tier: Signal['tier'] = 'Reject';
   if (confidence >= 85) tier = 'Strong';
