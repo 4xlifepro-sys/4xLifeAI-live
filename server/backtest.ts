@@ -403,4 +403,4 @@ async function runBacktest(): Promise<BacktestResult> {
   
   console.log('\n====================================');
   console.log(`[BACKTEST] Complete in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-  console.log('
+  console.log('====================================');
