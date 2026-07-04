@@ -248,14 +248,13 @@ async function runBacktest(): Promise<BacktestResult> {
     console.log(`  H4: ${h4Range.start} to ${h4Range.end} (${h4.length} candles)`);
     console.log(`  M5: ${m5Range.start} to ${m5Range.end} (${m5.length} candles)`);
     
-    const h4StartIdx = Math.max(0, h4.length - 50);
     let pairSignalCount = 0;
     
     // Step through M5 candles one by one
     // Skip first 50 candles to ensure indicators are warmed up
     for (let i = 50; i < m5.length - 100; i++) {
       const m5Slice = m5.slice(0, i + 1);
-      const h4Slice = h4.slice(h4StartIdx);
+      const h4Slice = h4;  // Pass ALL H4 candles for proper EMA50 calculation
       
       // Run engine on historical slice
       const result = detectTrendMomentumScannerV5(pair, h4Slice, m5Slice, m5Slice);
