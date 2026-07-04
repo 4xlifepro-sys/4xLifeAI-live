@@ -417,14 +417,14 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
              hardReject = 'REJECT_STOCHASTIC';
           }
 
-          // Momentum candle check — look at last 5 candles for a strong directional candle
+          // Momentum candle check — look at last 8 candles for a strong directional candle (M5-appropriate thresholds)
           let momentumCandleFound = false;
-          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 4); mi--) {
+          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 7); mi--) {
              const mBody = Math.abs(setup[mi].close - setup[mi].open);
              const mRange = Math.abs(setup[mi].high - setup[mi].low);
              const mIsGreen = setup[mi].close > setup[mi].open;
              const mCloseInTopHalf = setup[mi].close >= (setup[mi].high + setup[mi].low) / 2;
-             if (mRange > 0 && mBody >= 0.4 * mRange && mCloseInTopHalf && mIsGreen) {
+             if (mRange > 0 && mBody >= 0.3 * mRange && mCloseInTopHalf && mIsGreen) {
                 momentumCandleFound = true;
                 break;
              }
@@ -484,14 +484,14 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
              hardReject = 'REJECT_STOCHASTIC';
           }
 
-          // Momentum candle check — look at last 5 candles for a strong directional candle
+          // Momentum candle check — look at last 8 candles for a strong directional candle (M5-appropriate thresholds)
           let momentumCandleFound = false;
-          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 4); mi--) {
+          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 7); mi--) {
              const mBody = Math.abs(setup[mi].close - setup[mi].open);
              const mRange = Math.abs(setup[mi].high - setup[mi].low);
              const mIsRed = setup[mi].close < setup[mi].open;
              const mCloseInBottomHalf = setup[mi].close <= (setup[mi].high + setup[mi].low) / 2;
-             if (mRange > 0 && mBody >= 0.4 * mRange && mCloseInBottomHalf && mIsRed) {
+             if (mRange > 0 && mBody >= 0.3 * mRange && mCloseInBottomHalf && mIsRed) {
                 momentumCandleFound = true;
                 break;
              }

@@ -7,7 +7,6 @@ const PAIR = 'EURUSD';
 
 console.log(`\n=== M5 SANITY CHECK: ${PAIR} ===\n`);
 
-// Fetch 6 months of H4 and 1 week of M5
 const h4Promise = fetchCandles(PAIR, '4h', 1080);
 const m5Promise = fetchCandles(PAIR, '5min', 2016);
 
