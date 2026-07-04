@@ -1,0 +1,28 @@
+{
+  "totalSignals": 0,
+  "closedTrades": 0,
+  "wins": 0,
+  "losses": 0,
+  "breakevens": 0,
+  "partialWins": 0,
+  "winRate": 0,
+  "avgWinPips": 0,
+  "avgLossPips": 0,
+  "totalPips": 0,
+  "maxDrawdown": 0,
+  "maxConsecutiveLosses": 0,
+  "avgTradeDuration": 0,
+  "signalFrequency": 0,
+  "firstSignalDate": null,
+  "lastSignalDate": null,
+  "daysToFirstSignal": null,
+  "h4Range": {
+    "start": "N/A",
+    "end": "N/A"
+  },
+  "m5Range": {
+    "start": "N/A",
+    "end": "N/A"
+  },
+  "trades": []
+}

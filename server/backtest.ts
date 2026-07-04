@@ -28,6 +28,7 @@ interface Trade {
   result?: 'WIN' | 'LOSS' | 'PARTIAL_WIN' | 'BREAKEVEN' | 'OPEN';
   confidence?: number;
   tier?: string;
+  timeframe?: 'H4' | 'M5';
 }
 
 interface BacktestResult {
@@ -48,7 +49,8 @@ interface BacktestResult {
   firstSignalDate: string | null;
   lastSignalDate: string | null;
   daysToFirstSignal: number | null;
-  dataRange: { start: string; end: string };
+  h4Range: { start: string; end: string };
+  m5Range: { start: string; end: string };
   trades: Trade[];
 }
 
@@ -170,7 +172,7 @@ function simulateTradeOutcome(
   return result;
 }
 
-async function fetchHistoricalData(pair: string, months: number = 6): Promise<{ h4: Candle[], m5: Candle[] } | null> {
+async function fetchHistoricalData(pair: string, months: number = 6): Promise<{ h4: Candle[], m5: Candle[], h4Range: {start: string, end: string}, m5Range: {start: string, end: string} } | null> {
   console.log(`[BACKTEST] Fetching ${months} months of data for ${pair}...`);
   
   try {
@@ -196,15 +198,21 @@ async function fetchHistoricalData(pair: string, months: number = 6): Promise<{ 
       return null;
     }
     
-    const dataRange = {
+    const h4Range = {
+      start: h4[0].timestamp,
+      end: h4[h4.length - 1].timestamp
+    };
+    
+    const m5Range = {
       start: m5[0].timestamp,
       end: m5[m5.length - 1].timestamp
     };
     
     console.log(`[BACKTEST] ${pair}: ${h4.length} H4 candles, ${m5.length} M5 candles`);
-    console.log(`         Range: ${dataRange.start} to ${dataRange.end}`);
+    console.log(`         H4 Range: ${h4Range.start} to ${h4Range.end}`);
+    console.log(`         M5 Range: ${m5Range.start} to ${m5Range.end}`);
     
-    return { h4, m5 };
+    return { h4, m5, h4Range, m5Range };
   } catch (e: any) {
     console.error(`[BACKTEST] Error fetching ${pair}:`, e.message);
     return null;
@@ -218,8 +226,10 @@ async function runBacktest(): Promise<BacktestResult> {
   
   const allTrades: Trade[] = [];
   const startTime = Date.now();
-  let globalDataStart: string | null = null;
-  let globalDataEnd: string | null = null;
+  let globalH4Start: string | null = null;
+  let globalH4End: string | null = null;
+  let globalM5Start: string | null = null;
+  let globalM5End: string | null = null;
   
   for (const pair of PAIRS) {
     console.log(`\n[BACKTEST] Processing ${pair}...`);
@@ -227,10 +237,16 @@ async function runBacktest(): Promise<BacktestResult> {
     const data = await fetchHistoricalData(pair, 6);
     if (!data) continue;
     
-    const { h4, m5 } = data;
+    const { h4, m5, h4Range, m5Range } = data;
     
-    if (!globalDataStart) globalDataStart = m5[0].timestamp;
-    globalDataEnd = m5[m5.length - 1].timestamp;
+    if (!globalH4Start) globalH4Start = h4Range.start;
+    if (!globalH4End) globalH4End = h4Range.end;
+    if (!globalM5Start) globalM5Start = m5Range.start;
+    if (!globalM5End) globalM5End = m5Range.end;
+    
+    console.log(`[BACKTEST] ${pair} data ranges:`);
+    console.log(`  H4: ${h4Range.start} to ${h4Range.end} (${h4.length} candles)`);
+    console.log(`  M5: ${m5Range.start} to ${m5Range.end} (${m5.length} candles)`);
     
     const h4StartIdx = Math.max(0, h4.length - 50);
     let pairSignalCount = 0;
@@ -256,7 +272,8 @@ async function runBacktest(): Promise<BacktestResult> {
           tp3: result.signal.tp3,
           entryTime: result.signal.timestamp,
           confidence: result.signal.aiConfidence,
-          tier: result.signal.tier
+          tier: result.signal.tier,
+          timeframe: 'M5'
         };
         
         // Simulate outcome over next 100 candles (8+ hours)
@@ -332,9 +349,9 @@ async function runBacktest(): Promise<BacktestResult> {
   let daysToFirstSignal: number | null = null;
   let signalFrequency = 0;
   
-  if (firstSignalDate && globalDataStart) {
+  if (firstSignalDate && globalM5Start) {
     const firstSignal = new Date(firstSignalDate);
-    const dataStart = new Date(globalDataStart);
+    const dataStart = new Date(globalM5Start);
     daysToFirstSignal = (firstSignal.getTime() - dataStart.getTime()) / (1000 * 60 * 60 * 24);
     
     if (lastSignalDate) {
@@ -371,9 +388,13 @@ async function runBacktest(): Promise<BacktestResult> {
     firstSignalDate,
     lastSignalDate,
     daysToFirstSignal,
-    dataRange: {
-      start: globalDataStart || 'N/A',
-      end: globalDataEnd || 'N/A'
+    h4Range: {
+      start: globalH4Start || 'N/A',
+      end: globalH4End || 'N/A'
+    },
+    m5Range: {
+      start: globalM5Start || 'N/A',
+      end: globalM5End || 'N/A'
     },
     trades: allTrades
   };
@@ -382,7 +403,8 @@ async function runBacktest(): Promise<BacktestResult> {
   console.log('[BACKTEST] Summary Statistics');
   console.log('====================================\n');
   
-  console.log(`Data Range: ${result.dataRange.start} to ${result.dataRange.end}`);
+  console.log(`H4 Data Range: ${result.h4Range.start} to ${result.h4Range.end}`);
+  console.log(`M5 Data Range: ${result.m5Range.start} to ${result.m5Range.end}`);
   console.log(`\nTotal Signals Fired: ${result.totalSignals}`);
   console.log(`Closed Trades: ${result.closedTrades}`);
   console.log(`  Wins: ${result.wins}`);
