@@ -91,9 +91,24 @@ function atr(candles: Candle[], period: number = 14): number[] {
 
 // Export for scanner.ts compatibility
 export function getPipMultiplier(pair: string): number {
+  // Forex JPY pairs
   if (pair.includes('JPY')) return 0.01;
-  if (pair.startsWith('X') && !pair.includes('XRP')) return 0.1;
-  if (pair.includes('BTC') || pair.includes('ETH') || pair.includes('SOL') || pair.includes('BNB') || pair.includes('LTC') || pair.includes('DOT') || pair.includes('ADA') || pair.includes('XRP')) return 1;
+  
+  // Forex majors/minors
+  if (pair.includes('XAU')) return 0.1;  // Gold
+  if (pair.includes('XAG')) return 0.01; // Silver
+  
+  // Crypto - tiered by price range
+  // High price crypto ($1K+): 1 pip = $1
+  if (pair.includes('BTC') || pair.includes('ETH')) return 1;
+  
+  // Medium price crypto ($10-$300): 1 pip = $0.10
+  if (pair.includes('SOL') || pair.includes('BNB') || pair.includes('LTC') || pair.includes('DOT')) return 0.1;
+  
+  // Low price crypto ($0.01-$3): 1 pip = $0.01
+  if (pair.includes('XRP') || pair.includes('ADA') || pair.includes('DOGE')) return 0.01;
+  
+  // Default for everything else (forex, indices)
   return 0.0001;
 }
 
