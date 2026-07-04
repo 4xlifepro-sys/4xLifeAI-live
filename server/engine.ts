@@ -397,20 +397,32 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
           if (pullbackValid) { confidence += 2; cb.pullback = 2; reason.push('+2 Clean Pullback'); }
           else { hardReject = 'REJECT_NO_PULLBACK'; }
 
-          if (currentK > currentD && currentK <= 30) {
+          // Stochastic bullish confirmation — require K > D (directional) AND a recent
+          // candle in the lower half (proves we came out of a pullback, not random drift)
+          let stochConfirmed = false;
+          if (currentK > currentD) {
+             for (let si = lastIdx; si >= Math.max(0, lastIdx - 4); si--) {
+                const sk = stoch.k[si];
+                if (sk !== null && sk <= 45) {
+                   stochConfirmed = true;
+                   break;
+                }
+             }
+          }
+          if (stochConfirmed) {
              confidence += 2; cb.stochastic = 2; reason.push('+2 Stochastic Confirm');
           } else {
              hardReject = 'REJECT_STOCHASTIC';
           }
 
-          // Momentum candle check — look at last 3 candles for a strong directional candle
+          // Momentum candle check — look at last 5 candles for a strong directional candle
           let momentumCandleFound = false;
-          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 2); mi--) {
+          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 4); mi--) {
              const mBody = Math.abs(setup[mi].close - setup[mi].open);
              const mRange = Math.abs(setup[mi].high - setup[mi].low);
              const mIsGreen = setup[mi].close > setup[mi].open;
              const mCloseInTopHalf = setup[mi].close >= (setup[mi].high + setup[mi].low) / 2;
-             if (mRange > 0 && mBody >= 0.5 * mRange && mCloseInTopHalf && mIsGreen) {
+             if (mRange > 0 && mBody >= 0.4 * mRange && mCloseInTopHalf && mIsGreen) {
                 momentumCandleFound = true;
                 break;
              }
@@ -452,20 +464,32 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
           if (pullbackValid) { confidence += 2; cb.pullback = 2; reason.push('+2 Clean Pullback'); }
           else { hardReject = 'REJECT_NO_PULLBACK'; }
 
-          if (currentK < currentD && currentK >= 70) {
+          // Stochastic bearish confirmation — require K < D (directional) AND a recent
+          // candle in the upper half (proves we came out of an overbought pullback)
+          let stochConfirmed = false;
+          if (currentK < currentD) {
+             for (let si = lastIdx; si >= Math.max(0, lastIdx - 4); si--) {
+                const sk = stoch.k[si];
+                if (sk !== null && sk >= 55) {
+                   stochConfirmed = true;
+                   break;
+                }
+             }
+          }
+          if (stochConfirmed) {
              confidence += 2; cb.stochastic = 2; reason.push('+2 Stochastic Confirm');
           } else {
              hardReject = 'REJECT_STOCHASTIC';
           }
 
-          // Momentum candle check — look at last 3 candles for a strong directional candle
+          // Momentum candle check — look at last 5 candles for a strong directional candle
           let momentumCandleFound = false;
-          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 2); mi--) {
+          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 4); mi--) {
              const mBody = Math.abs(setup[mi].close - setup[mi].open);
              const mRange = Math.abs(setup[mi].high - setup[mi].low);
              const mIsRed = setup[mi].close < setup[mi].open;
              const mCloseInBottomHalf = setup[mi].close <= (setup[mi].high + setup[mi].low) / 2;
-             if (mRange > 0 && mBody >= 0.5 * mRange && mCloseInBottomHalf && mIsRed) {
+             if (mRange > 0 && mBody >= 0.4 * mRange && mCloseInBottomHalf && mIsRed) {
                 momentumCandleFound = true;
                 break;
              }
