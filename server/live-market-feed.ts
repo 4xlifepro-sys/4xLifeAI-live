@@ -204,40 +204,67 @@ export async function fetchHistoricalCandles(
     const CHUNK = 1000;
     let remaining = count;
     let toTimestamp: number | undefined = undefined;
+    let iteration = 0;
 
     while (remaining > 0) {
+      iteration++;
       const batchSize = Math.min(remaining, CHUNK);
       const params: any = { symbolId, period, count: batchSize };
       if (toTimestamp !== undefined) params.toTimestamp = toTimestamp;
 
+      console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Requesting ${batchSize} bars, toTimestamp=${toTimestamp || 'undefined'}, remaining=${remaining}`);
+
       const result = await client.raw.market.getTrendbars(params);
       const bars = Array.isArray(result) ? result : result?.trendbars || [];
 
-      if (!bars.length) break;
+      console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Received ${bars.length} bars`);
+
+      if (!bars.length) {
+        console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: No bars returned, stopping`);
+        break;
+      }
 
       const decoded = bars
         .map((bar: any) => decodeTrendbar(bar, digits))
         .filter((bar): bar is Candle => Boolean(bar));
 
+      console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Decoded ${decoded.length} candles`);
+
+      if (decoded.length > 0) {
+        const oldestBar = decoded[0];
+        const newestBar = decoded[decoded.length - 1];
+        console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Range ${oldestBar.timestamp} to ${newestBar.timestamp}`);
+      }
+
       // Prepend to build array in chronological order (oldest first)
       allCandles.unshift(...decoded);
 
-      // If we got fewer bars than requested, we've reached the end
-      if (bars.length < batchSize) break;
+      console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Total candles so far: ${allCandles.length}`);
 
-      // Get the OLDEST timestamp (last element in decoded array)
-      // API returns bars newest-first, so decoded[length-1] is oldest
-      const oldestBar = decoded[decoded.length - 1];
-      if (!oldestBar?.timestamp) break;
+      // If we got fewer bars than requested, we've reached the end
+      if (bars.length < batchSize) {
+        console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Received ${bars.length} < ${batchSize} requested, reached end of data`);
+        break;
+      }
+
+      // Get the OLDEST timestamp (first element in decoded array after unshift prepends)
+      // After unshift, decoded[0] is the oldest bar we just received
+      const oldestBar = decoded[0];
+      if (!oldestBar?.timestamp) {
+        console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: No valid timestamp on oldest bar, stopping`);
+        break;
+      }
       
       // Set toTimestamp to fetch data BEFORE this oldest bar
       toTimestamp = new Date(oldestBar.timestamp).getTime() / (60 * 1000);
+      console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Next toTimestamp=${toTimestamp} (${new Date(toTimestamp * 60000).toISOString()})`);
 
       remaining -= decoded.length;
 
       await new Promise(r => setTimeout(r, 150));
     }
 
+    console.log(`[Historical] ${pair} ${interval} - Final: ${allCandles.length} total candles across ${iteration} iterations`);
     return allCandles;
   } catch (error: any) {
     if (!error?.message?.includes('terminated')) {
