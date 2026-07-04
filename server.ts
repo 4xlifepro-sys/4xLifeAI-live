@@ -520,7 +520,7 @@ async function startServer() {
 
     try {
       const liveModule: any = await import('./server/live-market-feed.js');
-      const approved = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'NZDJPY', 'CADJPY', 'CHFJPY', 'EURAUD', 'EURNZD', 'GBPAUD', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOTUSD'];
+      const approved = ['EURUSD', 'USDJPY', 'USDCAD', 'NZDUSD', 'EURJPY', 'GBPJPY', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD'];
       const results: any[] = [];
       for (const [index, pair] of approved.entries()) {
         const item = await liveModule.getLatestPrice(pair);
