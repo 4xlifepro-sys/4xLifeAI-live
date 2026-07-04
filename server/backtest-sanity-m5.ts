@@ -117,19 +117,26 @@ for (let i = 0; i < sampleCount; i++) {
     
     // Show detailed examples for STOCHASTIC and COUNTER_TREND rejections
     if (primaryReason === 'REJECT_STOCHASTIC' && stochasticExamples.length < 5) {
+      const diag = result.signal?.diagnostics as any;
       stochasticExamples.push({
         candleIndex: i,
         aiReason: result.signal?.aiReason,
-        confidenceBreakdown: result.signal?.diagnostics?.confidenceBreakdown,
-        bias: result.signal?.bias
+        bias: result.signal?.bias,
+        stochK: diag?.stochK,
+        stochD: diag?.stochD,
+        directionalCross: diag?.directionalCross,
+        recentExtreme: diag?.recentExtreme
       });
     }
     if (primaryReason === 'REJECT_COUNTER_TREND' && counterTrendExamples.length < 5) {
+      const diag = result.signal?.diagnostics as any;
       counterTrendExamples.push({
         candleIndex: i,
         aiReason: result.signal?.aiReason,
-        confidenceBreakdown: result.signal?.diagnostics?.confidenceBreakdown,
-        bias: result.signal?.bias
+        bias: result.signal?.bias,
+        price: diag?.currentPrice,
+        ema: diag?.ema50,
+        distance: diag?.priceEmaDistance
       });
     }
   }

@@ -592,7 +592,15 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
           pullbackLow: pullbackExtreme,
           confidenceBreakdown: cb,
           regimeState: regime,
-          pathTrace: `Input -> Regime(${regime}) -> Filter(REJECTED: ${hardReject}) -> Dedup(N/A) -> Active Check(N/A)`
+          pathTrace: `Input -> Regime(${regime}) -> Filter(REJECTED: ${hardReject}) -> Dedup(N/A) -> Active Check(N/A)`,
+          // Expose computed values for diagnostics
+          stochK: stochK[stochK.length - 1],
+          stochD: stochD[stochD.length - 1],
+          ema50: ema50[ema50.length - 1],
+          currentPrice: current5M.close,
+          priceEmaDistance: Math.abs(current5M.close - ema50[ema50.length - 1]),
+          directionalCross,
+          recentExtreme
         }
       }, scores, regime, regimeReason };
   }
