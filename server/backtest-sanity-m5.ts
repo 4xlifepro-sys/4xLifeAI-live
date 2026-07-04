@@ -40,6 +40,8 @@ const sampleCount = Math.min(100, m5Filtered.length);
 let activeCount = 0;
 let rejectCount = 0;
 const rejectReasons: Record<string, number> = {};
+const stochasticExamples: any[] = [];
+const counterTrendExamples: any[] = [];
 const primaryRejectReasons: Record<string, number> = {};
 const failureCounts: Record<number, number> = {};
 let maxConf = 0;
@@ -112,6 +114,24 @@ for (let i = 0; i < sampleCount; i++) {
                  (result.regime === 'CHOP' ? 'REJECT_EMA_FLAT' : 
                   result.regime === 'VOLATILE' ? 'REJECT_SPIKE' : 'NO_BIAS_OR_OTHER');
     primaryRejectReasons[primaryReason] = (primaryRejectReasons[primaryReason] || 0) + 1;
+    
+    // Show detailed examples for STOCHASTIC and COUNTER_TREND rejections
+    if (primaryReason === 'REJECT_STOCHASTIC' && stochasticExamples.length < 5) {
+      stochasticExamples.push({
+        candleIndex: i,
+        aiReason: result.signal?.aiReason,
+        confidenceBreakdown: result.signal?.diagnostics?.confidenceBreakdown,
+        bias: result.signal?.bias
+      });
+    }
+    if (primaryReason === 'REJECT_COUNTER_TREND' && counterTrendExamples.length < 5) {
+      counterTrendExamples.push({
+        candleIndex: i,
+        aiReason: result.signal?.aiReason,
+        confidenceBreakdown: result.signal?.diagnostics?.confidenceBreakdown,
+        bias: result.signal?.bias
+      });
+    }
   }
 }
 
@@ -134,6 +154,43 @@ console.log(`\n=== FAILURE COUNT DISTRIBUTION (how many filters failed per candl
 Object.entries(failureCounts).sort((a,b) => Number(a[0]) - Number(b[0])).forEach(([count, num]) => {
   console.log(`  ${count} filter(s) failed: ${num} candles (${((num/rejectCount)*100).toFixed(1)}%)`);
 });
+
+console.log('\n=== SAMPLE STOCHASTIC REJECTIONS ===');
+if (stochasticExamples.length > 0) {
+  stochasticExamples.forEach((ex, idx) => {
+    const k = ex.stochasticK?.toFixed(2) || 'N/A';
+    const d = ex.stochasticD?.toFixed(2) || 'N/A';
+    const kRequired = ex.bias === 'BULLISH' ? '<=30' : '>=70';
+    console.log(`\nSTOCHASTIC Example ${idx + 1}:`);
+    console.log(`  Candle index: ${ex.candleIndex}`);
+    console.log(`  Bias: ${ex.bias}`);
+    console.log(`  Stochastic K: ${k} (required ${kRequired} for ${ex.bias})`);
+    console.log(`  Stochastic D: ${d}`);
+    console.log(`  Directional cross: ${ex.directionalCross ? 'YES' : 'NO'}`);
+    console.log(`  Recent extreme (K<=45 or K>=55): ${ex.recentExtreme ? 'YES' : 'NO'}`);
+  });
+} else {
+  console.log('  No stochastic rejections in this sample');
+}
+
+console.log('\n=== SAMPLE COUNTER-TREND REJECTIONS ===');
+if (counterTrendExamples.length > 0) {
+  counterTrendExamples.forEach((ex, idx) => {
+    const price = ex.price?.toFixed(5) || 'N/A';
+    const ema = ex.ema?.toFixed(5) || 'N/A';
+    const distance = ex.distance?.toFixed(5) || 'N/A';
+    console.log(`\nCOUNTER-TREND Example ${idx + 1}:`);
+    console.log(`  Candle index: ${ex.candleIndex}`);
+    console.log(`  Bias: ${ex.bias}`);
+    console.log(`  Current price: ${price}`);
+    console.log(`  EMA50: ${ema}`);
+    console.log(`  Distance from EMA: ${distance} pips`);
+    console.log(`  Required: ${ex.bias === 'BULLISH' ? 'price > EMA' : 'price < EMA'}`);
+    console.log(`  Actual: ${ex.bias === 'BULLISH' ? 'price < EMA' : 'price > EMA'} (COUNTER-TREND)`);
+  });
+} else {
+  console.log('  No counter-trend rejections in this sample');
+}
 
 console.log('\n=== DONE ===');
 process.exit(0);
