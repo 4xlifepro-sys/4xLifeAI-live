@@ -28,6 +28,7 @@ interface Trade {
   result?: 'WIN' | 'LOSS' | 'PARTIAL_WIN' | 'BREAKEVEN' | 'OPEN';
   confidence?: number;
   tier?: string;
+  timeframe?: 'H4' | 'M5';
 }
 
 function simulateTradeOutcome(
@@ -140,7 +141,7 @@ function simulateTradeOutcome(
   return result;
 }
 
-async function fetchHistoricalData(pair: string, months: number = 6): Promise<{ h4: Candle[], m5: Candle[] } | null> {
+async function fetchHistoricalData(pair: string, months: number = 6): Promise<{ h4: Candle[], m5: Candle[], h4Range: {start: string, end: string}, m5Range: {start: string, end: string} } | null> {
   console.log(`[BACKTEST] Fetching ${months} months of data for ${pair}...`);
   
   try {
@@ -163,9 +164,19 @@ async function fetchHistoricalData(pair: string, months: number = 6): Promise<{ 
       return null;
     }
     
+    const h4Range = {
+      start: h4[0].timestamp,
+      end: h4[h4.length - 1].timestamp
+    };
+    
+    const m5Range = {
+      start: m5[0].timestamp,
+      end: m5[m5.length - 1].timestamp
+    };
+    
     console.log(`[BACKTEST] ${pair}: ${h4.length} H4 candles, ${m5.length} M5 candles`);
     
-    return { h4, m5 };
+    return { h4, m5, h4Range, m5Range };
   } catch (e: any) {
     console.error(`[BACKTEST] Error fetching ${pair}:`, e.message);
     return null;
@@ -207,7 +218,8 @@ async function runBacktest(): Promise<Trade[]> {
           tp3: result.signal.tp3,
           entryTime: m5[i].timestamp,
           confidence: result.signal.aiConfidence,
-          tier: result.signal.tier
+          tier: result.signal.tier,
+          timeframe: 'M5'
         };
         
         const futureCandles = m5.slice(i + 1, Math.min(i + 101, m5.length));
@@ -216,10 +228,6 @@ async function runBacktest(): Promise<Trade[]> {
           const completedTrade = simulateTradeOutcome(trade, futureCandles, pair);
           allTrades.push(completedTrade);
           pairSignalCount++;
-          
-          if (pairSignalCount % 10 === 0) {
-            console.log(`  ✓ ${pair}: ${pairSignalCount} signals so far`);
-          }
         }
       }
       
@@ -247,7 +255,6 @@ function analyzeByConfidence(trades: Trade[]) {
     return;
   }
   
-  // Group by confidence buckets
   const buckets: { [key: string]: Trade[] } = {
     '70-75': [],
     '75-80': [],
@@ -276,33 +283,35 @@ function analyzeByConfidence(trades: Trade[]) {
   console.log('[ANALYSIS] Win Rate by Confidence Bucket');
   console.log('====================================\n');
   
-  console.log('Confidence | Trades | Wins | Losses | Win Rate | Avg Pips');
-  console.log('-----------|--------|------|--------|----------|----------');
-  
-  let totalWins = 0;
-  let totalLosses = 0;
+  console.log('Confidence | Trades | Wins | Losses | Win Rate | Avg Win | Avg Loss | Net Pips');
+  console.log('-----------|--------|------|--------|----------|---------|----------|----------');
   
   for (const [bucket, bucketTrades] of Object.entries(buckets)) {
     if (bucketTrades.length === 0) {
-      console.log(`${bucket.padEnd(11)}| ${'0'.padEnd(6)} | ${'0'.padEnd(4)} | ${'0'.padEnd(6)} | ${'N/A'.padEnd(8)} | N/A`);
+      console.log(`${bucket.padEnd(11)}| ${'0'.padEnd(6)} | ${'0'.padEnd(4)} | ${'0'.padEnd(6)} | ${'N/A'.padEnd(8)} | ${'N/A'.padEnd(7)} | ${'N/A'.padEnd(8)} | N/A`);
       continue;
     }
     
     const wins = bucketTrades.filter(t => t.result === 'WIN' || t.result === 'PARTIAL_WIN' || t.result === 'BREAKEVEN');
     const losses = bucketTrades.filter(t => t.result === 'LOSS');
     const winRate = (wins.length / bucketTrades.length) * 100;
-    const avgPips = bucketTrades.reduce((sum, t) => sum + (t.pips || 0), 0) / bucketTrades.length;
     
-    totalWins += wins.length;
-    totalLosses += losses.length;
+    const winPips = wins.reduce((sum, t) => sum + (t.pips || 0), 0);
+    const lossPips = Math.abs(losses.reduce((sum, t) => sum + (t.pips || 0), 0));
+    const avgWin = wins.length > 0 ? winPips / wins.length : 0;
+    const avgLoss = losses.length > 0 ? lossPips / losses.length : 0;
+    
+    const netPips = bucketTrades.reduce((sum, t) => sum + (t.pips || 0), 0);
     
     console.log(
       `${bucket.padEnd(11)}| ` +
       `${bucketTrades.length.toString().padEnd(6)} | ` +
       `${wins.length.toString().padEnd(4)} | ` +
       `${losses.length.toString().padEnd(6)} | ` +
-      `${winRate.toFixed(2).padEnd(8)}% | ` +
-      `${avgPips.toFixed(2).padEnd(8)}`
+      `${winRate.toFixed(1).padEnd(7)}% | ` +
+      `${avgWin.toFixed(2).padEnd(7)} | ` +
+      `${avgLoss.toFixed(2).padEnd(8)} | ` +
+      `${netPips.toFixed(1).padEnd(8)}`
     );
   }
   
@@ -310,10 +319,9 @@ function analyzeByConfidence(trades: Trade[]) {
   console.log('[ANALYSIS] Interpretation');
   console.log('====================================\n');
   
-  // Check if confidence correlates with win rate
   const bucketWinRates: number[] = [];
   for (const bucketTrades of Object.values(buckets)) {
-    if (bucketTrades.length > 10) { // Only count buckets with significant sample size
+    if (bucketTrades.length > 10) {
       const wins = bucketTrades.filter(t => t.result === 'WIN' || t.result === 'PARTIAL_WIN' || t.result === 'BREAKEVEN');
       const winRate = (wins.length / bucketTrades.length) * 100;
       bucketWinRates.push(winRate);
@@ -326,36 +334,45 @@ function analyzeByConfidence(trades: Trade[]) {
     if (maxDiff < 10) {
       console.log('❌ CONFIDENCE SCORE IS NOT PREDICTIVE');
       console.log(`   Win rates across buckets vary by only ${maxDiff.toFixed(1)}%`);
-      console.log('   This suggests the confidence scoring system is not correlated with actual win/loss outcomes.');
-      console.log('   Consider redesigning the scoring formula to include factors that actually predict success.');
+      console.log('   The confidence scoring system is not correlated with actual win/loss outcomes.');
+      console.log('   Recommendation: Redesign the scoring formula to include factors that actually predict success.');
     } else if (maxDiff < 20) {
       console.log('⚠️  CONFIDENCE SCORE HAS WEAK PREDICTIVE POWER');
       console.log(`   Win rates across buckets vary by ${maxDiff.toFixed(1)}%`);
-      console.log('   Some correlation exists, but the relationship is not strong.');
+      console.log('   Some correlation exists, but not strong enough to rely on for filtering.');
     } else {
       console.log('✅ CONFIDENCE SCORE HAS PREDICTIVE POWER');
       console.log(`   Win rates across buckets vary by ${maxDiff.toFixed(1)}%`);
       console.log('   Higher confidence scores correlate with higher win rates.');
+      console.log('   Recommendation: Focus on higher confidence buckets for live signals.');
     }
   }
   
-  console.log('\n====================================');
-  console.log('[ANALYSIS] Summary');
-  console.log('====================================\n');
+  // Find profitable buckets
+  const profitableBuckets: string[] = [];
+  for (const [bucket, bucketTrades] of Object.entries(buckets)) {
+    if (bucketTrades.length > 0) {
+      const netPips = bucketTrades.reduce((sum, t) => sum + (t.pips || 0), 0);
+      if (netPips > 0) {
+        profitableBuckets.push(`${bucket} (+${netPips.toFixed(1)} pips)`);
+      }
+    }
+  }
   
-  const overallWinRate = (totalWins / closedTrades.length) * 100;
-  console.log(`Total Closed Trades: ${closedTrades.length}`);
-  console.log(`Overall Win Rate: ${overallWinRate.toFixed(2)}%`);
-  console.log(`Total Wins: ${totalWins}`);
-  console.log(`Total Losses: ${totalLosses}`);
+  if (profitableBuckets.length > 0) {
+    console.log(`\n✅ PROFITABLE BUCKETS FOUND:`);
+    profitableBuckets.forEach(b => console.log(`   ${b}`));
+    console.log('   These confidence ranges generated positive returns in the backtest.');
+  } else {
+    console.log(`\n❌ NO PROFITABLE BUCKETS`);
+    console.log('   All confidence ranges lost money in this backtest.');
+    console.log('   The strategy needs fundamental changes, not just threshold tuning.');
+  }
 }
 
-// Run backtest
 runBacktest().then(async trades => {
-  // Analyze by confidence
   analyzeByConfidence(trades);
   
-  // Save trades to JSON for further analysis
   const fs = await import('fs');
   const path = await import('path');
   
