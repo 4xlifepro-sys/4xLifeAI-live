@@ -403,4 +403,23 @@ async function runBacktest(): Promise<BacktestResult> {
   
   console.log('\n====================================');
   console.log(`[BACKTEST] Complete in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-  console.log('====================================');
+  console.log('====================================\n');
+  
+  return result;
+}
+
+// Run backtest
+runBacktest().then(result => {
+  // Save trades to JSON for analysis
+  const fs = require('fs');
+  const path = require('path');
+  
+  const outputPath = path.join(process.cwd(), 'backtest-results.json');
+  fs.writeFileSync(outputPath, JSON.stringify(result, null, 2));
+  
+  console.log(`\n[BACKTEST] Results saved to: ${outputPath}`);
+  process.exit(0);
+}).catch(err => {
+  console.error('[BACKTEST] Fatal error:', err);
+  process.exit(1);
+});
