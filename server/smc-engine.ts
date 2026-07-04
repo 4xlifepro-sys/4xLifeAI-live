@@ -52,29 +52,29 @@ interface OrderBlock {
 }
 
 // Step 1: Find a strong H4 candle (body > 1.5x average of last 20)
+// Only consider the most recent H4 candle, not the strongest from all 20
 function findStrongH4Candle(h4Candles: Candle[]): StrongH4Candle | null {
   if (h4Candles.length < 20) return null;
+  
+  // Use only the most recent H4 candle
+  const candle = h4Candles[h4Candles.length - 1];
+  const body = Math.abs(candle.close - candle.open);
+  
+  // Calculate average body size from last 20 candles
   const recent = h4Candles.slice(-20);
   let totalBody = 0;
   for (const c of recent) {
     totalBody += Math.abs(c.close - c.open);
   }
   const avgBody = totalBody / recent.length;
-  let maxBody = 0;
-  let strongestIndex = -1;
-  for (let i = 0; i < recent.length; i++) {
-    const body = Math.abs(recent[i].close - recent[i].open);
-    if (body > maxBody) {
-      maxBody = body;
-      strongestIndex = i;
-    }
-  }
-  if (maxBody < avgBody * 1.5) return null;
-  const candle = recent[strongestIndex];
+  
+  // Check if it's strong enough (> 1.5x average)
+  if (body < avgBody * 1.5) return null;
+  
   const isBullish = candle.close > candle.open;
   return {
     candle,
-    index: h4Candles.length - 20 + strongestIndex,
+    index: h4Candles.length - 1,
     high: candle.high,
     low: candle.low,
     bodyTop: Math.max(candle.open, candle.close),
@@ -283,12 +283,13 @@ function waitForRetracement(
 
 // Step 6: Risk management
 // SL: beyond sweep wick tip by 2 pips buffer
-// TP1: 1:2 R:R, TP2: 1:3 R:R
+// TP1: 1:tpRatio R:R, TP2: 1:(tpRatio*1.5) R:R
 function calculateRiskManagement(
   sweepWickTip: number,
   entryPrice: number,
   direction: 'LONG' | 'SHORT',
-  pair: string
+  pair: string,
+  tpRatio: number = 2.0
 ): { sl: number; tp1: number; tp2: number } {
   const pipMultiplier = getPipMultiplier(pair);
   const buffer = 2 * pipMultiplier;
@@ -296,11 +297,11 @@ function calculateRiskManagement(
   if (direction === 'LONG') {
     sl = sweepWickTip - buffer;
     const risk = entryPrice - sl;
-    return { sl, tp1: entryPrice + risk * 2, tp2: entryPrice + risk * 3 };
+    return { sl, tp1: entryPrice + risk * tpRatio, tp2: entryPrice + risk * (tpRatio * 1.5) };
   } else {
     sl = sweepWickTip + buffer;
     const risk = sl - entryPrice;
-    return { sl, tp1: entryPrice - risk * 2, tp2: entryPrice - risk * 3 };
+    return { sl, tp1: entryPrice - risk * tpRatio, tp2: entryPrice - risk * (tpRatio * 1.5) };
   }
 }
 
@@ -312,7 +313,8 @@ function calculateRiskManagement(
 export function detectSMCSetup(
   pair: string,
   h4Candles: Candle[],
-  m5Candles: Candle[]
+  m5Candles: Candle[],
+  tpRatio: number = 2.0
 ): SMCSignal | null {
   // Step 1: Find strong H4 candle
   const h4Candle = findStrongH4Candle(h4Candles);
@@ -348,7 +350,7 @@ export function detectSMCSetup(
 
   // Step 6: Calculate risk management
   const direction = h4Candle.direction === 'bullish' ? 'LONG' : 'SHORT';
-  const risk = calculateRiskManagement(sweep.mostExtremeWick, retracement.entryPrice, direction, pair);
+  const risk = calculateRiskManagement(sweep.mostExtremeWick, retracement.entryPrice, direction, pair, tpRatio);
 
   const reason = `H4 ${h4Candle.direction} candle -> M5 liquidity sweep -> BOS -> retracement to OB`;
 

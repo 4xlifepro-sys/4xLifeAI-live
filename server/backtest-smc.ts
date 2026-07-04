@@ -180,19 +180,30 @@ async function runBacktest() {
     for (let i = 50; i < m5.length - 100; i += 5) {
       const m5Slice = m5.slice(0, i + 1);
 
-      // Check for SMC setup using current data slice
-      const signal = detectSMCSetup(pair, h4, m5Slice);
+      // Try first TP ratio
+      const signal = detectSMCSetup(pair, h4, m5Slice, TP_RATIOS[0]);
 
       if (signal) {
-        // Create separate trades for each TP ratio
+        // Create trades for each TP ratio using the SAME signal entry/SL
+        const risk = signal.direction === 'LONG'
+          ? signal.entry - signal.sl
+          : signal.sl - signal.entry;
+
         for (const tpRatio of TP_RATIOS) {
+          const tp1 = signal.direction === 'LONG'
+            ? signal.entry + risk * tpRatio
+            : signal.entry - risk * tpRatio;
+          const tp2 = signal.direction === 'LONG'
+            ? signal.entry + risk * tpRatio * 1.5
+            : signal.entry - risk * tpRatio * 1.5;
+
           const trade: Trade = {
             pair,
             direction: signal.direction,
             entry: signal.entry,
             sl: signal.sl,
-            tp1: signal.tp1,
-            tp2: signal.tp2,
+            tp1,
+            tp2,
             entryTime: m5[i].timestamp,
             confidence: signal.confidence,
             timeframe: 'M5',
@@ -212,6 +223,10 @@ async function runBacktest() {
             }
           }
         }
+        
+        // Skip ahead to avoid re-firing the same setup
+        // Skip past the entry candle plus some buffer
+        i += 50;
       }
     }
 
