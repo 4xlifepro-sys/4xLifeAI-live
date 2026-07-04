@@ -242,9 +242,10 @@ export async function fetchHistoricalCandles(
 
       console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Total candles so far: ${allCandles.length}`);
 
-      // If we got fewer bars than requested, we've reached the end
-      if (bars.length < batchSize) {
-        console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Received ${bars.length} < ${batchSize} requested, reached end of data`);
+      // If we got significantly fewer bars than requested, we've reached the end
+      // cTrader sometimes returns count-1 (e.g., 999 when requesting 1000), so only stop if it's much less
+      if (bars.length < batchSize - 50) {
+        console.log(`[Historical] ${pair} ${interval} - Iteration ${iteration}: Received ${bars.length} << ${batchSize} requested, reached end of data`);
         break;
       }
 
