@@ -1,0 +1,6 @@
+
+===== EURUSD BACKTEST (LIVE ENGINE: engine.ts) =====
+H4 candles: 1075
+M5 candles: 51478
+H4 range: 2026-01-05 07:00:00 to 2026-07-03 23:00:00
+M5 range: 2026-01-05 09:00:00 to 2026-07-04 00:00:00

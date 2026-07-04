@@ -1,5 +1,21 @@
 import { fetchCandles } from './live-market-feed.js';
-import { detectTrendMomentumScannerV5, getPipMultiplier, rejectionStats } from './engine.js';
+import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
+
+// Re-export rejectionStats for compatibility (engine2 doesn't track this)
+export const rejectionStats = {
+   ATR_LOW: 0,
+   EMA_FLAT: 0,
+   MOMENTUM: 0,
+   STOCHASTIC: 0,
+   VWAP: 0,
+   API_ERROR: 0,
+   SPIKE: 0,
+   COUNTER_TREND: 0,
+   NO_PULLBACK: 0,
+   STOP_DISTANCE: 0,
+   LOW_CONFIDENCE: 0,
+   ACTIVE_TRADE_EXISTS: 0
+};
 import { supabase } from './supabase.js';
 import { Signal, Stats, PairScanStatus, MarketState } from '../src/types.js';
 import { sendTelegramMessage } from './telegram.js';

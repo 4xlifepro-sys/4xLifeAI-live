@@ -1,4 +1,5 @@
-import type { Candle } from '../src/types.js';
+import type { Candle, Signal } from '../src/types.js';
+import crypto from 'crypto';
 
 export interface TradeSignal {
   symbol: string;
@@ -88,29 +89,12 @@ function atr(candles: Candle[], period: number = 14): number[] {
   return result;
 }
 
-// Get pip multiplier for a pair
-function getPipMultiplier(pair: string): number {
+// Export for scanner.ts compatibility
+export function getPipMultiplier(pair: string): number {
   if (pair.includes('JPY')) return 0.01;
-  if (pair.startsWith('X') && !pair.includes('XRP')) return 0.1; // Gold, Silver
+  if (pair.startsWith('X') && !pair.includes('XRP')) return 0.1;
   if (pair.includes('BTC') || pair.includes('ETH') || pair.includes('SOL') || pair.includes('BNB') || pair.includes('LTC') || pair.includes('DOT') || pair.includes('ADA') || pair.includes('XRP')) return 1;
   return 0.0001;
-}
-
-// Find recent swing low/high
-function findSwingLow(candles: Candle[], lookback: number = 10): number {
-  let low = Infinity;
-  for (let i = candles.length - lookback; i < candles.length; i++) {
-    if (candles[i].low < low) low = candles[i].low;
-  }
-  return low;
-}
-
-function findSwingHigh(candles: Candle[], lookback: number = 10): number {
-  let high = -Infinity;
-  for (let i = candles.length - lookback; i < candles.length; i++) {
-    if (candles[i].high > high) high = candles[i].high;
-  }
-  return high;
 }
 
 // Get hour from timestamp (UTC)
@@ -121,19 +105,18 @@ function getHour(timestamp: string): number {
 // Check if within trading session (London or NY)
 function isGoodSession(timestamp: string): boolean {
   const hour = getHour(timestamp);
-  // London: 07-16 UTC, NY: 12-21 UTC, Overlap: 12-16 UTC (best)
   return hour >= 7 && hour <= 21;
 }
 
 /**
  * MAIN SIGNAL FUNCTION
- * 
- * Simple trend-pullback strategy:
+ *
+ * Trend-pullback strategy:
  * 1. H4 trend: EMA20 direction determines bias
- * 2. M5 pullback: price touches M5 EMA20
+ * 2. M5 pullback: price touches M5 EMA20 zone
  * 3. RSI: not overbought/oversold
- * 4. ATR-based SL
- * 5. TP1=1R, TP2=2R, TP3=3R
+ * 4. ATR-based SL (1 ATR)
+ * 5. TP1=1.5R, TP2=3R, TP3=5R (wider for cost resistance)
  * 6. Session filter: London/NY only
  */
 export function detectSignalV2(
@@ -145,7 +128,6 @@ export function detectSignalV2(
 
   const currentM5 = m5Candles[m5Candles.length - 1];
 
-  // Session filter
   if (!isGoodSession(currentM5.timestamp)) return null;
 
   // === H4 TREND ===
@@ -154,11 +136,12 @@ export function detectSignalV2(
   const h4Trend = h4Closes[h4Closes.length - 1] > h4Ema20[h4Ema20.length - 1] ? 'BULL' : 'BEAR';
 
   // === M5 INDICATORS ===
-  const m5Closes = m5Candles.map(c => c.close);
+  const m5Window = m5Candles.slice(-200);
+  const m5Closes = m5Window.map(c => c.close);
   const m5Ema20 = ema(m5Closes, 20);
   const m5Ema9 = ema(m5Closes, 9);
   const m5Rsi = rsi(m5Closes, 14);
-  const m5Atr = atr(m5Candles, 14);
+  const m5Atr = atr(m5Window, 14);
 
   const currentPrice = currentM5.close;
   const currentEma20 = m5Ema20[m5Ema20.length - 1];
@@ -173,29 +156,24 @@ export function detectSignalV2(
 
   // === BULLISH SETUP ===
   if (h4Trend === 'BULL') {
-    // RSI not overbought
     if (currentRsi > 75) return null;
 
-    // Price pulled back to EMA20 zone (within 1 ATR)
     const pullbackZone = currentEma20;
     const distanceFromEma = currentPrice - pullbackZone;
 
-    // Price should be near or below EMA20, but EMA9 still above EMA20 (trend intact)
-    if (currentPrice > pullbackZone + currentAtr * 0.5) return null; // Too far above
-    if (currentEma9 <= currentEma20) return null; // M5 trend broken
+    if (currentPrice > pullbackZone + currentAtr * 0.5) return null;
+    if (currentEma9 <= currentEma20) return null;
 
-    // Entry: current price
     const entry = currentPrice;
     const sl = entry - risk;
-    const tp1 = entry + risk * 1;
-    const tp2 = entry + risk * 2;
-    const tp3 = entry + risk * 3;
+    const tp1 = entry + risk * 1.5;
+    const tp2 = entry + risk * 3;
+    const tp3 = entry + risk * 5;
 
-    // Confidence: higher when RSI closer to 50 (more room to run) and price closer to EMA
     let confidence = 55;
-    if (currentRsi >= 40 && currentRsi <= 60) confidence += 10; // Sweet spot
-    if (distanceFromEma > -currentAtr * 0.3) confidence += 5; // Close to EMA
-    if (h4Closes[h4Closes.length - 1] > h4Ema20[h4Ema20.length - 1] * 1.001) confidence += 5; // Strong H4 trend
+    if (currentRsi >= 40 && currentRsi <= 60) confidence += 10;
+    if (distanceFromEma > -currentAtr * 0.3) confidence += 5;
+    if (h4Closes[h4Closes.length - 1] > h4Ema20[h4Ema20.length - 1] * 1.001) confidence += 5;
 
     return {
       symbol: pair,
@@ -213,19 +191,19 @@ export function detectSignalV2(
 
   // === BEARISH SETUP ===
   if (h4Trend === 'BEAR') {
-    if (currentRsi < 25) return null; // RSI not oversold
+    if (currentRsi < 25) return null;
 
     const pullbackZone = currentEma20;
     const distanceFromEma = pullbackZone - currentPrice;
 
-    if (currentPrice < pullbackZone - currentAtr * 0.5) return null; // Too far below
-    if (currentEma9 >= currentEma20) return null; // M5 trend broken
+    if (currentPrice < pullbackZone - currentAtr * 0.5) return null;
+    if (currentEma9 >= currentEma20) return null;
 
     const entry = currentPrice;
     const sl = entry + risk;
-    const tp1 = entry - risk * 1;
-    const tp2 = entry - risk * 2;
-    const tp3 = entry - risk * 3;
+    const tp1 = entry - risk * 1.5;
+    const tp2 = entry - risk * 3;
+    const tp3 = entry - risk * 5;
 
     let confidence = 55;
     if (currentRsi >= 40 && currentRsi <= 60) confidence += 10;
@@ -247,4 +225,108 @@ export function detectSignalV2(
   }
 
   return null;
+}
+
+/**
+ * ADAPTER: Wraps detectSignalV2 to return scanner.ts-compatible Signal format.
+ * This replaces detectTrendMomentumScannerV5 from engine.js.
+ */
+export function detectTrendMomentumScannerV5(
+  pair: string,
+  htf: Candle[],
+  setup: Candle[],
+  entryTf: Candle[]
+): { signal: Signal; scores: any; regime: string; regimeReason: string } {
+  const result = detectSignalV2(pair, htf, entryTf);
+
+  if (!result) {
+    // Return a rejected signal when no setup found
+    return {
+      signal: {
+        id: crypto.randomUUID(),
+        pair,
+        direction: 'LONG',
+        entry: 0,
+        sl: 0,
+        tp1: 0,
+        tp2: 0,
+        tp3: 0,
+        aiConfidence: 0,
+        tier: 'Reject',
+        status: 'REJECTED',
+        timestamp: new Date().toISOString(),
+        aiReason: 'No valid setup detected',
+        diagnostics: {
+          regimeState: 'UNKNOWN',
+          raw_4h: null,
+          raw_5m_bos: null,
+          pullbackHigh: 0,
+          pullbackLow: 0,
+          confidenceBreakdown: { regime: 0 }
+        }
+      } as Signal,
+      scores: {},
+      regime: 'UNKNOWN',
+      regimeReason: 'No setup'
+    };
+  }
+
+  const pipMult = getPipMultiplier(pair);
+  const riskPips = Math.abs(result.entry - result.sl) / pipMult;
+  const tp1Pips = Math.abs(result.tp1 - result.entry) / pipMult;
+  const tp2Pips = Math.abs(result.tp2 - result.entry) / pipMult;
+  const tp3Pips = Math.abs(result.tp3 - result.entry) / pipMult;
+
+  const lastCandle = entryTf[entryTf.length - 1];
+  const h4Last = htf[htf.length - 1];
+
+  // Determine tier based on confidence
+  let tier = 'Valid';
+  if (result.confidence >= 75) tier = 'Strong';
+  else if (result.confidence >= 65) tier = 'Good';
+
+  return {
+    signal: {
+      id: crypto.randomUUID(),
+      pair,
+      direction: result.direction,
+      entry: result.entry,
+      sl: result.sl,
+      tp1: result.tp1,
+      tp2: result.tp2,
+      tp3: result.tp3,
+      aiConfidence: result.confidence,
+      tier,
+      status: 'ACTIVE',
+      timestamp: lastCandle?.timestamp || new Date().toISOString(),
+      aiReason: result.reason,
+      diagnostics: {
+        regimeState: result.direction === 'LONG' ? 'TRENDING_BULL' : 'TRENDING_BEAR',
+        raw_4h: {
+          open: h4Last?.open || 0,
+          close: h4Last?.close || 0,
+          start_time: h4Last?.timestamp || ''
+        },
+        raw_5m_bos: {
+          open: lastCandle?.open || 0,
+          close: lastCandle?.close || 0,
+          start_time: lastCandle?.timestamp || ''
+        },
+        pullbackHigh: Math.max(...entryTf.slice(-20).map(c => c.high)),
+        pullbackLow: Math.min(...entryTf.slice(-20).map(c => c.low)),
+        confidenceBreakdown: {
+          regime: result.confidence >= 65 ? 5 : 3,
+          riskPips,
+          tp1Pips,
+          tp2Pips,
+          tp3Pips,
+          rsi: 0,
+          atr: 0
+        }
+      }
+    } as Signal,
+    scores: { confidence: result.confidence },
+    regime: result.direction === 'LONG' ? 'TRENDING_BULL' : 'TRENDING_BEAR',
+    regimeReason: result.reason
+  };
 }
