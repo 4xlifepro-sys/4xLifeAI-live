@@ -178,3 +178,65 @@ export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15
     return null;
   }
 }
+
+/**
+ * Fetch large historical dataset with pagination.
+ * Fetches up to `count` candles by walking backwards in time in chunks of 1000.
+ */
+export async function fetchHistoricalCandles(
+  pair: string,
+  interval: '5min' | '4h',
+  count: number
+): Promise<Candle[] | null> {
+  try {
+    const client = await getClient();
+    const symbols = await client.getSymbols();
+    const symbol = symbols.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
+    if (!symbol) {
+      console.warn(`[Historical] Symbol not found: ${pair}`);
+      return null;
+    }
+
+    const symbolId = symbol.symbolId;
+    const digits = Number(symbol.digits ?? 5);
+    const period = getPeriod(interval);
+    const allCandles: Candle[] = [];
+    const CHUNK = 1000;
+    let remaining = count;
+    let toTimestamp: number | undefined = undefined;
+
+    while (remaining > 0) {
+      const batchSize = Math.min(remaining, CHUNK);
+      const params: any = { symbolId, period, count: batchSize };
+      if (toTimestamp !== undefined) params.toTimestamp = toTimestamp;
+
+      const result = await client.raw.market.getTrendbars(params);
+      const bars = Array.isArray(result) ? result : result?.trendbars || [];
+
+      if (!bars.length) break;
+
+      const decoded = bars
+        .map((bar: any) => decodeTrendbar(bar, digits))
+        .filter((bar): bar is Candle => Boolean(bar));
+
+      allCandles.unshift(...decoded);
+
+      if (bars.length < batchSize) break;
+
+      const oldestTs = decoded[0]?.timestamp;
+      if (!oldestTs) break;
+      toTimestamp = new Date(oldestTs).getTime() / (60 * 1000);
+
+      remaining -= decoded.length;
+
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    return allCandles;
+  } catch (error: any) {
+    if (!error?.message?.includes('terminated')) {
+      console.error(`[Historical] Error fetching ${pair} (${interval}):`, error.message || error);
+    }
+    return null;
+  }
+}
