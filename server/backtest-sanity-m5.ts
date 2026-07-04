@@ -40,6 +40,8 @@ const sampleCount = Math.min(100, m5Filtered.length);
 let activeCount = 0;
 let rejectCount = 0;
 const rejectReasons: Record<string, number> = {};
+const primaryRejectReasons: Record<string, number> = {};
+const failureCounts: Record<number, number> = {};
 let maxConf = 0;
 
 for (let i = 0; i < sampleCount; i++) {
@@ -58,11 +60,58 @@ for (let i = 0; i < sampleCount; i++) {
     }
   } else {
     rejectCount++;
-    const reason = result.signal?.aiReason || result.regimeReason || 'UNKNOWN';
-    const code = reason.startsWith('REJECT_') ? reason : 
+    
+    // Collect ALL failing conditions
+    const allFailures: string[] = [];
+    
+    // Check each condition independently
+    if (result.regime === 'CHOP') {
+      allFailures.push('REGIME_CHOP');
+    }
+    if (result.regime === 'VOLATILE') {
+      allFailures.push('REGIME_VOLATILE');
+    }
+    
+    // Check bias
+    if (!result.signal?.bias || result.signal.bias === 'NONE') {
+      allFailures.push('NO_BIAS');
+    }
+    
+    // Check confidence
+    if (result.signal && result.signal.aiConfidence < 65) {
+      allFailures.push('LOW_CONFIDENCE');
+    }
+    
+    // Parse the aiReason for explicit rejection codes
+    const aiReason = result.signal?.aiReason || '';
+    if (aiReason.includes('ATR_LOW')) allFailures.push('ATR_LOW');
+    if (aiReason.includes('MOMENTUM')) allFailures.push('MOMENTUM');
+    if (aiReason.includes('STOCHASTIC')) allFailures.push('STOCHASTIC');
+    if (aiReason.includes('COUNTER_TREND')) allFailures.push('COUNTER_TREND');
+    if (aiReason.includes('NO_PULLBACK')) allFailures.push('NO_PULLBACK');
+    if (aiReason.includes('STOP_DISTANCE')) allFailures.push('STOP_DISTANCE');
+    if (aiReason.includes('EMA_FLAT')) allFailures.push('EMA_FLAT');
+    if (aiReason.includes('SPIKE')) allFailures.push('SPIKE');
+    
+    // If no explicit failures detected, mark as OTHER
+    if (allFailures.length === 0) {
+      allFailures.push('OTHER');
+    }
+    
+    // Track how many failures per candle
+    const failureCount = allFailures.length;
+    failureCounts[failureCount] = (failureCounts[failureCount] || 0) + 1;
+    
+    // Track each individual failure
+    for (const failure of allFailures) {
+      rejectReasons[failure] = (rejectReasons[failure] || 0) + 1;
+    }
+    
+    // Track the primary (first) rejection for backward compatibility
+    const primaryReason = aiReason.startsWith('REJECT_') ? aiReason : 
                  (result.regime === 'CHOP' ? 'REJECT_EMA_FLAT' : 
                   result.regime === 'VOLATILE' ? 'REJECT_SPIKE' : 'NO_BIAS_OR_OTHER');
-    rejectReasons[code] = (rejectReasons[code] || 0) + 1;
+    primaryRejectReasons[primaryReason] = (primaryRejectReasons[primaryReason] || 0) + 1;
   }
 }
 
