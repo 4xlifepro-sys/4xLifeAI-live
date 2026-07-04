@@ -261,6 +261,10 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   const currentK = stoch.k[lastIdx];
   const currentD = stoch.d[lastIdx];
   
+  // Diagnostic variables for stochastic checks
+  let directionalCross = false;
+  let recentExtreme = false;
+  
   const currentAtr = atr14[lastIdx];
   const currentVwap = vwap[lastIdx];
 
