@@ -403,10 +403,19 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
              hardReject = 'REJECT_STOCHASTIC';
           }
 
-          const body = Math.abs(current5M.close - current5M.open);
-          const isGreen = current5M.close > current5M.open;
-          const closeTop20 = current5M.close >= current5M.high - (currentCandleRange * 0.35);
-          if (body >= 0.6 * currentCandleRange && closeTop20 && isGreen) {
+          // Momentum candle check — look at last 3 candles for a strong directional candle
+          let momentumCandleFound = false;
+          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 2); mi--) {
+             const mBody = Math.abs(setup[mi].close - setup[mi].open);
+             const mRange = Math.abs(setup[mi].high - setup[mi].low);
+             const mIsGreen = setup[mi].close > setup[mi].open;
+             const mCloseInTopHalf = setup[mi].close >= (setup[mi].high + setup[mi].low) / 2;
+             if (mRange > 0 && mBody >= 0.5 * mRange && mCloseInTopHalf && mIsGreen) {
+                momentumCandleFound = true;
+                break;
+             }
+          }
+          if (momentumCandleFound) {
              confidence += 2; cb.momentum = 2; reason.push('+2 Momentum Candle');
           } else {
              hardReject = 'REJECT_MOMENTUM';
@@ -449,10 +458,19 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
              hardReject = 'REJECT_STOCHASTIC';
           }
 
-          const body = Math.abs(current5M.close - current5M.open);
-          const isRed = current5M.close < current5M.open;
-          const closeBottom20 = current5M.close <= current5M.low + (currentCandleRange * 0.35);
-          if (body >= 0.6 * currentCandleRange && closeBottom20 && isRed) {
+          // Momentum candle check — look at last 3 candles for a strong directional candle
+          let momentumCandleFound = false;
+          for (let mi = lastIdx; mi >= Math.max(0, lastIdx - 2); mi--) {
+             const mBody = Math.abs(setup[mi].close - setup[mi].open);
+             const mRange = Math.abs(setup[mi].high - setup[mi].low);
+             const mIsRed = setup[mi].close < setup[mi].open;
+             const mCloseInBottomHalf = setup[mi].close <= (setup[mi].high + setup[mi].low) / 2;
+             if (mRange > 0 && mBody >= 0.5 * mRange && mCloseInBottomHalf && mIsRed) {
+                momentumCandleFound = true;
+                break;
+             }
+          }
+          if (momentumCandleFound) {
              confidence += 2; cb.momentum = 2; reason.push('+2 Momentum Candle');
           } else {
              hardReject = 'REJECT_MOMENTUM';
