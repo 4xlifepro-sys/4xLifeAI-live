@@ -21,10 +21,30 @@ function decodePrice(value: any, digits: number): number {
 }
 
 function decodeTrendbar(bar: any, digits: number): { timestamp: string; open: number; high: number; low: number; close: number } | null {
-  const open = decodePrice(bar.open ?? bar.openPrice ?? bar.deltaOpen, digits);
-  const high = decodePrice(bar.high ?? bar.highPrice ?? bar.deltaHigh, digits);
-  const low  = decodePrice(bar.low  ?? bar.lowPrice  ?? bar.deltaLow, digits);
-  const close = decodePrice(bar.close ?? bar.closePrice ?? bar.deltaClose, digits);
+  // cTrader trendbars are delta-encoded from the low:
+  //   low  = raw low / 10^digits
+  //   open  = low + (deltaOpen  / 10^digits)
+  //   high  = low + (deltaHigh  / 10^digits)
+  //   close = low + (deltaClose / 10^digits)
+  const scale = Math.pow(10, digits);
+
+  const low = decodePrice(bar.low ?? bar.lowPrice, digits);
+
+  const deltaOpen  = decodePrice(bar.deltaOpen,  digits);
+  const deltaHigh  = decodePrice(bar.deltaHigh,  digits);
+  const deltaClose = decodePrice(bar.deltaClose, digits);
+
+  let open = Number.isFinite(deltaOpen)  ? low + deltaOpen  : low;
+  let high = Number.isFinite(deltaHigh)  ? low + deltaHigh  : low;
+  const close = Number.isFinite(deltaClose) ? low + deltaClose : low;
+
+  // Fallback: if absolute open/high/close exist, prefer them
+  if (Number.isFinite(Number(bar.open)) || Number.isFinite(Number(bar.openPrice))) {
+    open = decodePrice(bar.open ?? bar.openPrice, digits);
+  }
+  if (Number.isFinite(Number(bar.high)) || Number.isFinite(Number(bar.highPrice))) {
+    high = decodePrice(bar.high ?? bar.highPrice, digits);
+  }
 
   if (![open, high, low, close].every(Number.isFinite)) {
     return null;
@@ -80,8 +100,8 @@ async function getClient() {
   return connectingPromise;
 }
 
-export async function getLatestPrice(pair: string): Promise<{ pair: string; price: number | null; digits: number | null; timestamp: number; error?: string }> {
-  const result: { pair: string; price: number | null; digits: number | null; timestamp: number; error?: string } = {
+export async function getLatestPrice(pair: string): Promise<{ pair: string; price: number | null; digits: number | null; timestamp: number; raw?: any; error?: string }> {
+  const result: { pair: string; price: number | null; digits: number | null; timestamp: number; raw?: any; error?: string } = {
     pair,
     price: null,
     digits: null,
@@ -111,9 +131,10 @@ export async function getLatestPrice(pair: string): Promise<{ pair: string; pric
     const full = await client.getSymbolInfo(pair).catch(() => null);
     const digits = Number(full?.digits ?? 5);
     result.digits = digits;
-    const close = decodePrice(last.close ?? last.closePrice ?? last.deltaClose, digits);
-    if (Number.isFinite(close)) {
-      result.price = close;
+    result.raw = { last, full: { symbolId: full?.symbolId, digits: full?.digits, name: full?.symbolName } };
+    const decoded = decodeTrendbar(last, digits);
+    if (decoded && Number.isFinite(decoded.close)) {
+      result.price = decoded.close;
     } else {
       result.error = 'invalid_close';
     }
