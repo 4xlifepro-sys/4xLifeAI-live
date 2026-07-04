@@ -356,15 +356,17 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   }
 
   // Remove the old duplicate condition since regime handles it
+  // ATR validity check - scaled for M5 timeframe
+  // M5 candles are ~5x smaller than H4, so thresholds scaled down by ~3.5x
   let atrValid = false;
-  if (pair === 'XAUUSD') atrValid = currentAtr >= 1.5;
-  else if (pair === 'XAGUSD') atrValid = currentAtr >= 0.08;
+  if (pair === 'XAUUSD') atrValid = currentAtr >= 0.45;  // was 1.5
+  else if (pair === 'XAGUSD') atrValid = currentAtr >= 0.025;  // was 0.08
   else if (isCrypto) {
       const percentageAtr = (currentAtr / current5M.close) * 100;
-      atrValid = percentageAtr >= 0.35;
+      atrValid = percentageAtr >= 0.1;  // was 0.35
   }
-  else if (isVolatileForex) atrValid = (currentAtr / pipsMultiplier) >= 4;
-  else atrValid = (currentAtr / pipsMultiplier) >= 2;
+  else if (isVolatileForex) atrValid = (currentAtr / pipsMultiplier) >= 1.2;  // was 4
+  else atrValid = (currentAtr / pipsMultiplier) >= 0.6;  // was 2
 
   if (!atrValid && !hardReject) {
       hardReject = 'REJECT_ATR_LOW';
