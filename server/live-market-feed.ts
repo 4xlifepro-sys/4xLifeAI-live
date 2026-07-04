@@ -20,30 +20,26 @@ function decodePrice(value: any, digits: number): number {
   return n / Math.pow(10, digits);
 }
 
-function decodeTrendbar(bar: any, digits: number): { timestamp: string; open: number; high: number; low: number; close: number } | null {
-  // cTrader trendbars are delta-encoded from the low:
-  //   low  = raw low / 10^digits
-  //   open  = low + (deltaOpen  / 10^digits)
-  //   high  = low + (deltaHigh  / 10^digits)
-  //   close = low + (deltaClose / 10^digits)
-  const scale = Math.pow(10, digits);
+function decodeTrendbar(bar: any, _digits: number): { timestamp: string; open: number; high: number; low: number; close: number } | null {
+  // cTrader trendbars are scaled by a fixed factor of 100000 across all symbols.
+  // Verified empirically against live BTCUSD, ETHUSD, SOLUSD, XAUUSD, XAGUSD, FX pairs.
+  const SCALE = 100000;
 
-  const low = decodePrice(bar.low ?? bar.lowPrice, digits);
+  const low = Number(bar.low ?? bar.lowPrice) / SCALE;
 
-  const deltaOpen  = decodePrice(bar.deltaOpen,  digits);
-  const deltaHigh  = decodePrice(bar.deltaHigh,  digits);
-  const deltaClose = decodePrice(bar.deltaClose, digits);
+  const deltaOpen  = Number(bar.deltaOpen  ?? 0) / SCALE;
+  const deltaHigh  = Number(bar.deltaHigh  ?? 0) / SCALE;
+  const deltaClose = Number(bar.deltaClose ?? 0) / SCALE;
 
-  let open = Number.isFinite(deltaOpen)  ? low + deltaOpen  : low;
-  let high = Number.isFinite(deltaHigh)  ? low + deltaHigh  : low;
+  let open  = Number.isFinite(deltaOpen)  ? low + deltaOpen  : low;
+  let high  = Number.isFinite(deltaHigh)  ? low + deltaHigh  : low;
   const close = Number.isFinite(deltaClose) ? low + deltaClose : low;
 
-  // Fallback: if absolute open/high/close exist, prefer them
   if (Number.isFinite(Number(bar.open)) || Number.isFinite(Number(bar.openPrice))) {
-    open = decodePrice(bar.open ?? bar.openPrice, digits);
+    open = Number(bar.open ?? bar.openPrice) / SCALE;
   }
   if (Number.isFinite(Number(bar.high)) || Number.isFinite(Number(bar.highPrice))) {
-    high = decodePrice(bar.high ?? bar.highPrice, digits);
+    high = Number(bar.high ?? bar.highPrice) / SCALE;
   }
 
   if (![open, high, low, close].every(Number.isFinite)) {
