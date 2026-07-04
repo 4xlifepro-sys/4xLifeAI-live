@@ -552,9 +552,9 @@ export function detectTrendMomentumScannerV5(pair: string, htfRaw: Candle[], set
   let tier: Signal['tier'] = 'Reject';
   if (confidence >= 85) tier = 'Strong';
   else if (confidence >= 75) tier = 'Good';
-  else if (confidence >= 65) tier = 'Valid';
+  else if (confidence >= 70) tier = 'Valid';
 
-  if (!hardReject && confidence < 65) {
+  if (!hardReject && confidence < 70) {
       hardReject = 'REJECT_LOW_CONFIDENCE';
       tier = 'Reject';
   }
