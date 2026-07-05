@@ -215,7 +215,7 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
             (item, i) => (
               <span className="x4-ticker__item" key={i}>
                 <span className="x4-ticker__pair">{item.pair}</span>
-                <span className="x4-ticker__price">{fmtPrice(item.price)}</span>
+                <span className={`x4-ticker__price x4-ticker__price--${item.trend.toLowerCase()}`}>{fmtPrice(item.price)}</span>
                 <span className={`x4-ticker__chg ${item.changePct != null && item.changePct >= 0 ? "up" : "down"}`}>
                   {item.changePct != null ? `${item.changePct >= 0 ? "▲" : "▼"} ${Math.abs(item.changePct).toFixed(2)}%` : ""}
                 </span>
@@ -317,7 +317,7 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
                 {group.items.map((item) => (
                   <div className="x4-row" key={item.pair}>
                     <span className="x4-row__pair">{item.pair}</span>
-                    <span className="x4-row__price">{fmtPrice(item.price)}</span>
+                    <span className={`x4-row__price x4-row__price--${item.trend.toLowerCase()}`}>{fmtPrice(item.price)}</span>
                     {item.changePct != null && (
                       <span className={`x4-row__chg ${item.changePct >= 0 ? "up" : "down"}`}>
                         {item.changePct >= 0 ? "+" : ""}
@@ -517,6 +517,9 @@ const CSS = `
 }
 .x4-ticker__pair { color: var(--x4-text-dim); letter-spacing: 0.5px; }
 .x4-ticker__price { color: var(--x4-text); font-weight: 600; }
+.x4-ticker__price--bull { color: var(--x4-green); }
+.x4-ticker__price--bear { color: var(--x4-red); }
+.x4-ticker__price--neutral { color: var(--x4-text); }
 .x4-ticker__chg.up { color: var(--x4-green); }
 .x4-ticker__chg.down { color: var(--x4-red); }
 
