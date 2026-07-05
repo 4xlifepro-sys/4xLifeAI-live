@@ -1,53 +1,43 @@
 import { fetchCandles } from './live-market-feed.js';
 
-const pairs = ['EURUSD', 'USDJPY', 'USDCAD', 'NZDUSD', 'EURJPY', 'GBPJPY', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD'];
+const pairs = [
+  { pair: 'EURUSD', digits: 5 }, { pair: 'USDJPY', digits: 3 },
+  { pair: 'USDCAD', digits: 5 }, { pair: 'NZDUSD', digits: 5 },
+  { pair: 'EURJPY', digits: 3 }, { pair: 'GBPJPY', digits: 3 },
+  { pair: 'XAUUSD', digits: 2 }, { pair: 'XAGUSD', digits: 3 },
+  { pair: 'BTCUSD', digits: 2 }, { pair: 'ETHUSD', digits: 2 }
+];
 
-async function calcATR(pair: string): Promise<{ avg: number; min: number; max: number; candles: number }> {
-  try {
-    const candles = await fetchCandles(pair, 'M5', 1000);
-    if (!candles || candles.length < 50) return { avg: 0, min: 0, max: 0, candles: 0 };
-
-    // Calculate ATR(14) manually
-    const trValues: number[] = [];
-    for (let i = 1; i < candles.length; i++) {
-      const high = candles[i].high;
-      const low = candles[i].low;
-      const prevClose = candles[i - 1].close;
-      const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
-      trValues.push(tr);
-    }
-
-    // Average TR (simplified - full ATR uses Wilder's smoothing)
-    const avgTR = trValues.reduce((sum, tr) => sum + tr, 0) / trValues.length;
-    const minTR = Math.min(...trValues);
-    const maxTR = Math.max(...trValues);
-
-    return {
-      avg: avgTR,
-      min: minTR,
-      max: maxTR,
-      candles: candles.length
-    };
-  } catch (e) {
-    console.error(`${pair} failed:`, e.message);
-    return { avg: 0, min: 0, max: 0, candles: 0 };
-  }
+function toPips(val: number, digits: number): number {
+  if (digits <= 3) return val * 100;       // JPY pairs: 1 pip = 0.01
+  if (digits === 2) return val;             // metals/crypto: 1 pip = $1
+  return val * 10000;                       // forex: 1 pip = 0.0001
 }
 
 async function main() {
-  console.log('REAL ATR CALCULATION FROM LIVE DATA\n');
-  console.log('Pair | Avg ATR | Min ATR | Max ATR | Candles | SL (2x ATR) | SL (1.5x ATR)');
-  console.log('---|---|---|---|---|---|---');
+  console.log('REAL ATR FROM LIVE cTrader DATA (100 M5 candles)\n');
+  console.log('Pair     | Avg(pips) | Min(pips) | Max(pips) | SL@1.5x | SL@2.0x | SL@2.5x');
+  console.log('---------|-----------|-----------|-----------|---------|---------|--------');
 
-  for (const pair of pairs) {
-    const atr = await calcATR(pair);
-    if (atr.candles === 0) continue;
+  for (const { pair, digits } of pairs) {
+    try {
+      const candles = await fetchCandles(pair, '5min');
+      if (!candles || candles.length < 20) { console.log(`${pair.padEnd(9)} | NO DATA`); continue; }
 
-    const sl2x = atr.avg * 2;
-    const sl15x = atr.avg * 1.5;
-    console.log(`${pair} | ${atr.avg.toFixed(2)} | ${atr.min.toFixed(2)} | ${atr.max.toFixed(2)} | ${atr.candles} | ${sl2x.toFixed(2)} | ${sl15x.toFixed(2)}`);
+      const trs: number[] = [];
+      for (let i = 1; i < candles.length; i++) {
+        const c = candles[i], p = candles[i - 1];
+        trs.push(Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close)));
+      }
+      const avgTR = trs.reduce((a, b) => a + b, 0) / trs.length;
+      const minTR = Math.min(...trs);
+      const maxTR = Math.max(...trs);
 
-    // Wait 50ms between requests to avoid rate limits
+      const a = toPips(avgTR, digits);
+      const mn = toPips(minTR, digits);
+      const mx = toPips(maxTR, digits);
+      console.log(`${pair.padEnd(9)} | ${a.toFixed(1).padStart(9)} | ${mn.toFixed(1).padStart(9)} | ${mx.toFixed(1).padStart(9)} | ${(a*1.5).toFixed(1).padStart(7)} | ${(a*2).toFixed(1).padStart(7)} | ${(a*2.5).toFixed(1).padStart(7)}`);
+    } catch (e: any) { console.log(`${pair.padEnd(9)} | ERROR: ${e.message}`); }
     await new Promise(r => setTimeout(r, 50));
   }
 }
