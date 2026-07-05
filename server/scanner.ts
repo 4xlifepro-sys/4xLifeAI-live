@@ -632,14 +632,24 @@ export async function startScanner() {
       if (finalSignal) {
         const signal = finalSignal;
 
-        // Check per-pair cooldown: prevent re-firing same pair within cooldown window
-        const lastFired = pairCooldowns.get(pair);
-        if (lastFired && (Date.now() - lastFired) < PAIR_COOLDOWN_MS) {
-          console.log(`COOLDOWN_BLOCKED: ${pair} fired ${Math.round((Date.now() - lastFired) / 60000)}m ago (cooldown: ${PAIR_COOLDOWN_MS / 60000}m)`);
-          signal.tier = 'Reject';
-          signal.aiReason = 'COOLDOWN_ACTIVE';
-          signal.status = 'REJECTED';
-          rejectionStats.ACTIVE_TRADE_EXISTS++; // reuse counter for now
+        // Check per-pair cooldown via Supabase: prevent re-firing same pair within cooldown window
+        // This survives server restarts unlike the in-memory Map
+        if (signal.tier !== 'Reject' && supabase) {
+          const cooldownAgo = new Date(Date.now() - PAIR_COOLDOWN_MS).toISOString();
+          const { data: recentSignals } = await supabase
+            .from('signals')
+            .select('id, timestamp')
+            .eq('pair', pair)
+            .in('status', ['ACTIVE', 'TP1 HIT', 'TP2 HIT'])
+            .gte('timestamp', cooldownAgo)
+            .limit(1);
+          if (recentSignals && recentSignals.length > 0) {
+            console.log(`COOLDOWN_BLOCKED: ${pair} fired within last ${PAIR_COOLDOWN_MS / 60000}m`);
+            signal.tier = 'Reject';
+            signal.aiReason = 'COOLDOWN_ACTIVE';
+            signal.status = 'REJECTED';
+            rejectionStats.ACTIVE_TRADE_EXISTS++;
+          }
         }
 
         // Persistent deduplication: check Supabase to avoid cross-restart duplicate alerts/audit spam
