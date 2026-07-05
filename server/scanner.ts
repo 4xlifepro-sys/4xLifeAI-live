@@ -393,7 +393,7 @@ export async function startScanner() {
                      if (hitLevel === 'TP3') finalResult = 'WIN';
                      else if (hitLevel === 'SL') {
                          if (s.status === 'TP2 HIT') finalResult = 'PARTIAL WIN';
-                         else if (s.status === 'TP1 HIT') finalResult = 'BREAKEVEN';
+                         else if (s.status === 'TP1 HIT') finalResult = 'TP1 HIT';
                          else finalResult = 'LOSS';
                      }
                  } else {
@@ -454,7 +454,7 @@ export async function startScanner() {
                      const tp2Status = (hitLevel === 'TP3' || hitLevel === 'TP2' || s.status === 'TP2 HIT') ? 'HIT ✅' : 'MISSED ❌';
                      const tp3Status = (hitLevel === 'TP3') ? 'HIT ✅' : 'MISSED ❌';
                      
-                     const isWin = finalResult === 'WIN' || finalResult === 'PARTIAL WIN';
+                     const isWin = finalResult === 'WIN' || finalResult === 'PARTIAL WIN' || finalResult === 'TP1 HIT';
                      const isBreakeven = finalResult === 'BREAKEVEN';
                      const totalPips = isWin ? `+${pipStr}` : (isBreakeven ? `0.0` : `-${pipStr}`);
                      const summaryEmoji = isWin ? '🟢' : (isBreakeven ? '🛡️' : '🔴');
