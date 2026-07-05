@@ -25,17 +25,35 @@ async function testSignal(pair: string) {
       
       if (signal) {
         const slDistance = Math.abs(signal.entry - signal.sl);
+        const pipMult = pair.includes('JPY') ? 0.01 : pair.includes('XAU') ? 0.1 : pair.includes('XAG') ? 0.01 : pair.includes('BTC') || pair.includes('ETH') ? 1 : 0.0001;
+        const slDistancePips = slDistance / pipMult;
         const isCrypto = ['BTC', 'ETH'].some(c => pair.includes(c));
-        const floorPips = isCrypto ? (pair.includes('BTC') ? 250 : 15) : 0;
-        const floorTriggered = slDistance <= floorPips + 1; // +1 for rounding
+        const isMetal = ['XAU', 'XAG'].some(c => pair.includes(c));
+        
+        let floorLabel = '';
+        let floorPipsVal = 0;
+        if (pair.includes('BTC')) { floorLabel = '$250'; floorPipsVal = 250 / pipMult; }
+        else if (pair.includes('ETH')) { floorLabel = '$15'; floorPipsVal = 15 / pipMult; }
+        else if (pair.includes('XAU')) { floorLabel = '$12'; floorPipsVal = 12 / pipMult; }
+        else if (pair.includes('XAG')) { floorLabel = '$0.50'; floorPipsVal = 0.50 / pipMult; }
+        else if (pair.includes('JPY')) { floorLabel = '8 pips'; floorPipsVal = 8; }
+        else { floorLabel = '5 pips'; floorPipsVal = 5; }
+        
+        const floorTriggered = slDistancePips <= floorPipsVal + 0.5;
+        const usedRaw = currentAtr;
         
         console.log(`\nSignal detected at candle ${i}:`);
-        console.log(`  Entry: ${signal.entry.toFixed(2)}`);
-        console.log(`  SL: ${signal.sl.toFixed(2)}`);
-        console.log(`  SL Distance: ${slDistance.toFixed(2)} ${isCrypto ? 'dollars' : 'price units'}`);
-        console.log(`  Floor: ${floorPips} ${isCrypto ? 'dollars' : 'pips'}`);
-        console.log(`  Floor triggered: ${floorTriggered ? 'YES' : 'NO'}`);
-        console.log(`  TP1: ${signal.tp1.toFixed(2)}`);
+        console.log(`  Entry: ${signal.entry}`);
+        console.log(`  SL: ${signal.sl}`);
+        console.log(`  SL Distance: ${slDistance} (${slDistancePips.toFixed(1)} pips)`);
+        console.log(`  Floor: ${floorLabel} (${floorPipsVal} pips equivalent)`);
+        console.log(`  Floor triggered: ${floorTriggered ? 'YES (ATR was below floor)' : 'NO (ATR exceeded floor)'}`);
+        console.log(`  Raw ATR (M5): ${usedRaw.toFixed(6)}`);
+        console.log(`  SL multiplier: ${isCrypto ? '2.0x' : '1.5x'}`);
+        console.log(`  ATR×multiplier: ${(usedRaw * (isCrypto ? 2 : 1.5)).toFixed(6)} (${((usedRaw * (isCrypto ? 2 : 1.5)) / pipMult).toFixed(1)} pips)`);
+        console.log(`  TP1: ${signal.tp1}`);
+        console.log(`  TP2: ${signal.tp2}`);
+        console.log(`  TP3: ${signal.tp3}`);
         console.log(`  Confidence: ${signal.confidence}%`);
         console.log(`  Reason: ${signal.reason}`);
         
