@@ -168,7 +168,17 @@ export function detectSignalV2(
   // Crypto gets 2x ATR SL (wider to handle volatility), forex gets 1.5x
   const isCrypto = ['BTC', 'ETH', 'SOL', 'BNB', 'LTC', 'XRP', 'ADA', 'DOGE', 'DOT', 'AVAX'].some(c => pair.includes(c));
   const slMultiplier = isCrypto ? 2.0 : 1.5;
-  const risk = currentAtr * slMultiplier;
+
+  function getFloorRisk(pair: string, pipMultiplier: number): number {
+    if (pair.includes('BTC')) return 250; // dollars, not pips
+    if (pair.includes('ETH')) return 15; // dollars
+    if (pair.includes('XAU')) return 12; // dollars
+    if (pair.includes('XAG')) return 0.50; // dollars
+    if (pair.includes('JPY')) return 8 * pipMultiplier; // 8 pips
+    return 5 * pipMultiplier; // 5 pips for standard forex majors
+  }
+  const floorRisk = getFloorRisk(pair, pipMultiplier);
+  const risk = Math.max(currentAtr * slMultiplier, floorRisk);
 
   if (risk === 0) return null;
 
