@@ -9,6 +9,21 @@ import { supabase } from './server/supabase.js';
 
 import { GoogleGenAI } from "@google/genai";
 
+// Notification helper - inserts into Supabase notifications table
+async function sendNotification(userEmail: string, title: string, message: string, type: string = 'info') {
+  if (!supabase) return;
+  const { error } = await supabase.from('notifications').insert([{
+    user_id: null,
+    email: userEmail,
+    title,
+    message,
+    type,
+    is_read: false,
+    created_at: new Date().toISOString()
+  }]);
+  if (error) console.error('Notification insert error:', error.message);
+}
+
 function getPrompts() {
   try {
     const data = fs.readFileSync(path.join(process.cwd(), 'prompts.json'), 'utf8');
@@ -587,12 +602,14 @@ async function startServer() {
         return res.status(403).json({ error: "Forbidden: You can only submit payments for your own account" });
     }
 
-    const { error } = await supabase.from('payments').insert([{ user_id: user.id, email, proof_url: network, tx_hash: txid }]);
+    const { error } = await supabase.from('payments').insert([{ user_id: user.id, email, proof_url: network, tx_hash: txid, status: 'PENDING' }]);
     if (error && error.message.includes('find the table')) {
       runtimePayments.push({ id: crypto.randomUUID(), email, network, txid, status: 'PENDING', created_at: new Date().toISOString() });
+      await sendNotification(email, 'Payment Submitted', `We received your payment. Our team will review and activate your account within 24 hours.`, 'payment');
       return res.json({ success: true });
     }
     if (error) return res.status(500).json({ error: error.message });
+    await sendNotification(email, 'Payment Submitted', `We received your payment. Our team will review and activate your account within 24 hours.`, 'payment');
     res.json({ success: true });
   });
 
@@ -624,6 +641,35 @@ async function startServer() {
     }
     if (error) return res.status(500).json({ error: error.message });
     res.json(data[0] || null);
+  });
+
+  // Admin: approve payment and send notification
+  app.post("/api/admin/payments/:id/approve", requireAdmin, async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "4x System Error" });
+    const paymentId = req.params.id;
+    const { data: payment } = await supabase.from('payments').select('*').eq('id', paymentId).single();
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+
+    await supabase.from('payments').update({ status: 'APPROVED' }).eq('id', paymentId);
+    await supabase.from('profiles').update({ plan_status: 'active', plan_activated_at: new Date().toISOString() }).eq('email', payment.email);
+
+    await sendNotification(payment.email, 'Payment Approved', `Congratulations! Your subscription is now active. You have full access to all trading signals and premium features. Welcome to 4xLifeAI!`, 'success');
+
+    res.json({ success: true });
+  });
+
+  // Admin: reject payment and send notification
+  app.post("/api/admin/payments/:id/reject", requireAdmin, async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "4x System Error" });
+    const paymentId = req.params.id;
+    const { data: payment } = await supabase.from('payments').select('*').eq('id', paymentId).single();
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+
+    await supabase.from('payments').update({ status: 'REJECTED' }).eq('id', paymentId);
+
+    await sendNotification(payment.email, 'Payment Review Update', `We were unable to verify your payment. Please check your transaction details and contact support if you believe this is an error.`, 'warning');
+
+    res.json({ success: true });
   });
 
 

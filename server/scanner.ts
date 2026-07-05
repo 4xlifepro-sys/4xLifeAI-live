@@ -510,6 +510,32 @@ export async function startScanner() {
                     } else {
                        updatePayload.pips_lost = rawPips;
                     }
+                    
+                    // Send notification about trade close
+                    if (supabase) {
+                        const { data: allUsers } = await supabase
+                            .from('profiles')
+                            .select('email')
+                            .eq('plan_status', 'active')
+                            .neq('email', null);
+                        
+                        if (allUsers && allUsers.length > 0) {
+                            const isWin = finalResult === 'WIN' || finalResult === 'TP2 HIT' || finalResult === 'TP1 HIT';
+                            const closeMsg = `${s.pair} trade closed\nResult: ${finalResult}\n${isWin ? '✅' : '❌'} ${isWin ? '+' : '-'}${pipStr} pips\nEntry: ${sEntry} | Exit: ${hitPrice}`;
+                            
+                            for (const u of allUsers) {
+                                await supabase.from('notifications').insert([{
+                                    user_id: u.id,
+                                    email: u.email,
+                                    title: `Trade Closed: ${s.pair}`,
+                                    message: closeMsg,
+                                    type: isWin ? 'success' : 'warning',
+                                    is_read: false,
+                                    created_at: closedAt
+                                }]);
+                            }
+                        }
+                    }
                  }
                  
                  const updatePromises: any[] = [];
@@ -784,6 +810,29 @@ export async function startScanner() {
                    }
                } else if (data && data.id) {
                    generateAiReason(data.id, signal);
+                   
+                   // Send notifications to all active users
+                   const { data: allUsers } = await supabase
+                       .from('profiles')
+                       .select('email')
+                       .eq('plan_status', 'active')
+                       .neq('email', null);
+                   
+                   if (allUsers && allUsers.length > 0) {
+                       const signalMsg = `New ${signal.direction} signal for ${signal.pair}\nEntry: ${signal.entry}\nSL: ${signal.sl}\nTP1: ${signal.tp1} | TP2: ${signal.tp2} | TP3: ${signal.tp3}\nConfidence: ${signal.confidence}%\n\nAct now!`;
+                       
+                       for (const u of allUsers) {
+                           await supabase.from('notifications').insert([{
+                               user_id: u.id,
+                               email: u.email,
+                               title: `New Signal: ${signal.pair}`,
+                               message: signalMsg,
+                               type: 'signal',
+                               is_read: false,
+                               created_at: new Date().toISOString()
+                           }]);
+                       }
+                   }
                }
             });
           }
