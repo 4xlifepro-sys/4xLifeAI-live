@@ -165,7 +165,10 @@ export function detectSignalV2(
   const currentAtr = m5Atr.length > 0 ? m5Atr[m5Atr.length - 1] : 0;
 
   const pipMultiplier = getPipMultiplier(pair);
-  const risk = currentAtr; // SL distance = 1 ATR
+  // Crypto gets 2x ATR SL (wider to handle volatility), forex gets 1.5x
+  const isCrypto = ['BTC', 'ETH', 'SOL', 'BNB', 'LTC', 'XRP', 'ADA', 'DOGE', 'DOT', 'AVAX'].some(c => pair.includes(c));
+  const slMultiplier = isCrypto ? 2.0 : 1.5;
+  const risk = currentAtr * slMultiplier;
 
   if (risk === 0) return null;
 
