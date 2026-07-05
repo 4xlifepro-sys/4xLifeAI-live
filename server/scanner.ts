@@ -1,7 +1,10 @@
 import { fetchCandles } from './live-market-feed.js';
 import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
 
-// Re-export rejectionStats for compatibility (engine2 doesn't track this)
+// Per-pair cooldown: after a signal fires (and closes), wait this many ms before firing again
+// Prevents the scanner from re-firing the same setup within seconds
+const PAIR_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours cooldown per pair
+const pairCooldowns = new Map<string, number>(); // pair -> timestamp when it last fired
 export const rejectionStats = {
    ATR_LOW: 0,
    EMA_FLAT: 0,
@@ -629,6 +632,16 @@ export async function startScanner() {
       if (finalSignal) {
         const signal = finalSignal;
 
+        // Check per-pair cooldown: prevent re-firing same pair within cooldown window
+        const lastFired = pairCooldowns.get(pair);
+        if (lastFired && (Date.now() - lastFired) < PAIR_COOLDOWN_MS) {
+          console.log(`COOLDOWN_BLOCKED: ${pair} fired ${Math.round((Date.now() - lastFired) / 60000)}m ago (cooldown: ${PAIR_COOLDOWN_MS / 60000}m)`);
+          signal.tier = 'Reject';
+          signal.aiReason = 'COOLDOWN_ACTIVE';
+          signal.status = 'REJECTED';
+          rejectionStats.ACTIVE_TRADE_EXISTS++; // reuse counter for now
+        }
+
         // Persistent deduplication: check Supabase to avoid cross-restart duplicate alerts/audit spam
         let isDuplicate = false;
         
@@ -717,6 +730,8 @@ export async function startScanner() {
              });
           }
           if (signal.tier !== 'Reject') {
+             // Set per-pair cooldown to prevent re-firing same setup within window
+             pairCooldowns.set(pair, Date.now());
              scannerState.signals.unshift(signal);
              if (scannerState.signals.length > 100) scannerState.signals.pop();
              scannerState.stats.lastSignalTimestamp = signal.timestamp;
