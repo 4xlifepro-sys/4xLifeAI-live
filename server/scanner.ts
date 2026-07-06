@@ -299,8 +299,7 @@ export async function startScanner() {
             .select('*')
             .eq('pair', pair)
             .eq('is_active', true)
-            .in('status', ['ACTIVE', 'TP1 HIT', 'TP2 HIT'])
-            .or('result.is.null,result.eq.OPEN') as any;
+            .in('status', ['ACTIVE', 'TP1 HIT', 'TP2 HIT']) as any;
       }
       
       const [setup, supabaseResponse] = await Promise.all([setupPromise, activeSignalsPromise]);
