@@ -7,7 +7,7 @@ const PAIR_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours cooldown per pair
 
 // EMERGENCY KILL SWITCH - set to true to pause ALL Telegram signals immediately
 const TELEGRAM_SIGNALS_DISABLED = process.env.DISABLE_TELEGRAM_SIGNALS === 'true';
-const pairCooldowns = new Map<string, number>(); // pair -> timestamp when it last fired
+
 export const rejectionStats = {
    ATR_LOW: 0,
    EMA_FLAT: 0,
@@ -661,9 +661,25 @@ export async function startScanner() {
       if (finalSignal) {
         const signal = finalSignal;
 
-        // Check per-pair cooldown via Supabase: prevent re-firing same pair within cooldown window
-        // This survives server restarts unlike the in-memory Map
-        if (signal.tier !== 'Reject' && supabase) {
+        // Check per-pair cooldown: prevent re-firing same pair within cooldown window
+        // Check BOTH in-memory array (fast, catches same-instance duplicates) AND
+        // Supabase (survives restarts, catches cross-instance duplicates)
+        let cooldownTriggered = false;
+        
+        // 1. In-memory check
+        const recentInMemory = scannerState.signals.find(s => 
+          s.pair === pair && 
+          s.tier !== 'Reject' && 
+          (Date.now() - new Date(s.timestamp).getTime()) < PAIR_COOLDOWN_MS
+        );
+        
+        if (recentInMemory) {
+          cooldownTriggered = true;
+          console.log(`COOLDOWN_BLOCKED (memory): ${pair} fired within last ${PAIR_COOLDOWN_MS / 60000}m`);
+        }
+        
+        // 2. Database check (for cross-restart protection)
+        if (!cooldownTriggered && signal.tier !== 'Reject' && supabase) {
           const cooldownAgo = new Date(Date.now() - PAIR_COOLDOWN_MS).toISOString();
           const { data: recentSignals } = await supabase
             .from('signals')
@@ -673,12 +689,16 @@ export async function startScanner() {
             .gte('timestamp', cooldownAgo)
             .limit(1);
           if (recentSignals && recentSignals.length > 0) {
-            console.log(`COOLDOWN_BLOCKED: ${pair} fired within last ${PAIR_COOLDOWN_MS / 60000}m`);
-            signal.tier = 'Reject';
-            signal.aiReason = 'COOLDOWN_ACTIVE';
-            signal.status = 'REJECTED';
-            rejectionStats.ACTIVE_TRADE_EXISTS++;
+            cooldownTriggered = true;
+            console.log(`COOLDOWN_BLOCKED (db): ${pair} fired within last ${PAIR_COOLDOWN_MS / 60000}m`);
           }
+        }
+        
+        if (cooldownTriggered) {
+          signal.tier = 'Reject';
+          signal.aiReason = 'COOLDOWN_ACTIVE';
+          signal.status = 'REJECTED';
+          rejectionStats.ACTIVE_TRADE_EXISTS++;
         }
 
         // Persistent deduplication: check Supabase to avoid cross-restart duplicate alerts/audit spam
@@ -769,8 +789,6 @@ export async function startScanner() {
              });
           }
           if (signal.tier !== 'Reject') {
-             // Set per-pair cooldown to prevent re-firing same setup within window
-             pairCooldowns.set(pair, Date.now());
              scannerState.signals.unshift(signal);
              if (scannerState.signals.length > 100) scannerState.signals.pop();
              scannerState.stats.lastSignalTimestamp = signal.timestamp;
