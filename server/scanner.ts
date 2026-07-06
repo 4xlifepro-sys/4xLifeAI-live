@@ -4,6 +4,9 @@ import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
 // Per-pair cooldown: after a signal fires (and closes), wait this many ms before firing again
 // Prevents the scanner from re-firing the same setup within seconds
 const PAIR_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours cooldown per pair
+
+// EMERGENCY KILL SWITCH - set to true to pause ALL Telegram signals immediately
+const TELEGRAM_SIGNALS_DISABLED = process.env.DISABLE_TELEGRAM_SIGNALS === 'true';
 const pairCooldowns = new Map<string, number>(); // pair -> timestamp when it last fired
 export const rejectionStats = {
    ATR_LOW: 0,
@@ -270,7 +273,7 @@ export async function startScanner() {
     
     try {
       if (!process.env.CTRADER_ACCESS_TOKEN || !process.env.CTRADER_ACCOUNT_ID) {
-        throw new Error('Live market feed unavailable — retrying next cycle');
+        throw new Error('Live market feed unavailable ï¿½ retrying next cycle');
       }
 
       // We now need 4h and 5min candles (with 4H caching)
@@ -305,7 +308,7 @@ export async function startScanner() {
       const entryTf = setup; // Compatibility for now
 
       if (!htf || !setup) {
-         throw new Error('Live market feed unavailable — retrying next cycle');
+         throw new Error('Live market feed unavailable ï¿½ retrying next cycle');
       }
 
       // ==== 4xLifeAI REAL-TIME TP/SL TRACKING ====
@@ -439,7 +442,7 @@ export async function startScanner() {
                  + `Timestamp: ${dt.toUTCString()}`;
                  
                  console.log(`[OUTCOME TRACKER] ${pair} ${hitLevel} HIT @ ${closedAt}`);
-                 sendTelegramMessage(hitMsg);
+                 if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(hitMsg); else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
                  
                  if (finalClose) {
                      scannerState.stats.lastTradeTimestamp = closedAt;
@@ -477,7 +480,7 @@ export async function startScanner() {
                      + `Outcome: ${finalResult} ${summaryEmoji}\n\n`
                      + `Timestamp: ${dt.toUTCString()}`;
                      
-                     sendTelegramMessage(summaryMsg);
+                     if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(summaryMsg); else console.log('[KILL SWITCH] Telegram summary msg BLOCKED');
                  }
                  
                  // Payload construction for Supabase update
@@ -931,8 +934,12 @@ export async function startScanner() {
              + `<b>Timestamp:</b> ${dt}`;
              
              if (!scannerState.stats.isDegraded) {
-               sendTelegramMessage(msgOut);
-               scannerState.stats.telegramPushes++;
+              if (TELEGRAM_SIGNALS_DISABLED) {
+                console.log(`[KILL SWITCH] Telegram signal BLOCKED for ${signal.pair}`);
+              } else {
+                sendTelegramMessage(msgOut);
+                scannerState.stats.telegramPushes++;
+              }
              } else {
                console.warn("Skipped Telegram alert because Scanner is DEGRADED.");
              }
