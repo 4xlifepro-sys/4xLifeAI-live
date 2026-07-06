@@ -118,8 +118,8 @@ async function main() {
       .from('signals')
       .update({
         is_active: false,
-        status: 'CANCELLED',
-        result: 'MISSED',
+        status: 'VOID',
+        result: 'VOID',
         closed_at: new Date().toISOString()
       })
       .eq('id', ghost.id);

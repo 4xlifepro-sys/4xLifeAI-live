@@ -244,7 +244,7 @@ export default function Admin() {
       const { data: results } = await supabase.from('signal_results').select('*').order('created_at', { ascending: false });
       if (results && results.length > 0) {
         setPerformanceSignals(results);
-        const closed = results.filter(r => r.status !== 'ACTIVE');
+        const closed = results.filter(r => r.status !== 'ACTIVE' && r.status !== 'VOID' && r.status !== 'CANCELLED');
         const wins = closed.filter(r => r.result?.startsWith('WIN')).length;
         setWinRate(closed.length > 0 ? (wins / closed.length) * 100 : 0);
         
