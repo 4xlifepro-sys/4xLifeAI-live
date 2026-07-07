@@ -8,7 +8,11 @@
 }
 
 body {
-  background-color: #0A0D12;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(0, 209, 255, 0.10), transparent 28%),
+    radial-gradient(circle at 86% 10%, rgba(34, 197, 94, 0.08), transparent 26%),
+    linear-gradient(180deg, #05080d 0%, #070b12 42%, #030509 100%);
+  background-attachment: fixed;
   color: #E0E4EA;
 }
 

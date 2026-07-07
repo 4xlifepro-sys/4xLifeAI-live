@@ -452,25 +452,25 @@ export async function startScanner() {
                  }
                  
                  let headerEmoji = '🎯';
-                 let titleText = `4XLIFEAI — ${hitLevel} HIT`;
+                let titleText = `4xFiveAI — ${hitLevel} HIT`;
                  let statusLine = '';
                  if (hitLevel === 'SL') {
                      if (finalResult === 'PARTIAL WIN') {
                          headerEmoji = '✅';
-                         titleText = s.status === 'TP2_HIT' ? '4XLIFEAI — TP2 SECURED' : '4XLIFEAI — TP1 SECURED';
+                        titleText = s.status === 'TP2_HIT' ? '4xFiveAI — TP2 SECURED' : '4xFiveAI — TP1 SECURED';
                      } else if (finalResult === 'BREAKEVEN') {
                          headerEmoji = '🛡️';
-                         titleText = '4XLIFEAI — STOPPED AT BREAKEVEN';
+                        titleText = '4xFiveAI — STOPPED AT BREAKEVEN';
                      } else {
                          headerEmoji = '🛑';
-                         titleText = '4XLIFEAI — STOP LOSS HIT';
+                        titleText = '4xFiveAI — STOP LOSS HIT';
                      }
                      statusLine = '\n\nStatus: TRADE CLOSED';
                  } else if (hitLevel === 'TP2') {
                      headerEmoji = '🚀';
                  } else if (hitLevel === 'TP3') {
                      headerEmoji = '🏆';
-                     titleText = '4XLIFEAI — FULL TARGET REACHED';
+                    titleText = '4xFiveAI — FULL TARGET REACHED';
                      statusLine = '\n\nStatus: TRADE CLOSED';
                  }
 
@@ -514,7 +514,7 @@ export async function startScanner() {
                      const rrRatio = (rawPips / riskPips).toFixed(1);
                      const riskRewardStr = isWin ? `1:${rrRatio}` : (isBreakeven ? '0:0' : `-1:1`);
                      
-                     const summaryMsg = `📊 <b>4XLIFEAI — TRADE SUMMARY</b>\n\n`
+                    const summaryMsg = `📊 <b>4xFiveAI — TRADE SUMMARY</b>\n\n`
                      + `Pair: ${pair}\n`
                      + `Direction: ${directionStr}\n`
                      + `Entry: ${sEntry}\n`
@@ -731,6 +731,8 @@ export async function startScanner() {
             isDuplicate = true; 
         }
         
+        const dbDirection = signal.direction === 'LONG' ? 'BUY' : signal.direction === 'SHORT' ? 'SELL' : signal.direction;
+
         // 1. In-memory exact ID match (catches same UUID within scan cycle)
         const memoryDuplicate = scannerState.signals.find(s => s.id === signal.id);
         
@@ -755,7 +757,7 @@ export async function startScanner() {
              .from('signals')
              .select('id')
              .eq('pair', pair)
-             .eq('direction', signal.direction)
+             .eq('direction', dbDirection)
              .eq('entry_price', signal.entry)
              .eq('sl', signal.sl)
              .gte('created_at', dedupAgo)
@@ -795,7 +797,6 @@ export async function startScanner() {
           // Save Signal to public.signals for Active trades
           if (supabase && signal.tier !== 'Reject') {
             // Map internal values to match DB check constraints
-            const dbDirection = signal.direction === 'LONG' ? 'BUY' : signal.direction === 'SHORT' ? 'SELL' : signal.direction;
             const dbStatus = mapStatus(signal.status);
 
             const insertPayload: any = {
@@ -839,14 +840,13 @@ export async function startScanner() {
              
              const dt = new Date(signal.timestamp).toUTCString();
              
-             const signalDirectionStr = signal.direction === 'LONG' || signal.direction === 'BUY' ? 'BUY' : 'SELL';
-             const modeStr = scannerState.stats.mode === 'crypto' ? ' (WEEKEND CRYPTO MODE)' : '';
-             const regimeStr = signal.diagnostics?.regimeState || 'Trending';
+             const signalDirectionStr = dbDirection === 'BUY' ? 'BUY' : 'SELL';
+             const modeStr = scannerState.stats.mode === 'crypto' ? ' (CRYPTO MODE)' : '';
              
-             const msgOut = `🚨 <b>4XLIFEAI SIGNAL${modeStr}</b>\n\n`
+             const msgOut = `🚨 <b>4xFiveAI SIGNAL${modeStr}</b>\n\n`
              + `<b>Pair:</b> ${signal.pair}\n`
              + `<b>Signal:</b> ${signalDirectionStr}\n`
-             + `<b>Regime:</b> ${regimeStr}\n\n`
+             + `<b>Setup:</b> Premium signal\n\n`
              + `<b>Entry:</b> ${signal.entry}\n`
              + `<b>SL:</b> ${signal.sl} (${risk} pips)\n`
              + `<b>TP1:</b> ${signal.tp1} (1:1)\n`

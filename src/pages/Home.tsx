@@ -29,7 +29,7 @@ interface LiveSetupPreview {
   tp3: number;
   status: string;
   confidence: number;
-  regime: string;
+  quality: string;
 }
 
 export default function Home() {
@@ -46,7 +46,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
       tp3: 1.28450,
       status: "TP1 HIT → SL AT ENTRY (BREAKEVEN)",
       confidence: 89,
-      regime: "BULLISH TREND"
+      quality: "HIGH QUALITY"
     },
     {
       pair: "EURUSD",
@@ -58,18 +58,18 @@ const liveSignalPreviews: LiveSetupPreview[] = [
       tp3: 1.07600,
       status: "ACTIVE",
       confidence: 84,
-      regime: "BEARISH TREND"
+      quality: "HIGH QUALITY"
     }
   ];
 
   const faqs = [
     {
-      question: "What is the core technology behind 4xLifeAI?",
-      answer: "4xLifeAI combines automated multi-timeframe structural charting with high-precision quantitative calculations. It continuously analyzes top-tier institutional liquidity, mapping key Smart Money Concepts (SMC) like Order Blocks, Fair Value Gaps, and Liquidity Pools across 4H down to 5M cycles. Signals are filtered through our proprietary volatility engine before dispatch."
+      question: "What is the core technology behind 4xFiveAI?",
+      answer: "4xFiveAI combines automated multi-timeframe market analysis with high-precision quantitative calculations. It continuously reviews live market structure and filters each setup through proprietary quality, volatility, and risk controls before dispatch."
     },
     {
     question: "Do you use fabricated or historical-only feeds?",
-    answer: "No. 4xLifeAI is driven by live market data only. Our quantitative parser scans in real-time. If market conditions degrade or liquidity dries up, our hard filters step in to reject sub-optimal setups to protect capital."
+    answer: "No. 4xFiveAI is driven by live market data only. Our quantitative parser scans in real time. If market conditions degrade or liquidity dries up, our hard filters step in to reject low-quality setups to protect capital."
     },
     {
       question: "How does the stop-loss and trade-management system work?",
@@ -98,7 +98,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold tracking-wider uppercase"
           >
             <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-            Institutional SMC Smart-Scanning Engine
+            Premium Live Signal Intelligence
           </motion.div>
 
           <motion.h1 
@@ -228,8 +228,8 @@ const liveSignalPreviews: LiveSetupPreview[] = [
                         <div className="text-xs font-semibold text-rose-400 font-mono">{sig.sl.toFixed(5)}</div>
                       </div>
                       <div>
-                        <div className="text-[9px] text-[#8A95A5] uppercase font-mono">Regime</div>
-                        <div className="text-[10px] font-bold text-[#E0E4EA] truncate">{sig.regime}</div>
+                        <div className="text-[9px] text-[#8A95A5] uppercase font-mono">Quality</div>
+                        <div className="text-[10px] font-bold text-[#E0E4EA] truncate">{sig.quality}</div>
                       </div>
                     </div>
 
@@ -251,7 +251,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
               {/* Live Scanner Stats */}
               <div className="mt-6 pt-5 border-t border-[#202735] grid grid-cols-2 gap-4 text-center">
                 <div className="bg-[#0E121C]/50 p-2.5 rounded-lg border border-[#202735]/40">
-                  <div className="text-[10px] text-[#8A95A5]">Win Rate (SMC Validation)</div>
+                  <div className="text-[10px] text-[#8A95A5]">Win Rate Validation</div>
                   <div className="text-lg font-bold text-white mt-0.5">74.2%</div>
                 </div>
                 <div className="bg-[#0E121C]/50 p-2.5 rounded-lg border border-[#202735]/40">
@@ -324,7 +324,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 relative z-10 border-t border-[#202735]/40">
         <div className="text-center space-y-4 mb-16 max-w-2xl mx-auto">
           <span className="text-xs font-bold uppercase tracking-widest text-blue-400 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">The Processing Cycle</span>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white font-sans">The 4xLifeAI Signal Lifecycle</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white font-sans">The 4xFiveAI Signal Lifecycle</h2>
           <p className="text-[#8A95A5] text-sm">
             Every potential market setup is strictly validated in a four-stage execution sequence.
           </p>
@@ -369,7 +369,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10 border-t border-[#202735]/40">
         <div className="text-center space-y-4 mb-14">
           <h2 className="text-3xl font-bold tracking-tight text-white font-sans">Frequently Asked Questions</h2>
-          <p className="text-[#8A95A5] text-sm">Everything you need to know about the 4xLifeAI Smart Engine.</p>
+          <p className="text-[#8A95A5] text-sm">Everything you need to know about the 4xFiveAI signal engine.</p>
         </div>
 
         <div className="space-y-4">
@@ -417,7 +417,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
             Ready to Upgrade Your Analytical Edge?
           </h2>
           <p className="text-[#C5CDD9] text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-            Gain full elite access to our premium SMC tracking filters, automated Telegram VIP pushes, and institutional trade validation templates.
+            Gain full elite access to our premium signal filters, automated Telegram VIP alerts, and institutional trade validation tools.
           </p>
           <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link

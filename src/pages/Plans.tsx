@@ -150,7 +150,7 @@ export default function Plans() {
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">Supercharge Your trading</h1>
           <p className="text-[#8A95A5] text-lg max-w-2xl mx-auto leading-relaxed">
-            Access the industry's most advanced automated Smart Money Concepts (SMC) scanning suite.<br/>
+            Access premium automated market scanning, instant alerts, and trade-management tools.<br/>
             Achieve full-edge consistency.
           </p>
         </div>
@@ -200,7 +200,7 @@ export default function Plans() {
                   </div>
                   <p className="text-[#8A95A5] mb-8 text-sm leading-relaxed">
                     {plan.name === 'Free' 
-                      ? "Explore the core intelligence of algorithmic SMC market analysis absolutely free." 
+                      ? "Explore the core intelligence of algorithmic market analysis absolutely free." 
                       : "Unlock complete premium analytical scanners, instant notifications, and institutional elite execution templates."}
                   </p>
                   <ul className="space-y-4 mb-auto text-[#E0E4EA]">

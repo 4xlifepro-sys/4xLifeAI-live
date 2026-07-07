@@ -14,7 +14,7 @@ const PAIRS = [
 
 interface Trade {
   pair: string;
-  direction: 'LONG' | 'SHORT';
+  direction: 'LONG' | 'SHORT' | 'BUY' | 'SELL';
   entry: number;
   sl: number;
   tp1: number;

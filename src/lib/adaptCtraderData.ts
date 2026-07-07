@@ -120,8 +120,8 @@ export function adaptCtraderData(raw: RawPricesResponse, overrides: AdapterOverr
   };
 
   return {
-    brand: "4xLifeAI",
-    tagline: "Institutional SMC Smart Engine",
+    brand: "4xFiveAI",
+    tagline: "Premium Signal Intelligence",
     session: overrides.session ?? "LIVE SESSION",
     pairCount: raw.prices.length,
     weekendMode: overrides.weekendMode,

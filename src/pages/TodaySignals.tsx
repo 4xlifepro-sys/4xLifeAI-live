@@ -231,18 +231,6 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     <p className="text-[#F5A524] font-medium">{signal.aiConfidence ? `${signal.aiConfidence}%` : '-'}</p>
                   </div>
                 </div>
-                
-                {(signal.ai_reason || signal.aiReason) && (
-                  <div className="mt-4 p-3 bg-[#1A2332]/50 border border-[#2A3441] rounded-lg">
-                    <p className="text-xs font-medium text-[#00E08A] mb-1 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#00E08A] animate-pulse"></span>
-                      4xLifeAI Intelligence
-                    </p>
-                    <p className="text-sm text-[#8A95A5] leading-relaxed">
-                      {signal.ai_reason || signal.aiReason}
-                    </p>
-                  </div>
-                )}
               </div>
               
               <div className="p-4 border-t border-[#1A2332] bg-[#070B12] flex items-center justify-between">

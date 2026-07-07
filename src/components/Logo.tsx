@@ -128,7 +128,7 @@ export const Logo: React.FC<LogoProps> = ({ size = 32, className, showText = fal
         />
       </svg>
       {showText && (
-        <span className="font-semibold text-lg tracking-tight text-white font-sans">4xLifeAI</span>
+        <span className="font-semibold text-lg tracking-tight text-white font-sans">4xFiveAI</span>
       )}
     </div>
   );

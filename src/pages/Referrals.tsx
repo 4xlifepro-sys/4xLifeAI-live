@@ -77,7 +77,7 @@ export default function Referrals() {
   };
 
   const handleTelegramShare = () => {
-    const text = "Get 3 free days of premium 4xLifeAI signals when you use my link!";
+    const text = "Get 3 free days of premium 4xFiveAI signals when you use my link!";
     const url = `https://t.me/share/url?url=https://${referralCode}&text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
@@ -103,11 +103,11 @@ export default function Referrals() {
             <div className="relative z-10 w-full max-w-3xl">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-teal-500/10 text-teal-400 rounded-full text-xs font-bold tracking-widest uppercase mb-6">
                     <Sparkles className="w-3.5 h-3.5" />
-                    4xLifeAI Referral Campaign
+                    4xFiveAI Referral Campaign
                 </div>
                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-4 tracking-tight">Invite Friends & Earn 10% Cash Commission</h1>
                 <p className="text-[#8A95A5] text-lg leading-relaxed mb-1">
-                    Help grow the 4xLifeAI Smart Money Concepts (SMC) quantitative trading circle! When your friends sign up via your unique invitation code and upgrade to Premium, you receive a <span className="text-teal-400 font-semibold">10% cash commission ($2.50)</span> paid directly in USDT.
+                    Help grow the 4xFiveAI premium signal community. When your friends sign up via your unique invitation code and upgrade to Premium, you receive a <span className="text-teal-400 font-semibold">10% cash commission ($2.50)</span> paid directly in USDT.
                 </p>
                 <p className="text-[#5D6B80] text-sm">
                     They also get a 3-day free Premium trial upon email verification!

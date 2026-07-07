@@ -246,7 +246,7 @@ export default function Admin() {
         setScannerStats(scanStats);
       }
 
-      // 4. SMC Engine validation Metrics & Chart & Signals performance
+      // 4. Signal engine validation metrics, chart, and signal performance
       const { data: results } = await supabase.from('signal_results').select('*').order('created_at', { ascending: false });
       if (results && results.length > 0) {
         setPerformanceSignals(results);
@@ -1083,7 +1083,7 @@ export default function Admin() {
           {/* AI Coach System Prompt */}
           <div className="space-y-2">
             <label className="block text-sm font-bold text-white tracking-wider uppercase">
-              1. 4xLifeAI Coach System Instruction
+              1. 4xFiveAI Coach System Instruction
             </label>
             <p className="text-xs text-[#8A95A5]">
               This instruction defines the personality, expertise, and behavioral rules of the in-app chatbot coach.
@@ -1111,7 +1111,7 @@ export default function Admin() {
                 <span className="bg-[#11141A] border border-[#202735] text-cyan-400 px-1.5 py-0.5 rounded">{"${signal.direction}"}</span>
                 <span className="bg-[#11141A] border border-[#202735] text-cyan-400 px-1.5 py-0.5 rounded">{"${signal.aiConfidence}"}</span>
                 <span className="bg-[#11141A] border border-[#202735] text-cyan-400 px-1.5 py-0.5 rounded">{"${signal.tier}"}</span>
-                <span className="bg-[#11141A] border border-[#202735] text-cyan-400 px-1.5 py-0.5 rounded">{"${signal.diagnostics?.confidenceBreakdown?.regime === 5 ? 'Trending (Clean)' : 'Chop / Mixed'}"}</span>
+                <span className="bg-[#11141A] border border-[#202735] text-cyan-400 px-1.5 py-0.5 rounded">{"${signal.qualityLabel}"}</span>
               </div>
             </div>
             <textarea
@@ -1149,8 +1149,8 @@ export default function Admin() {
                   });
                   if (!confirmed) return;
                   setPromptsConfig({
-                      coach_system_instruction: "You are the 4xLifeAI Coach, an expert in Smart Money Concepts (SMC) and quantitative trading. You help users with risk management, position sizing, understanding market structure (BOS, CHoCH, Order Blocks, Liquidity Sweeps), and trading psychology. Keep responses concise, professional, and directly actionable. Avoid long generic paragraphs.",
-                      signal_explainer_prompt: "You are an expert forex trader. Explain this signal to a user in plain English:\nPair: ${signal.pair}\nDirection: ${signal.direction}\nConfidence Score: ${signal.aiConfidence}%\nStatus: ${signal.tier}\nMarket Regime: ${signal.diagnostics?.confidenceBreakdown?.regime === 5 ? 'Trending (Clean)' : 'Chop / Mixed'}\nWhy this triggered:\n- ATR, VWAP, EMA alignments were matched\n- Pullback and stochastic were confirmed\n- Stop Loss is well placed\n\nGive a short, punchy 2-3 sentence explanation of why this trade looks good and what market structure we are following. No fluffy intros. Keep it to the point."
+                      coach_system_instruction: "You are the 4xFiveAI Coach, an expert trading assistant. You help users with risk management, position sizing, signal discipline, and trading psychology. Keep responses concise, professional, and directly actionable. Avoid long generic paragraphs.",
+                      signal_explainer_prompt: "You are an expert forex trading assistant. Explain this signal to a user in plain English:\nPair: ${signal.pair}\nDirection: ${signal.direction}\nConfidence Score: ${signal.aiConfidence}%\nStatus: ${signal.tier}\nQuality: ${signal.qualityLabel}\n\nGive a short, punchy 2-3 sentence explanation. No proprietary strategy details, no fluffy intros. Keep it to the point."
                     });
                 }}
                 className="px-4 py-2 bg-transparent text-[#8A95A5] hover:text-white rounded-lg text-xs font-bold uppercase tracking-wider border border-[#202735] hover:border-[#2A3345] transition-colors"
@@ -1242,7 +1242,7 @@ export default function Admin() {
               <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-12 text-center shadow-sm">
                 <ShieldAlert className="w-12 h-12 text-[#202735] mx-auto mb-4" />
                 <h3 className="text-white text-lg font-bold tracking-widest uppercase mb-2">{TABS.find(t=>t.id === activeTab)?.label} Module</h3>
-                <p className="text-[#8A95A5] max-w-md mx-auto">This administrative module is currently under active development. Connection to the 4xLifeAI core node is pending.</p>
+                <p className="text-[#8A95A5] max-w-md mx-auto">This administrative module is currently under active development. Connection to the 4xFiveAI core node is pending.</p>
               </div>
             )}
           </div>

@@ -2,13 +2,12 @@ import React, { useMemo, useState } from "react";
 
 /**
  * ============================================================================
- * 4xLifeAI — Professional Trading Terminal Dashboard
+ * 4xFiveAI — Professional Trading Terminal Dashboard
  * ============================================================================
  *
  * DESIGN DIRECTION: Institutional trading terminal (Bloomberg/Reuters-inspired),
  * not a generic SaaS dashboard. Dense, monospaced, amber/cyan accent system on
- * a near-black terminal background. This matches the "Institutional SMC Smart
- * Engine" positioning already in the brand.
+ * a near-black terminal background.
  *
  * HOW TO WIRE THIS UP (for the coding agent):
  * - Replace the `sampleData` object below with real data from your API.
@@ -92,8 +91,8 @@ interface DashboardData {
 // ---------------------------------------------------------------------------
 
 const sampleData: DashboardData = {
-  brand: "4xLifeAI",
-  tagline: "Institutional SMC Smart Engine",
+  brand: "4xFiveAI",
+  tagline: "Premium Signal Intelligence",
   session: "LONDON SESSION",
   pairCount: 10,
   weekendMode: "Crypto & Metals only",
@@ -488,10 +487,10 @@ function Level({
 
 const CSS = `
 :root {
-  --x4-bg: #08090b;
-  --x4-panel: #101317;
-  --x4-panel-2: #151920;
-  --x4-line: #1f242c;
+  --x4-bg: #05080d;
+  --x4-panel: rgba(14, 20, 30, 0.88);
+  --x4-panel-2: rgba(18, 26, 38, 0.92);
+  --x4-line: rgba(50, 63, 84, 0.62);
   --x4-text: #e7eaee;
   --x4-text-dim: #7c8794;
   --x4-amber: #ffb020;
@@ -503,7 +502,10 @@ const CSS = `
 }
 
 .x4-root {
-  background: var(--x4-bg);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(0, 209, 255, 0.10), transparent 28%),
+    radial-gradient(circle at 86% 10%, rgba(34, 197, 94, 0.08), transparent 26%),
+    linear-gradient(180deg, #05080d 0%, #070b12 42%, #030509 100%);
   color: var(--x4-text);
   font-family: var(--x4-font-display);
   min-height: 100%;
@@ -775,31 +777,42 @@ const CSS = `
 .x4-signal__time { margin-left: auto; font-size: 11px; }
 .x4-signal__levels {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 16px;
+}
+.x4-level {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(42, 52, 68, 0.75);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(12, 18, 28, 0.92), rgba(7, 11, 18, 0.72));
 }
 .x4-level__label {
   display: block;
   font-size: 9px;
   color: var(--x4-text-dim);
-  letter-spacing: 0.5px;
-  margin-bottom: 2px;
+  letter-spacing: 0.7px;
+  margin-bottom: 5px;
 }
 .x4-level__value {
   display: block;
   font-family: var(--x4-font-mono);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
+  min-width: 0;
 }
 .x4-level__row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 .x4-level__copy {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

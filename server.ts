@@ -33,7 +33,8 @@ async function sendNotification(userEmail: string, title: string, message: strin
   let userId: string | null = null;
   try {
     const { data: authUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const targetUser = authUsers?.users?.find(user => (user.email || '').toLowerCase() === userEmail.toLowerCase());
+    const authUserList = ((authUsers as any)?.users || []) as Array<{ id: string; email?: string | null }>;
+    const targetUser = authUserList.find(user => (user.email || '').toLowerCase() === userEmail.toLowerCase());
     userId = targetUser?.id || null;
   } catch (error: any) {
     console.error('Notification user lookup error:', error?.message || error);
@@ -67,7 +68,8 @@ async function sendAdminWebNotification(title: string, message: string, type: st
   const { data: authUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const rows = admins
     .map((admin: any) => {
-      const authUser = authUsers?.users?.find(user => (user.email || '').toLowerCase() === String(admin.email || '').toLowerCase());
+      const authUserList = ((authUsers as any)?.users || []) as Array<{ id: string; email?: string | null }>;
+      const authUser = authUserList.find(user => (user.email || '').toLowerCase() === String(admin.email || '').toLowerCase());
       if (!authUser?.id) return null;
       return {
         user_id: authUser.id,
@@ -434,30 +436,29 @@ async function startServer() {
           console.error("Supabase error fetching today signals:", error);
         } else if (data && data.length > 0) {
           return res.json(data.map((d: any) => ({
-            ...d,
+            id: d.id,
+            pair: d.pair,
+            direction: d.direction,
             entry: d.entry_price,
+            entry_price: d.entry_price,
+            sl: d.sl,
+            tp1: d.tp1,
+            tp2: d.tp2,
+            tp3: d.tp3,
+            confidence: d.confidence,
+            aiConfidence: d.confidence,
+            score: d.score || d.confidence,
+            status: d.status,
+            result: d.result,
+            pips_won: d.pips_won,
+            pips_lost: d.pips_lost,
+            closed_at: d.closed_at,
+            created_at: d.created_at,
             timestamp: d.created_at,
-            aiConfidence: d.confidence_score || d.confidence,
-            score: d.confidence_score || d.confidence
+            tp1_hit_at: d.tp1_hit_at,
+            tp2_hit_at: d.tp2_hit_at,
+            tp3_hit_at: d.tp3_hit_at
           })));
-        } else {
-          // Fallback to active_opportunities if signal_audit_log is empty
-          const todayStart = new Date();
-          todayStart.setHours(0,0,0,0);
-          
-          const { data: oppsData, error: oppsError } = await supabase
-            .from('active_opportunities')
-            .select('*')
-            .gte('updated_at', todayStart.toISOString())
-            .order('updated_at', { ascending: false });
-            
-          if (!oppsError && oppsData && oppsData.length > 0) {
-            return res.json(oppsData.map((d: any) => ({
-              ...d,
-              timestamp: d.updated_at,
-              aiConfidence: d.confidence
-            })));
-          }
         }
       }
       

@@ -75,7 +75,7 @@ export default function Login() {
             <Logo size={64} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Welcome Back</h1>
-          <p className="text-[#8A95A5]">Sign in to access the 4xLifeAI Engine</p>
+          <p className="text-[#8A95A5]">Sign in to access 4xFiveAI</p>
         </div>
 
         <div className="bg-[#11141A] border border-[#202735] p-8 rounded-2xl shadow-2xl backdrop-blur-sm">

@@ -115,7 +115,7 @@ export default function Signup() {
         
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Create Account</h1>
-          <p className="text-[#8A95A5]">Join 4xLifeAI Engine</p>
+          <p className="text-[#8A95A5]">Join 4xFiveAI</p>
         </div>
 
         <div className="bg-[#11141A] border border-[#202735] p-8 rounded-2xl shadow-2xl backdrop-blur-sm">

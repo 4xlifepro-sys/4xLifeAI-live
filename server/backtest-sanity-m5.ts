@@ -7,8 +7,8 @@ const PAIR = 'EURUSD';
 
 console.log(`\n=== M5 SANITY CHECK: ${PAIR} ===\n`);
 
-const h4Promise = fetchCandles(PAIR, '4h', 1080);
-const m5Promise = fetchCandles(PAIR, '5min', 2016);
+const h4Promise = fetchCandles(PAIR, '4h');
+const m5Promise = fetchCandles(PAIR, '5min');
 
 const [h4, m5] = await Promise.all([h4Promise, m5Promise]);
 

@@ -1,7 +1,7 @@
 // Download script - fetches 6 months M5+H4 for all 27 pairs from TwelveData
 // Saves to .cache/ as JSON. Run once, then backtest uses cache.
 import { TWELVEDATA_API_KEY } from '../config.local.js';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 const PAIRS = [

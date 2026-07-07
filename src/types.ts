@@ -31,7 +31,7 @@ export interface PairScanStatus {
 export interface Signal {
   id: string;
   pair: string;
-  direction: 'LONG' | 'SHORT';
+  direction: 'LONG' | 'SHORT' | 'BUY' | 'SELL';
   bias: string; // e.g., 'BULLISH', 'BEARISH'
   score: number;
   tier: 'Strong' | 'Good' | 'Valid' | 'Reject';

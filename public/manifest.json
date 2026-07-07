@@ -1,7 +1,7 @@
 {
-  "name": "4xLifeAI",
-  "short_name": "4xLifeAI",
-  "description": "Institutional SMC Smart Engine",
+  "name": "4xFiveAI",
+  "short_name": "4xFiveAI",
+  "description": "Premium live signal intelligence",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0a0a0a",

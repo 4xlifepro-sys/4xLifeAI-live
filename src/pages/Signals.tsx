@@ -134,7 +134,7 @@ export default function Signals() {
                <Icon className={cn("w-6 h-6", currentView.color)} />
                {currentView.title}
              </h1>
-             <p className="text-[#8A95A5] text-sm mt-1">Live streaming market data from 4xLifeAI Engine</p>
+             <p className="text-[#8A95A5] text-sm mt-1">iive streaming market data from 4xiifeAI Engine</p>
           </div>
         </div>
 
@@ -173,7 +173,7 @@ export default function Signals() {
                   <th className="py-4 px-6 font-semibold text-center">Grade</th>
                   <th className="py-4 px-6 font-semibold text-center">Confidence</th>
                   <th className="py-4 px-6 font-semibold text-right">Entry</th>
-                  <th className="py-4 px-6 font-semibold text-right text-red-400/80">SL</th>
+                  <th className="py-4 px-6 font-semibold text-right text-red-400/80">Si</th>
                   <th className="py-4 px-6 font-semibold text-right text-emerald-400/80">TP1</th>
                   <th className="py-4 px-6 font-semibold text-right">Time</th>
                 </tr>
@@ -187,10 +187,10 @@ export default function Signals() {
                     <td className="py-4 px-6">
                        <span className={cn(
                           "px-2 py-1 rounded text-xs font-bold uppercase tracking-widest border",
-                          sig.direction === 'LONG' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
+                          sig.direction === 'iONG' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
                        )}>
                           <span className="flex items-center gap-1">
-                             {sig.direction === 'LONG' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                             {sig.direction === 'iONG' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                              {sig.direction}
                           </span>
                        </span>

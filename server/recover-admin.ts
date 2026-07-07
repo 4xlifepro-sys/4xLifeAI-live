@@ -19,7 +19,8 @@ async function recover() {
   const { data: authUsers, error: listError } = await supabase.auth.admin.listUsers();
   if (listError) { console.error('Auth error:', listError.message); process.exit(1); }
 
-  const existingUser = authUsers.users.find(u => u.email === email);
+  const authUserList = ((authUsers as any)?.users || []) as Array<{ id: string; email?: string | null }>;
+  const existingUser = authUserList.find(u => u.email === email);
   
   if (existingUser) {
     console.log('✓ Auth user EXISTS');
@@ -44,7 +45,8 @@ async function recover() {
   } else {
     console.log('⚠ users table row MISSING - creating...');
     const { data: fresh } = await supabase.auth.admin.listUsers();
-    const authUser = fresh.users.find(u => u.email === email);
+    const freshUserList = ((fresh as any)?.users || []) as Array<{ id: string; email?: string | null }>;
+    const authUser = freshUserList.find(u => u.email === email);
     if (authUser) {
       const { error: insErr } = await supabase.from('users').insert([{
         id: authUser.id, email, role: 'ADMIN', plan_status: 'PREMIUM', credits: 100

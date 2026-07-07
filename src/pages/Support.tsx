@@ -51,10 +51,10 @@ export default function Support() {
         <div className="bg-[#0D101A] border border-[#202735] rounded-xl p-6 lg:p-8 shadow-2xl relative overflow-hidden flex flex-col h-full">
             <h2 className="text-white font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
                 <HeartHandshake className="w-5 h-5 text-teal-400" />
-                4xLifeAI Support Center
+                4xFiveAI Support Center
             </h2>
             <p className="text-[#8A95A5] text-sm leading-relaxed mb-8">
-                Have questions regarding risk profiles, prop firm drawdown rules, or how the SMC point analysis calculates sweeps? Open a ticket below and our trading desk analysts will assist you shortly.
+                Have questions regarding risk profiles, prop firm drawdown rules, payments, or account access? Open a ticket below and our support team will assist you shortly.
             </p>
 
             <div className="space-y-4 flex-1">
@@ -155,10 +155,10 @@ export default function Support() {
       {/* Footer Section equivalent */}
       <div className="text-center pt-8 border-t border-[#202735] mt-auto">
         <h4 className="text-[#5D6B80] font-mono text-xs tracking-widest uppercase mb-4">
-            4xLifeAI Quantitative Algorithmic Node
+            4xFiveAI Quantitative Signal Network
         </h4>
         <p className="text-[#5D6B80] text-xs max-w-3xl mx-auto leading-relaxed mb-6">
-            Forex trading carries substantial leverage risk. The structural points, bias indicators, and 4xLifeAI Engine-based forecasts do not constitute guaranteed investment advice. All trading targets must be evaluated with strict customized stop parameters.
+            Forex trading carries substantial leverage risk. Signals and market forecasts do not constitute guaranteed investment advice. All trading targets must be evaluated with strict customized stop parameters.
         </p>
         
         <div className="flex items-center justify-center gap-4 mb-6">
@@ -168,7 +168,7 @@ export default function Support() {
         </div>
 
         <p className="text-[#5D6B80] text-xs font-mono">
-            Powered by 4xLifeAI Intelligence
+            Powered by 4xFiveAI Intelligence
         </p>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { detectSignalV2, getPipMultiplier } from './engine2.js';
 import { readFileSync } from 'fs';
 
 interface Candle { timestamp: string; open: number; high: number; low: number; close: number; }
-interface TradeResult { pair: string; direction: string; entry: number; sl: number; tp1: number; tp2: number; tp3: number; entryTime: string; result: string; pips: number; confidence: number; }
+interface TradeResult { pair: string; direction: string; entry: number; sl: number; tp1: number; tp2: number; tp3: number; entryTime: string; exitTime?: string; result: string; pips: number; confidence: number; }
 
 const COSTS = 2.0;
 

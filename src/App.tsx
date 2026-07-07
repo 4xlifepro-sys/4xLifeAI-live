@@ -134,17 +134,17 @@ function GlobalLayout() {
   ] : [];
 
   return (
-    <div className="min-h-screen bg-[#0A0D12] text-[#E0E4EA] font-sans antialiased flex flex-col">
-      {/* Top Banner with Developer Name */}
+    <div className="min-h-screen bg-[radial-gradient(circle_at_12%_0%,rgba(0,209,255,0.10),transparent_28%),radial-gradient(circle_at_86%_10%,rgba(34,197,94,0.08),transparent_26%),linear-gradient(180deg,#05080d_0%,#070b12_42%,#030509_100%)] text-[#E0E4EA] font-sans antialiased flex flex-col">
+      {/* Platform status banner */}
       <div className="bg-[#05080E] border-b border-[#202735]/60 py-2.5 px-4 text-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-teal-500/5 to-blue-500/5 pointer-events-none" />
         <p className="text-xs text-[#8A95A5] font-sans tracking-wider flex flex-wrap items-center justify-center gap-2 relative z-10">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-black text-[10px] uppercase tracking-widest border border-blue-500/20">
-            ★ LEAD DEVELOPER
+            LIVE PLATFORM
           </span>
-          <span className="font-semibold text-slate-300">System Engineered By</span>
+          <span className="font-semibold text-slate-300">Secure Signal Network</span>
           <span className="text-white font-black text-sm tracking-widest uppercase hover:text-blue-400 transition-colors drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-            Tofik Mohammed
+            4xFiveAI
           </span>
         </p>
       </div>
@@ -330,7 +330,7 @@ function GlobalLayout() {
                   }}
                   className="w-full flex items-center justify-center gap-3 px-4 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all uppercase text-sm tracking-wide border border-emerald-500/30 cursor-pointer"
                 >
-                  <span>📲 Install 4xLifeAI App</span>
+                  <span>Install 4xFiveAI App</span>
                 </button>
               )}
 
@@ -382,13 +382,13 @@ function GlobalLayout() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3">
               <Logo size={24} />
-              <span className="font-bold text-sm tracking-tight text-white font-sans">4xLifeAI</span>
-              <span className="text-xs text-[#5D6B80] border-l border-[#202735] pl-3">Institutional SMC Smart Engine</span>
+              <span className="font-bold text-sm tracking-tight text-white font-sans">4xFiveAI</span>
+              <span className="text-xs text-[#5D6B80] border-l border-[#202735] pl-3">Premium Signal Intelligence</span>
             </div>
             
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 text-xs text-[#8A95A5]">
               <div>
-                System Lead Architect: <span className="text-blue-400 font-semibold">Tofik Mohammed</span>
+                Signal Intelligence Platform
               </div>
               <div className="hidden sm:block text-[#202735]">|</div>
               <div>
@@ -397,7 +397,7 @@ function GlobalLayout() {
             </div>
 
             <div className="text-xs text-[#5D6B80]">
-              &copy; 2026 4xLifeAI. All rights reserved.
+              &copy; 2026 4xFiveAI. All rights reserved.
             </div>
           </div>
         </div>
