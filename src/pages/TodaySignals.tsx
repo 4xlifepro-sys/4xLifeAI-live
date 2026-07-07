@@ -62,10 +62,30 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleCopyValue = (id: string, value: any) => {
+    navigator.clipboard.writeText(String(value));
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const renderCopyableValue = (id: string, value: any, className: string) => (
+    <div className="flex items-center gap-2">
+      <p className={cn("font-mono", className)}>{value}</p>
+      <button
+        type="button"
+        onClick={() => handleCopyValue(id, value)}
+        className="p-1 rounded border border-[#1A2332] bg-[#070B12] text-[#5D6B80] hover:text-[#00D1FF] hover:border-[#00D1FF]/40 transition-colors"
+        title={`Copy ${value}`}
+      >
+        {copiedId === id ? <CheckCircle2 className="w-3 h-3 text-[#00E08A]" /> : <Copy className="w-3 h-3" />}
+      </button>
+    </div>
+  );
+
   const getStatusColor = (status: string) => {
     if (!status) return "bg-gray-500/10 text-gray-500 border-gray-500/20";
     if (status.includes("HIT") || status === "WIN") return "bg-[#00E08A]/10 text-[#00E08A] border-[#00E08A]/20";
-    if (status === "ACTIVE" || status === "OPEN") return "bg-[#F5A524]/10 text-[#F5A524] border-[#F5A524]/20";
+    if (status === "LIVE" || status === "ACTIVE" || status === "OPEN") return "bg-[#00D1FF]/10 text-[#5EEAD4] border-[#00D1FF]/25 shadow-[0_0_18px_rgba(0,209,255,0.08)]";
     if (status === "SL HIT" || status === "LOSS") return "bg-[#FF4D6D]/10 text-[#FF4D6D] border-[#FF4D6D]/20";
     if (status === "EXPIRED" || status === "CLOSED") return "bg-[#8A95A5]/10 text-[#8A95A5] border-[#8A95A5]/20";
     return "bg-[#070B12] text-white border-[#1A2332]";
@@ -130,8 +150,11 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     const isBreakeven = signal.sl === signal.tp1 && signal.status && signal.status.includes('HIT');
                     return (
                       <div className="flex flex-col items-end gap-1">
-                        <span className={cn("px-2 py-1 rounded text-[10px] font-bold border", getStatusColor(signal.status))}>
-                          {signal.status || 'ACTIVE'}
+                        <span className={cn("px-2 py-1 rounded-full text-[10px] font-bold border inline-flex items-center gap-1.5", getStatusColor(signal.status))}>
+                          {(signal.status === 'LIVE' || signal.status === 'ACTIVE' || !signal.status) && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#5EEAD4] shadow-[0_0_10px_rgba(94,234,212,0.95)]" />
+                          )}
+                          {signal.status || 'LIVE'}
                         </span>
                         {isBreakeven && (
                           <span className="text-[10px] text-[#00E08A] font-medium px-2 py-0.5 rounded border border-[#00E08A]/20 bg-[#00E08A]/10">
@@ -185,23 +208,23 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                 <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
                   <div>
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">Entry</p>
-                    <p className="text-white font-mono">{signal.entry}</p>
+                    {renderCopyableValue(`${signal.id}:entry`, signal.entry, "text-white")}
                   </div>
                   <div>
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">Stop Loss</p>
-                    <p className="text-[#FF4D6D] font-mono">{signal.sl}</p>
+                    {renderCopyableValue(`${signal.id}:sl`, signal.sl, "text-[#FF4D6D]")}
                   </div>
                   <div>
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">TP1 (1:1)</p>
-                    <p className="text-[#00E08A] font-mono">{signal.tp1}</p>
+                    {renderCopyableValue(`${signal.id}:tp1`, signal.tp1, "text-[#00E08A]")}
                   </div>
                   <div>
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">TP2 (1:2)</p>
-                    <p className="text-[#00E08A] font-mono">{signal.tp2}</p>
+                    {renderCopyableValue(`${signal.id}:tp2`, signal.tp2, "text-[#00E08A]")}
                   </div>
                   <div>
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">TP3 (1:3)</p>
-                    <p className="text-[#00E08A] font-mono">{signal.tp3}</p>
+                    {renderCopyableValue(`${signal.id}:tp3`, signal.tp3, "text-[#00E08A]")}
                   </div>
                   <div>
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">Confidence</p>

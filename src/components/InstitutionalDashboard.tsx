@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 
 /**
  * ============================================================================
@@ -417,12 +417,19 @@ function StatCard({
 }
 
 function ActiveSignalCard({ s }: { s: ActiveSignal }) {
+  const [copiedLevel, setCopiedLevel] = useState<string | null>(null);
   const statusLabel =
     s.status === "profit"
       ? `In profit +${s.statusPips ?? 0} pips`
       : s.status === "loss"
       ? `In loss ${s.statusPips ?? 0} pips`
       : "Active — waiting for TP1";
+
+  const copyLevel = (label: string, value: number) => {
+    navigator.clipboard.writeText(String(value));
+    setCopiedLevel(label);
+    setTimeout(() => setCopiedLevel(null), 1500);
+  };
 
   return (
     <div className="x4-signal">
@@ -433,22 +440,44 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
         <span className="x4-muted x4-signal__time">{s.openedAgo}</span>
       </div>
       <div className="x4-signal__levels">
-        <Level label="ENTRY" value={s.entry} />
-        <Level label="SL" value={s.sl} muted />
-        <Level label="TP1" value={s.tp1} />
-        <Level label="TP2" value={s.tp2} />
-        {s.tp3 != null && <Level label="TP3" value={s.tp3} />}
+        <Level label="ENTRY" value={s.entry} copied={copiedLevel === "ENTRY"} onCopy={copyLevel} />
+        <Level label="SL" value={s.sl} muted copied={copiedLevel === "SL"} onCopy={copyLevel} />
+        <Level label="TP1" value={s.tp1} copied={copiedLevel === "TP1"} onCopy={copyLevel} />
+        <Level label="TP2" value={s.tp2} copied={copiedLevel === "TP2"} onCopy={copyLevel} />
+        {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
       </div>
       <div className={`x4-signal__status x4-signal__status--${s.status}`}>{statusLabel}</div>
     </div>
   );
 }
 
-function Level({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
+function Level({
+  label,
+  value,
+  muted,
+  copied,
+  onCopy,
+}: {
+  label: string;
+  value: number;
+  muted?: boolean;
+  copied?: boolean;
+  onCopy?: (label: string, value: number) => void;
+}) {
   return (
     <div className={`x4-level ${muted ? "x4-level--muted" : ""}`}>
       <span className="x4-level__label">{label}</span>
-      <span className="x4-level__value">{fmtPrice(value)}</span>
+      <span className="x4-level__row">
+        <span className="x4-level__value">{fmtPrice(value)}</span>
+        <button
+          type="button"
+          className={`x4-level__copy ${copied ? "copied" : ""}`}
+          onClick={() => onCopy?.(label, value)}
+          title={`Copy ${label}`}
+        >
+          {copied ? "✓" : "⧉"}
+        </button>
+      </span>
     </div>
   );
 }
@@ -763,17 +792,62 @@ const CSS = `
   font-size: 13px;
   font-weight: 600;
 }
+.x4-level__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.x4-level__copy {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px solid var(--x4-line);
+  background: rgba(8, 9, 11, 0.55);
+  color: var(--x4-text-dim);
+  font-size: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.x4-level__copy:hover,
+.x4-level__copy.copied {
+  color: var(--x4-cyan);
+  border-color: rgba(79, 209, 232, 0.45);
+  background: rgba(79, 209, 232, 0.08);
+}
 .x4-level--muted .x4-level__value { color: var(--x4-red); }
 .x4-signal__status {
   font-family: var(--x4-font-mono);
   font-size: 12px;
   font-weight: 600;
-  padding-top: 10px;
-  border-top: 1px solid var(--x4-line);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  letter-spacing: 0.02em;
 }
 .x4-signal__status--profit { color: var(--x4-green); }
 .x4-signal__status--loss { color: var(--x4-red); }
-.x4-signal__status--pending { color: var(--x4-text-dim); }
+.x4-signal__status--pending {
+  color: #5eead4;
+  background: rgba(20,184,166,0.10);
+  border-color: rgba(20,184,166,0.26);
+  box-shadow: 0 0 20px rgba(20,184,166,0.06);
+}
+.x4-signal__status--pending::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2dd4bf;
+  box-shadow: 0 0 12px rgba(45,212,191,0.9);
+}
 
 /* Watchlist groups */
 .x4-group { margin-bottom: 16px; }
