@@ -609,7 +609,6 @@ async function startServer() {
     const amount = Number(amount_usd || (selectedPlan === 'ELITE' ? 50 : 20));
     const planCredits = Number(credits || (selectedPlan === 'ELITE' ? 100 : 25));
     const payload = {
-      user_id: user.id,
       email: user.email,
       method: network || 'TRC20',
       plan: selectedPlan,
