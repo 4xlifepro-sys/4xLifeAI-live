@@ -142,7 +142,7 @@ export default function Dashboard() {
     });
 
     const activeMapped = active.map(s => {
-      const isLong = s.direction === 'BUY';
+      const isLong = s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY';
       const entry = s.entry_price || s.entry || prices[s.pair] || 0;
       const currentPrice = prices[s.pair] || entry;
       const pips = calcPips(s.pair, entry, currentPrice) * (isLong ? 1 : -1);

@@ -353,7 +353,7 @@ export async function startScanner() {
               let newStatus = s.status || 'LIVE';
               let tpRecordStr = '';
           
-              const isLong = s.direction === 'LONG' || s.signal === 'BUY';
+              const isLong = s.direction === 'LONG' || s.direction === 'BUY' || s.signal === 'BUY';
 
               // Determine current effective SL based on trailing logic
               let effectiveSL = s.sl;
@@ -785,13 +785,13 @@ export async function startScanner() {
              
              const dt = new Date(signal.timestamp).toUTCString();
              
-             const biasStr = signal.direction === 'LONG' ? 'BUY' : 'SELL';
+             const signalDirectionStr = signal.direction === 'LONG' || signal.direction === 'BUY' ? 'BUY' : 'SELL';
              const modeStr = scannerState.stats.mode === 'crypto' ? ' (WEEKEND CRYPTO MODE)' : '';
              const regimeStr = signal.diagnostics?.regimeState || 'Trending';
              
              const msgOut = `🚨 <b>4XLIFEAI SIGNAL${modeStr}</b>\n\n`
              + `<b>Pair:</b> ${signal.pair}\n`
-             + `<b>Signal:</b> ${signal.direction === 'LONG' ? 'BUY' : 'SELL'}\n`
+             + `<b>Signal:</b> ${signalDirectionStr}\n`
              + `<b>Regime:</b> ${regimeStr}\n\n`
              + `<b>Entry:</b> ${signal.entry}\n`
              + `<b>SL:</b> ${signal.sl} (${risk} pips)\n`

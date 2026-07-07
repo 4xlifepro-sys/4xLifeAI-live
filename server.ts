@@ -494,7 +494,7 @@ async function startServer() {
            ...d,
            opened_at: d.created_at,
            entry: d.entry_price,
-           tp1_hit_at: d.status === 'TP1 HIT' || d.status === 'TP2 HIT' || d.status === 'TP3 HIT' || d.status === 'CLOSED' ? new Date().toISOString() : null,
+           tp1_hit_at: d.status === 'TP1_HIT' || d.status === 'TP2_HIT' || d.status === 'TP3_HIT' || d.status === 'CLOSED' ? new Date().toISOString() : null,
         }));
         openTrades = allTrades.filter((t: any) => t.is_active);
         closedTrades = allTrades.filter((t: any) => !t.is_active && t.result);
@@ -502,7 +502,7 @@ async function startServer() {
     } else {
       // In-memory fallback
       allTrades = scannerState.signals.filter(s => s.tier !== 'Reject');
-      openTrades = allTrades.filter(s => s.status !== 'CLOSED' && s.result !== 'LOSS' && s.result !== 'WIN');
+      openTrades = allTrades.filter(s => ['LIVE', 'TP1_HIT', 'TP2_HIT'].includes(s.status));
       closedTrades = allTrades.filter(s => s.status === 'CLOSED' || s.result === 'LOSS' || s.result === 'WIN' || s.result === 'PARTIAL WIN');
     }
 

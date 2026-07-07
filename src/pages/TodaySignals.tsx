@@ -119,7 +119,7 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   <h3 className="text-lg font-bold text-white tracking-tight">{signal.pair}</h3>
                   <span className={cn(
                     "px-2 py-0.5 rounded text-xs font-medium uppercase",
-                    signal.direction === 'LONG' ? "bg-[#00E08A]/10 text-[#00E08A]" : "bg-[#FF4D6D]/10 text-[#FF4D6D]"
+                    signal.direction === 'LONG' || signal.direction === 'BUY' ? "bg-[#00E08A]/10 text-[#00E08A]" : "bg-[#FF4D6D]/10 text-[#FF4D6D]"
                   )}>
                     {signal.direction}
                   </span>
