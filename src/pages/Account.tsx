@@ -13,7 +13,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export default function Account() {
   const dialog = useDialog();
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [telegramAlerts, setTelegramAlerts] = useState(true);
   const [eliteOnly, setEliteOnly] = useState(false);
@@ -71,12 +71,22 @@ export default function Account() {
     if (!txid) return;
     try {
       if (!user) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        await dialog.showAlert({
+          title: "Session Expired",
+          message: "Please log out and log back in, then submit your payment again.",
+          variant: "warning",
+        });
+        return;
+      }
       
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({ email: user.email, network, txid, plan: 'ELITE', amount_usd: 50, credits: 100 })
       });

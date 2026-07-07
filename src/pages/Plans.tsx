@@ -12,7 +12,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export default function Plans() {
   const dialog = useDialog();
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [showUpgradeForm, setShowUpgradeForm] = useState(false);
   const [network, setNetwork] = useState('TRC20');
@@ -50,14 +50,18 @@ export default function Plans() {
        }
        
        // Check for pending payments
-       const res = await fetch(`/api/payments/${encodeURIComponent(user.email || '')}/status`, {
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-       });
-       const payment = res.ok ? await res.json() : null;
-       if (payment?.status === 'PENDING') {
-          setPaymentStatus('PENDING');
-       } else if (payment?.status === 'APPROVED') {
-          setIsPremium(true);
+       const { data: sessionData } = await supabase.auth.getSession();
+       const accessToken = sessionData.session?.access_token;
+       if (accessToken) {
+         const res = await fetch(`/api/payments/${encodeURIComponent(user.email || '')}/status`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+         });
+         const payment = res.ok ? await res.json() : null;
+         if (payment?.status === 'PENDING') {
+            setPaymentStatus('PENDING');
+         } else if (payment?.status === 'APPROVED') {
+            setIsPremium(true);
+         }
        }
     };
     checkStatus();
@@ -85,11 +89,22 @@ export default function Plans() {
     e.preventDefault();
     if (!txid) return;
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        await dialog.showAlert({
+          title: "Session Expired",
+          message: "Please log out and log back in, then submit your payment again.",
+          variant: "warning",
+        });
+        return;
+      }
+
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({ email: user.email, network, txid, plan: 'PREMIUM', amount_usd: 20, credits: 25 })
       });
