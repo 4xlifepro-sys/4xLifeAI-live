@@ -4,12 +4,14 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../components/ConfirmDialog';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export default function Plans() {
+  const dialog = useDialog();
   const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [showUpgradeForm, setShowUpgradeForm] = useState(false);
@@ -86,15 +88,28 @@ export default function Plans() {
       const data = await res.json();
       if (!res.ok) {
          console.error(data);
-         alert(data.error || "Failed to submit payment");
+         await dialog.showAlert({
+           title: "Payment Error",
+           message: data.error || "Failed to submit payment. Please try again.",
+           variant: "danger",
+         });
          return;
       }
       setPaymentStatus('PENDING');
       setShowUpgradeForm(false);
       setTxid('');
+      await dialog.showAlert({
+        title: "Payment Submitted",
+        message: "Your payment has been submitted for review. We will activate your account within 24 hours.",
+        variant: "success",
+      });
     } catch (err) {
       console.error(err);
-      alert("Failed to submit payment");
+      await dialog.showAlert({
+        title: "Payment Error",
+        message: "Failed to submit payment. Please try again.",
+        variant: "danger",
+      });
     }
   };
 

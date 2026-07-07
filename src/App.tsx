@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import NotificationDropdown from './components/NotificationDropdown';
+import { DialogProvider } from './components/ConfirmDialog';
 
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
@@ -409,7 +410,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <GlobalLayout />
+        <DialogProvider>
+          <GlobalLayout />
+        </DialogProvider>
       </AuthProvider>
     </BrowserRouter>
   );

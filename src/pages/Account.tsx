@@ -5,12 +5,14 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useDialog } from '../components/ConfirmDialog';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export default function Account() {
+  const dialog = useDialog();
   const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [telegramAlerts, setTelegramAlerts] = useState(true);
@@ -82,7 +84,11 @@ export default function Account() {
       }]);
       if (error) {
         console.error(error);
-        alert("Failed to submit payment details.");
+        await dialog.showAlert({
+          title: "Payment Error",
+          message: "Failed to submit payment details. Please try again.",
+          variant: "danger",
+        });
         return;
       }
       setPaymentStatus('PENDING');

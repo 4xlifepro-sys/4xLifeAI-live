@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useDialog } from '../../components/ConfirmDialog';
 import { RefreshCw, Save, Plus, X } from 'lucide-react';
 import { cn } from '../../App';
 
@@ -15,6 +16,7 @@ interface Plan {
 }
 
 export default function PlansManager() {
+  const dialog = useDialog();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -48,9 +50,17 @@ export default function PlansManager() {
     }).eq('id', plan.id);
     
     if (error) {
-      alert("Error saving plan: " + error.message);
+      await dialog.showAlert({
+        title: "Error",
+        message: `Failed to save plan: ${error.message}`,
+        variant: "danger",
+      });
     } else {
-      alert("Plan saved successfully!");
+      await dialog.showAlert({
+        title: "Success",
+        message: "Plan saved successfully.",
+        variant: "success",
+      });
     }
     setSaving(false);
   };

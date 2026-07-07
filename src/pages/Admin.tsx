@@ -7,6 +7,7 @@ import {
   CircleDollarSign, Database, Play, Activity, LayoutList, Cpu 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useDialog } from '../components/ConfirmDialog';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function cn(...inputs: ClassValue[]) {
@@ -49,6 +50,7 @@ const TABS = [
 import PlansManager from './admin/PlansManager';
 
 export default function Admin() {
+  const dialog = useDialog();
   const [activeTab, setActiveTab] = useState('analytics');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
@@ -354,7 +356,11 @@ export default function Admin() {
   };
 
   const handleApprove = async (id: string) => {
-    alert("SECURITY LOCKOUT: Manual approval has been disabled until real blockchain TX hash verification is implemented. Do not manually grant ELITE privileges.");
+    await dialog.showAlert({
+      title: "Manual Approval Disabled",
+      message: "Manual approval has been disabled until real blockchain TX hash verification is implemented. Do not manually grant ELITE privileges.",
+      variant: "warning",
+    });
     return;
     /*
     if (!supabase) return;
@@ -810,7 +816,14 @@ export default function Admin() {
                       )}
                       {!user.is_admin && (
                         <button onClick={async () => {
-                           if (!confirm('Are you sure you want to completely ban and delete this user?')) return;
+                           const confirmed = await dialog.showConfirm({
+                             title: "Ban & Delete User",
+                             message: "Are you sure you want to permanently ban and delete this user? This action cannot be undone.",
+                             variant: "danger",
+                             confirmText: "Delete",
+                             cancelText: "Cancel"
+                           });
+                           if (!confirmed) return;
                            const { data: { session } } = await supabase.auth.getSession();
                            await fetch(`/api/admin/users/${user.id}/delete`, { method: 'POST', headers: { 'Authorization': `Bearer ${session?.access_token}` } });
                            fetchDashboardData();
@@ -1080,13 +1093,19 @@ export default function Admin() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm("Reset prompts to platform defaults?")) {
-                    setPromptsConfig({
+                onClick={async () => {
+                  const confirmed = await dialog.showConfirm({
+                    title: "Reset Prompts",
+                    message: "Are you sure you want to reset all AI prompts to platform defaults?",
+                    variant: "warning",
+                    confirmText: "Reset",
+                    cancelText: "Cancel"
+                  });
+                  if (!confirmed) return;
+                  setPromptsConfig({
                       coach_system_instruction: "You are the 4xLifeAI Coach, an expert in Smart Money Concepts (SMC) and quantitative trading. You help users with risk management, position sizing, understanding market structure (BOS, CHoCH, Order Blocks, Liquidity Sweeps), and trading psychology. Keep responses concise, professional, and directly actionable. Avoid long generic paragraphs.",
                       signal_explainer_prompt: "You are an expert forex trader. Explain this signal to a user in plain English:\nPair: ${signal.pair}\nDirection: ${signal.direction}\nConfidence Score: ${signal.aiConfidence}%\nStatus: ${signal.tier}\nMarket Regime: ${signal.diagnostics?.confidenceBreakdown?.regime === 5 ? 'Trending (Clean)' : 'Chop / Mixed'}\nWhy this triggered:\n- ATR, VWAP, EMA alignments were matched\n- Pullback and stochastic were confirmed\n- Stop Loss is well placed\n\nGive a short, punchy 2-3 sentence explanation of why this trade looks good and what market structure we are following. No fluffy intros. Keep it to the point."
                     });
-                  }
                 }}
                 className="px-4 py-2 bg-transparent text-[#8A95A5] hover:text-white rounded-lg text-xs font-bold uppercase tracking-wider border border-[#202735] hover:border-[#2A3345] transition-colors"
               >
