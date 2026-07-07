@@ -608,9 +608,10 @@ async function startServer() {
     const selectedPlan = String(plan || 'PREMIUM').toUpperCase();
     const amount = Number(amount_usd || (selectedPlan === 'ELITE' ? 50 : 20));
     const planCredits = Number(credits || (selectedPlan === 'ELITE' ? 100 : 25));
+    const methodValue = (network || 'TRC20').toUpperCase();
     const payload = {
       email: user.email,
-      method: network || 'TRC20',
+      method: methodValue === 'BEP20' ? 'USDT_BEP20' : 'USDT_TRC20',
       plan: selectedPlan,
       amount_usd: amount,
       credits: planCredits,
