@@ -11,6 +11,7 @@ import { sendTelegramMessage } from './server/telegram.js';
 import { GoogleGenAI } from "@google/genai";
 
 const adminAlertCooldown = new Map<string, number>();
+let notificationsTableAvailable = true;
 
 function escapeTelegramHtml(value: string) {
   return value
@@ -29,7 +30,7 @@ function shouldSendAdminAlert(key: string, cooldownMs = 60000) {
 
 // Notification helper - inserts into Supabase notifications table
 async function sendNotification(userEmail: string, title: string, message: string, type: string = 'info') {
-  if (!supabase) return;
+  if (!supabase || !notificationsTableAvailable) return;
   let userId: string | null = null;
   try {
     const { data: authUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -49,11 +50,18 @@ async function sendNotification(userEmail: string, title: string, message: strin
     is_read: false,
     created_at: new Date().toISOString()
   }]);
-  if (error) console.error('Notification insert error:', error.message);
+  if (error) {
+    if (error.message.includes("Could not find the table 'public.notifications'")) {
+      notificationsTableAvailable = false;
+      console.warn('Notifications table missing; web notifications disabled until table is created.');
+      return;
+    }
+    console.error('Notification insert error:', error.message);
+  }
 }
 
 async function sendAdminWebNotification(title: string, message: string, type: string = 'system_alert') {
-  if (!supabase) return;
+  if (!supabase || !notificationsTableAvailable) return;
 
   const { data: admins, error } = await supabase
     .from('users')
@@ -86,7 +94,14 @@ async function sendAdminWebNotification(title: string, message: string, type: st
   if (!rows.length) return;
 
   const { error: insertError } = await supabase.from('notifications').insert(rows);
-  if (insertError) console.error('[ADMIN NOTIFY] Web notification insert error:', insertError.message);
+  if (insertError) {
+    if (insertError.message.includes("Could not find the table 'public.notifications'")) {
+      notificationsTableAvailable = false;
+      console.warn('[ADMIN NOTIFY] Notifications table missing; web notifications disabled until table is created.');
+      return;
+    }
+    console.error('[ADMIN NOTIFY] Web notification insert error:', insertError.message);
+  }
 }
 
 async function notifyAdmin(title: string, message: string, type: string = 'system_alert', dedupeKey?: string) {
