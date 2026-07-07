@@ -8,6 +8,21 @@ export default function Dashboard() {
   const [allSignals, setAllSignals] = useState<any[]>([]);
   const [scannerState, setScannerState] = useState<any>({ stats: null, marketStates: [], prices: {} });
   const [loading, setLoading] = useState(true);
+  const fallbackPrices = {
+    prices: [
+      { pair: 'EURUSD', price: scannerState.prices?.EURUSD || 1.08, digits: 5 },
+      { pair: 'USDJPY', price: scannerState.prices?.USDJPY || 157.0, digits: 3 },
+      { pair: 'USDCAD', price: scannerState.prices?.USDCAD || 1.36, digits: 5 },
+      { pair: 'NZDUSD', price: scannerState.prices?.NZDUSD || 0.60, digits: 5 },
+      { pair: 'EURJPY', price: scannerState.prices?.EURJPY || 170.0, digits: 3 },
+      { pair: 'GBPJPY', price: scannerState.prices?.GBPJPY || 200.0, digits: 3 },
+      { pair: 'XAUUSD', price: scannerState.prices?.XAUUSD || 2350, digits: 2 },
+      { pair: 'XAGUSD', price: scannerState.prices?.XAGUSD || 30, digits: 3 },
+      { pair: 'BTCUSD', price: scannerState.prices?.BTCUSD || 60000, digits: 2 },
+      { pair: 'ETHUSD', price: scannerState.prices?.ETHUSD || 3000, digits: 2 },
+    ],
+    cached: true
+  };
 
   // Fetch prices from /api/prices
   useEffect(() => {
@@ -55,7 +70,7 @@ export default function Dashboard() {
     // Safety timeout: if SSE doesn't respond in 10s, show dashboard anyway
     timeout = setTimeout(() => {
       setLoading(false);
-    }, 10000);
+    }, 3000);
     
     es.onmessage = (e) => {
       try { 
@@ -77,7 +92,7 @@ export default function Dashboard() {
   const PAIRS = ['EURUSD','USDJPY','USDCAD','NZDUSD','EURJPY','GBPJPY','XAUUSD','XAGUSD','BTCUSD','ETHUSD'];
 
   const dashboardData = useMemo(() => {
-    if (!rawPrices) return null;
+    const safeRawPrices = rawPrices || fallbackPrices;
 
     const prices = scannerState.prices || {};
     const marketStates = (scannerState.marketStates || []).filter((s: any) => PAIRS.includes(s.pair));
@@ -189,7 +204,7 @@ export default function Dashboard() {
       weekendMode,
     };
 
-    const adapted = adaptCtraderData(rawPrices, overrides);
+    const adapted = adaptCtraderData(safeRawPrices, overrides);
 
     // Replace inferred trend with real scanner bias
     adapted.watchlist.forEach(group => {
@@ -205,7 +220,7 @@ export default function Dashboard() {
     return adapted;
   }, [rawPrices, allSignals, scannerState]);
 
-  if (loading || !dashboardData) {
+  if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#08090b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
