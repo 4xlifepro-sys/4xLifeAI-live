@@ -761,6 +761,7 @@ export async function startScanner() {
                   console.error("Supabase signals insert error:", error.message);
               } else if (data) {
                   const dbId = data[0]?.id;
+                  console.log(`[DB INSERT] ${signal.pair} ${dbDirection} @ ${signal.entry} → id: ${dbId}`);
                   if (dbId) generateAiReason(String(dbId), signal);
               }
             } catch (insertErr: any) {
