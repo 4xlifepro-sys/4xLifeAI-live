@@ -36,8 +36,23 @@ const AuthContext = createContext<AuthContextType>({
         return;
       }
       try {
-        const { data } = await supabase.from('profiles').select('is_admin').eq('id', userId).single();
-        setIsAdmin(data?.is_admin || false);
+        // Check our custom users table for role = 'ADMIN'
+        // First get the email from auth, then look it up in users table
+        const { data: authData } = await supabase.auth.getUser();
+        const userEmail = authData?.user?.email;
+        
+        if (!userEmail) {
+          setIsAdmin(false);
+          return;
+        }
+        
+        const { data } = await supabase
+          .from('users')
+          .select('role')
+          .eq('email', userEmail)
+          .single();
+        
+        setIsAdmin(data?.role === 'ADMIN');
       } catch (err) {
         setIsAdmin(false);
       }

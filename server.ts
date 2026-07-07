@@ -583,8 +583,9 @@ async function startServer() {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) return res.status(401).json({ error: "Invalid token" });
     
-    const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
-    if (!profile?.is_admin) {
+    // Check our users table for role = 'ADMIN'
+    const { data: userRecord } = await supabase.from('users').select('role').eq('email', user.email).single();
+    if (!userRecord || userRecord.role !== 'ADMIN') {
         return res.status(403).json({ error: "Forbidden: Admin access required" });
     }
     
