@@ -128,7 +128,7 @@ function isGoodSession(timestamp: string): boolean {
  *
  * Trend-pullback strategy:
  * 1. H4 trend: EMA20 direction determines bias
- * 2. M5 pullback: price touches M5 EMA20 zone
+ * 2. M5 pullback: price touches M5 EMA110 zone
  * 3. RSI: not overbought/oversold
  * 4. ATR-based SL (1 ATR)
  * 5. TP1=1.5R, TP2=3R, TP3=5R (wider for cost resistance)
@@ -153,7 +153,7 @@ export function detectSignalV2(
   // === M5 INDICATORS ===
   const m5Window = m5Candles.slice(-200);
   const m5Closes = m5Window.map(c => c.close);
-  const m5Ema20 = ema(m5Closes, 20);
+  const m5Ema20 = ema(m5Closes, 110);
   const m5Ema9 = ema(m5Closes, 9);
   const m5Rsi = rsi(m5Closes, 14);
   const m5Atr = atr(m5Window, 14);
@@ -212,7 +212,7 @@ export function detectSignalV2(
       tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
       tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
       confidence: Math.min(confidence, 85),
-      reason: `H4 BULL | M5 pullback to EMA20 | RSI ${currentRsi.toFixed(1)} | ATR SL ${risk.toFixed(pipMultiplier === 0.0001 ? 5 : pipMultiplier === 0.01 ? 3 : 2)}`,
+      reason: `H4 BULL | M5 pullback to EMA110 | RSI ${currentRsi.toFixed(1)} | ATR SL ${risk.toFixed(pipMultiplier === 0.0001 ? 5 : pipMultiplier === 0.01 ? 3 : 2)}`,
       candleIndex: m5Candles.length - 1
     };
   }
@@ -247,7 +247,7 @@ export function detectSignalV2(
       tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
       tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
       confidence: Math.min(confidence, 85),
-      reason: `H4 BEAR | M5 pullback to EMA20 | RSI ${currentRsi.toFixed(1)} | ATR SL ${risk.toFixed(pipMultiplier === 0.0001 ? 5 : pipMultiplier === 0.01 ? 3 : 2)}`,
+      reason: `H4 BEAR | M5 pullback to EMA110 | RSI ${currentRsi.toFixed(1)} | ATR SL ${risk.toFixed(pipMultiplier === 0.0001 ? 5 : pipMultiplier === 0.01 ? 3 : 2)}`,
       candleIndex: m5Candles.length - 1
     };
   }
