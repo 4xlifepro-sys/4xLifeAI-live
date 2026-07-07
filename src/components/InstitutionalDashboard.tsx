@@ -46,6 +46,7 @@ interface ActiveSignal {
   tp2: number;
   tp3?: number;
   status: "profit" | "loss" | "pending";
+  tradeStatus?: string;
   statusPips?: number;
   tier?: "Strong" | "Good" | "Valid";
   openedAgo: string; // e.g. "12m ago"
@@ -418,11 +419,15 @@ function StatCard({
 function ActiveSignalCard({ s }: { s: ActiveSignal }) {
   const [copiedLevel, setCopiedLevel] = useState<string | null>(null);
   const statusLabel =
-    s.status === "profit"
-      ? `In profit +${s.statusPips ?? 0} pips`
+    s.tradeStatus === "TP2_HIT"
+      ? "TP2 secured - waiting for TP3"
+      : s.tradeStatus === "TP1_HIT"
+      ? "TP1 secured - waiting for TP2 / TP3"
+      : s.status === "profit"
+      ? `Live market +${s.statusPips ?? 0} pips`
       : s.status === "loss"
-      ? `In loss ${s.statusPips ?? 0} pips`
-      : "Active — waiting for TP1";
+      ? `Live market -${s.statusPips ?? 0} pips`
+      : "Live - waiting for TP1";
 
   const copyLevel = (label: string, value: number) => {
     navigator.clipboard.writeText(String(value));

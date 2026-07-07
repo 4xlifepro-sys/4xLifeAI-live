@@ -361,9 +361,10 @@ export async function startScanner() {
 
           if (activeSignals && activeSignals.length > 0) {
             for (const s of activeSignals) {
-              const openedAt = new Date(s.created_at || s.timestamp || 0).getTime();
+              const trackingStartTime = s.tp2_hit_at || s.tp1_hit_at || s.created_at || s.timestamp || 0;
+              const openedAt = new Date(trackingStartTime).getTime();
               const trackingCandles = entryTf.filter((candle: any) => new Date(candle.timestamp).getTime() > openedAt);
-              const currentPrice = trackingCandles[trackingCandles.length - 1];
+              let currentPrice = trackingCandles[trackingCandles.length - 1];
               if (!currentPrice || !Number.isFinite(Number(currentPrice.close))) {
                  continue;
               }
@@ -379,16 +380,41 @@ export async function startScanner() {
               let hitLevel = '';
               let hitPrice = 0;
               let rawPips = 0;
-              let newStatus = s.status || 'LIVE';
+              const currentStatus = s.tp2_hit_at ? 'TP2_HIT' : s.tp1_hit_at ? 'TP1_HIT' : (s.status || 'LIVE');
+              let newStatus = currentStatus;
               let tpRecordStr = '';
           
               const isLong = s.direction === 'LONG' || s.direction === 'BUY' || s.signal === 'BUY';
 
+              const firstEventCandle = trackingCandles.find((candle: any) => {
+                 const close = Number(candle.close);
+                 if (!Number.isFinite(close)) return false;
+                 let trailingSL = s.sl;
+                 if (currentStatus === 'TP2_HIT') trailingSL = s.tp1;
+                 else if (currentStatus === 'TP1_HIT') trailingSL = sEntry;
+
+                 if (isLong) {
+                    return close <= trailingSL
+                       || (close >= s.tp3 && currentStatus !== 'TP3_HIT')
+                       || (close >= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(currentStatus))
+                       || (close >= s.tp1 && currentStatus === 'LIVE');
+                 }
+
+                 return close >= trailingSL
+                    || (close <= s.tp3 && currentStatus !== 'TP3_HIT')
+                    || (close <= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(currentStatus))
+                    || (close <= s.tp1 && currentStatus === 'LIVE');
+              });
+
+              if (firstEventCandle) {
+                 currentPrice = firstEventCandle;
+              }
+
               // Determine current effective SL based on trailing logic
               let effectiveSL = s.sl;
-              if (s.status === 'TP2_HIT') {
+              if (currentStatus === 'TP2_HIT') {
                   effectiveSL = s.tp1;
-              } else if (s.status === 'TP1_HIT') {
+              } else if (currentStatus === 'TP1_HIT') {
                   effectiveSL = sEntry;
               }
 
@@ -397,15 +423,15 @@ export async function startScanner() {
                     isHit = true; finalClose = true;
                     hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'STOP_LOSS_HIT';
                     rawPips = calculatePips(sEntry, effectiveSL);
-                 } else if (currentPrice.close >= s.tp3 && s.status !== 'TP3_HIT') {
+                 } else if (currentPrice.close >= s.tp3 && currentStatus !== 'TP3_HIT') {
                     isHit = true; finalClose = true;
                     hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'TP3_HIT'; tpRecordStr = 'tp3_hit_at';
                     rawPips = calculatePips(s.tp3, sEntry);
-                 } else if (currentPrice.close >= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
+                 } else if (currentPrice.close >= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(currentStatus)) {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2_HIT'; tpRecordStr = 'tp2_hit_at';
                     rawPips = calculatePips(s.tp2, sEntry);
-                 } else if (currentPrice.close >= s.tp1 && s.status === 'LIVE') {
+                 } else if (currentPrice.close >= s.tp1 && currentStatus === 'LIVE') {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1_HIT'; tpRecordStr = 'tp1_hit_at';
                     rawPips = calculatePips(s.tp1, sEntry);
@@ -415,15 +441,15 @@ export async function startScanner() {
                     isHit = true; finalClose = true;
                     hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'STOP_LOSS_HIT';
                     rawPips = calculatePips(sEntry, effectiveSL);
-                 } else if (currentPrice.close <= s.tp3 && s.status !== 'TP3_HIT') {
+                 } else if (currentPrice.close <= s.tp3 && currentStatus !== 'TP3_HIT') {
                     isHit = true; finalClose = true;
                     hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'TP3_HIT'; tpRecordStr = 'tp3_hit_at';
                     rawPips = calculatePips(sEntry, s.tp3);
-                 } else if (currentPrice.close <= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
+                 } else if (currentPrice.close <= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(currentStatus)) {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2_HIT'; tpRecordStr = 'tp2_hit_at';
                     rawPips = calculatePips(sEntry, s.tp2);
-                 } else if (currentPrice.close <= s.tp1 && s.status === 'LIVE') {
+                 } else if (currentPrice.close <= s.tp1 && currentStatus === 'LIVE') {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1_HIT'; tpRecordStr = 'tp1_hit_at';
                     rawPips = calculatePips(sEntry, s.tp1);
@@ -438,10 +464,10 @@ export async function startScanner() {
                  if (finalClose) {
                      if (hitLevel === 'TP3') finalResult = 'WIN';
                      else if (hitLevel === 'SL') {
-                         if (s.status === 'TP2_HIT') {
+                         if (currentStatus === 'TP2_HIT') {
                              finalResult = 'PARTIAL WIN';
                              rawPips = calculatePips(s.tp2, sEntry);
-                         } else if (s.status === 'TP1_HIT') {
+                         } else if (currentStatus === 'TP1_HIT') {
                              finalResult = 'PARTIAL WIN';
                              rawPips = calculatePips(s.tp1, sEntry);
                          }

@@ -449,6 +449,7 @@ async function startServer() {
             aiConfidence: d.confidence,
             score: d.score || d.confidence,
             status: d.status,
+            is_active: d.is_active,
             result: d.result,
             pips_won: d.pips_won,
             pips_lost: d.pips_lost,

@@ -161,6 +161,7 @@ export default function Dashboard() {
         tp2: s.tp2 || 0,
         tp3: s.tp3 || undefined,
         status,
+        tradeStatus: s.status,
         statusPips: Math.abs(pips),
         tier,
         openedAgo: daysAgo(s.created_at || s.timestamp || ''),
