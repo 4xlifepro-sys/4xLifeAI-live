@@ -651,11 +651,23 @@ export async function startScanner() {
             isDuplicate = true; 
         }
         
-        // 1. In-memory exact ID match
+        // 1. In-memory exact ID match (catches same UUID within scan cycle)
         const memoryDuplicate = scannerState.signals.find(s => s.id === signal.id);
         
-        if (!isDuplicate && memoryDuplicate) {
+        // 2. In-memory fingerprint match (catches same setup even with different UUID)
+        const setupHash = `${pair}:${signal.direction}:${Math.round(signal.entry * 100000)}:${Math.round(signal.sl * 100000)}`;
+        const memoryFingerprint = scannerState.signals.find(s => {
+          if (s.pair !== pair || s.direction !== signal.direction) return false;
+          if (s.tier === 'Reject') return false;
+          const age = Date.now() - new Date(s.timestamp).getTime();
+          if (age > PAIR_COOLDOWN_MS) return false;
+          const sHash = `${s.pair}:${s.direction}:${Math.round(s.entry * 100000)}:${Math.round(s.sl * 100000)}`;
+          return sHash === setupHash;
+        });
+        
+        if (!isDuplicate && (memoryDuplicate || memoryFingerprint)) {
              isDuplicate = true;
+             if (memoryFingerprint) console.log(`DUPLICATE_BLOCKED (memory fingerprint): ${pair} ${signal.direction} @ ${signal.entry}`);
         } else if (!isDuplicate && supabase) {
            // Fingerprint dedup: check signals table for same pair+direction+entry+sl within cooldown window
            const dedupAgo = new Date(Date.now() - PAIR_COOLDOWN_MS).toISOString();
@@ -763,14 +775,17 @@ export async function startScanner() {
               pips_lost: signal.pips_lost || null
             };
             
-            supabase.from('signals').insert([insertPayload]).then(({data, error}: any) => {
-               if (error) {
-                   console.error("Supabase signals insert error:", error.message);
-               } else if (data) {
-                   const dbId = data[0]?.id;
-                   if (dbId) generateAiReason(String(dbId), signal);
-               }
-            });
+            try {
+              const { data, error } = await supabase.from('signals').insert([insertPayload]) as any;
+              if (error) {
+                  console.error("Supabase signals insert error:", error.message);
+              } else if (data) {
+                  const dbId = data[0]?.id;
+                  if (dbId) generateAiReason(String(dbId), signal);
+              }
+            } catch (insertErr: any) {
+              console.error("Supabase signals insert threw:", insertErr.message);
+            }
           }
 
           if (supabase && signal.tier !== 'Reject') {
