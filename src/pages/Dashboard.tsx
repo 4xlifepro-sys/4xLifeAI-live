@@ -9,18 +9,7 @@ export default function Dashboard() {
   const [scannerState, setScannerState] = useState<any>({ stats: null, marketStates: [], prices: {} });
   const [loading, setLoading] = useState(true);
   const fallbackPrices = {
-    prices: [
-      { pair: 'EURUSD', price: scannerState.prices?.EURUSD || 1.08, digits: 5 },
-      { pair: 'USDJPY', price: scannerState.prices?.USDJPY || 157.0, digits: 3 },
-      { pair: 'USDCAD', price: scannerState.prices?.USDCAD || 1.36, digits: 5 },
-      { pair: 'NZDUSD', price: scannerState.prices?.NZDUSD || 0.60, digits: 5 },
-      { pair: 'EURJPY', price: scannerState.prices?.EURJPY || 170.0, digits: 3 },
-      { pair: 'GBPJPY', price: scannerState.prices?.GBPJPY || 200.0, digits: 3 },
-      { pair: 'XAUUSD', price: scannerState.prices?.XAUUSD || 2350, digits: 2 },
-      { pair: 'XAGUSD', price: scannerState.prices?.XAGUSD || 30, digits: 3 },
-      { pair: 'BTCUSD', price: scannerState.prices?.BTCUSD || 60000, digits: 2 },
-      { pair: 'ETHUSD', price: scannerState.prices?.ETHUSD || 3000, digits: 2 },
-    ],
+    prices: [],
     cached: true
   };
 
