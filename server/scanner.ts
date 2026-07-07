@@ -759,7 +759,8 @@ export async function startScanner() {
               direction: signal.direction,
               bias: signal.bias,
               score: signal.score,
-              confidence: signal.aiConfidence,
+              // constraint requires 1-10 scale; precise 0-100% preserved in 'score'
+              confidence: Math.min(10, Math.max(1, signal.aiConfidence / 10)),
               tier: signal.tier,
               entry_price: signal.entry,
               sl: signal.sl,
