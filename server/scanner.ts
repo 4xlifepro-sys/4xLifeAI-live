@@ -143,11 +143,12 @@ export const isWeekend = () => {
   return day === 0 || day === 6
 }
 
-export const WEEKEND_PAIRS = ['BTCUSD', 'XAGUSD', 'XAUUSD'];
+export const WEEKEND_PAIRS = ['BTCUSD', 'SOLUSD', 'BNBUSD', 'LTCUSD', 'ETHUSD', 'XAGUSD', 'XAUUSD'];
 
 export const APPROVED_PAIRS = [
-  'EURUSD', 'USDJPY', 'USDCAD', 'NZDUSD', 'EURJPY', 'GBPJPY',
-  'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD'
+  'XAUUSD', 'BTCUSD', 'SOLUSD', 'GBPNZD', 'CADJPY', 'NZDJPY',
+  'EURNZD', 'USDCAD', 'XAGUSD', 'LTCUSD', 'ETHUSD', 'GBPAUD',
+  'BNBUSD', 'AUDUSD'
 ];
 
 export const PAIRS = [...APPROVED_PAIRS]; // Initialized, mutable by mode switch
