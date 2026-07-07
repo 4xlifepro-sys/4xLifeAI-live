@@ -49,12 +49,29 @@ export default function Dashboard() {
 
   // Stream scanner state from server SSE
   useEffect(() => {
+    let timeout: NodeJS.Timeout;
     const es = new EventSource('/api/stream');
+    
+    // Safety timeout: if SSE doesn't respond in 10s, show dashboard anyway
+    timeout = setTimeout(() => {
+      setLoading(false);
+    }, 10000);
+    
     es.onmessage = (e) => {
-      try { setScannerState(p => ({ ...p, ...JSON.parse(e.data) })); setLoading(false); } catch {}
+      try { 
+        setScannerState(p => ({ ...p, ...JSON.parse(e.data) })); 
+        setLoading(false); 
+        clearTimeout(timeout);
+      } catch {}
     };
-    es.onerror = () => setLoading(false);
-    return () => es.close();
+    es.onerror = () => {
+      setLoading(false);
+      clearTimeout(timeout);
+    };
+    return () => { 
+      clearTimeout(timeout);
+      es.close(); 
+    };
   }, []);
 
   const PAIRS = ['EURUSD','USDJPY','USDCAD','NZDUSD','EURJPY','GBPJPY','XAUUSD','XAGUSD','BTCUSD','ETHUSD'];
@@ -65,8 +82,8 @@ export default function Dashboard() {
     const prices = scannerState.prices || {};
     const marketStates = (scannerState.marketStates || []).filter((s: any) => PAIRS.includes(s.pair));
 
-    const active = allSignals.filter(s => PAIRS.includes(s.pair) && ['ACTIVE', 'TP1 HIT', 'TP2 HIT'].includes(s.status));
-    const closed = allSignals.filter(s => PAIRS.includes(s.pair) && ['CLOSED', 'TP3 HIT', 'SL HIT', 'EXPIRED'].includes(s.status));
+    const active = allSignals.filter(s => PAIRS.includes(s.pair) && ['LIVE', 'TP1_HIT', 'TP2_HIT'].includes(s.status));
+    const closed = allSignals.filter(s => PAIRS.includes(s.pair) && ['CLOSED', 'TP3_HIT', 'STOP_LOSS_HIT'].includes(s.status));
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
@@ -112,8 +129,8 @@ export default function Dashboard() {
     });
 
     const activeMapped = active.map(s => {
-      const isLong = s.direction === 'LONG' || s.signal === 'BUY';
-      const entry = s.entry || prices[s.pair] || 0;
+      const isLong = s.direction === 'BUY';
+      const entry = s.entry_price || prices[s.pair] || 0;
       const currentPrice = prices[s.pair] || entry;
       const pips = calcPips(s.pair, entry, currentPrice) * (isLong ? 1 : -1);
       let status: 'profit' | 'loss' | 'pending' = 'pending';
@@ -133,20 +150,20 @@ export default function Dashboard() {
         status,
         statusPips: Math.abs(pips),
         tier,
-        openedAgo: daysAgo(s.created_at),
+        openedAgo: daysAgo(s.created_at || s.timestamp || ''),
       };
     });
 
     const historyMapped = closed.slice(0, 10).map(s => {
-      const isLong = s.direction === 'LONG' || s.signal === 'BUY';
-      const entry = s.entry || 0;
-      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result) || s.status?.includes('TP');
+      const isLong = s.direction === 'BUY';
+      const entry = s.entry_price || 0;
+      const isWin = ['TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'CLOSED'].includes(s.status) && s.status !== 'STOP_LOSS_HIT';
       const exit = isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
       const pips = calcPips(s.pair, entry, exit) * (isLong ? 1 : -1);
       let result: 'win' | 'loss' | 'breakeven' = 'loss';
       if (Math.abs(pips) < 1) result = 'breakeven';
       else if (pips > 0) result = 'win';
-      const d = new Date(s.created_at);
+      const d = new Date(s.created_at || s.timestamp);
       const closedAt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
         d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
       return { pair: s.pair, direction: isLong ? 'LONG' as const : 'SHORT' as const, entry, exit, result, pips: Math.round(pips), closedAt };
