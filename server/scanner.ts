@@ -657,14 +657,23 @@ export async function startScanner() {
         if (!isDuplicate && memoryDuplicate) {
              isDuplicate = true;
         } else if (!isDuplicate && supabase) {
-           const { data } = await supabase
-             .from('signal_audit_log')
+           // Fingerprint dedup: check signals table for same pair+direction+entry+sl within cooldown window
+           const dedupAgo = new Date(Date.now() - PAIR_COOLDOWN_MS).toISOString();
+           const { data: dedupMatch, error: dedupErr } = await supabase
+             .from('signals')
              .select('id')
-             .eq('id', signal.id)
+             .eq('pair', pair)
+             .eq('direction', signal.direction)
+             .eq('entry_price', signal.entry)
+             .eq('sl', signal.sl)
+             .gte('created_at', dedupAgo)
              .limit(1);
-             
-           if (data && data.length > 0) {
+           if (dedupErr) {
+             console.error("Dedup DB check error:", dedupErr.message);
+           }
+           if (dedupMatch && dedupMatch.length > 0) {
               isDuplicate = true;
+              console.log(`DUPLICATE_BLOCKED (db fingerprint): ${pair} ${signal.direction} @ ${signal.entry}`);
            }
         }
 
@@ -754,37 +763,12 @@ export async function startScanner() {
               pips_lost: signal.pips_lost || null
             };
             
-            supabase.from('signals').insert([insertPayload]).then(({data, error}) => {
+            supabase.from('signals').insert([insertPayload]).then(({data, error}: any) => {
                if (error) {
                    console.error("Supabase signals insert error:", error.message);
                } else if (data) {
                    const dbId = data[0]?.id;
                    if (dbId) generateAiReason(String(dbId), signal);
-               }
-            });
-                   
-                   // Send notifications to all active users
-                   const { data: allUsers } = await supabase
-                       .from('profiles')
-                       .select('email')
-                       .eq('plan_status', 'active')
-                       .neq('email', null);
-                   
-                   if (allUsers && allUsers.length > 0) {
-                       const signalMsg = `New ${signal.direction} signal for ${signal.pair}\nEntry: ${signal.entry}\nSL: ${signal.sl}\nTP1: ${signal.tp1} | TP2: ${signal.tp2} | TP3: ${signal.tp3}\nConfidence: ${signal.confidence}%\n\nAct now!`;
-                       
-                       for (const u of allUsers) {
-                           await supabase.from('notifications').insert([{
-                               user_id: u.id,
-                               email: u.email,
-                               title: `New Signal: ${signal.pair}`,
-                               message: signalMsg,
-                               type: 'signal',
-                               is_read: false,
-                               created_at: new Date().toISOString()
-                           }]);
-                       }
-                   }
                }
             });
           }
