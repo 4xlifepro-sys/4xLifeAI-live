@@ -1,6 +1,21 @@
 import { fetchCandles } from './live-market-feed.js';
 import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
 
+// Map internal status values to real DB check constraint values
+// DB allows: PENDING_APPROVAL, LIVE, TP1_HIT, TP2_HIT, TP3_HIT, STOP_LOSS_HIT, CLOSED, REJECTED_BY_ADMIN
+function mapStatus(s: string | undefined): string {
+  if (!s) return 'LIVE';
+  if (s === 'ACTIVE') return 'LIVE';
+  if (s === 'TP1 HIT' || s === 'TP1_HIT') return 'TP1_HIT';
+  if (s === 'TP2 HIT' || s === 'TP2_HIT') return 'TP2_HIT';
+  if (s === 'TP3 HIT' || s === 'TP3_HIT') return 'TP3_HIT';
+  if (s === 'STOP_LOSS_HIT' || s === 'SL HIT') return 'STOP_LOSS_HIT';
+  if (s === 'WIN' || s === 'LOSS' || s === 'VOID' || s === 'CANCELLED') return 'CLOSED';
+  if (s === 'REJECTED' || s === 'REJECTED_BY_ADMIN') return 'REJECTED_BY_ADMIN';
+  if (s === 'LIVE' || s === 'PENDING_APPROVAL') return s;
+  return 'LIVE';
+}
+
 // Per-pair cooldown: after a signal fires (and closes), wait this many ms before firing again
 // Prevents the scanner from re-firing the same setup within seconds
 const PAIR_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours cooldown per pair
@@ -483,7 +498,7 @@ export async function startScanner() {
                  }
                  
                  // Payload construction for Supabase update
-                 const updatePayload: any = { status: newStatus };
+                 const updatePayload: any = { status: mapStatus(newStatus) };
                  if (tpRecordStr) {
                     updatePayload[tpRecordStr] = closedAt;
                  }
@@ -556,10 +571,10 @@ export async function startScanner() {
       if (finalSignal && finalSignal.tier !== 'Reject' && supabase) {
         try {
           const { data: activePairTrades, error: activeTradesErr } = await supabase
-            .from('trades')
+            .from('signals')
             .select('id')
             .eq('pair', pair)
-            .in('status', ['ACTIVE', 'TP1 HIT', 'TP2 HIT', 'OPEN'])
+            .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT'])
             .limit(1);
             
           if (!activeTradesErr && activePairTrades && activePairTrades.length > 0) {
@@ -706,46 +721,6 @@ export async function startScanner() {
              scannerState.confidenceHistory.pop();
           }
 
-          // Persistent audit log for all GENUINELY NEW signals (VALID and REJECTED)
-          if (supabase) {
-             supabase.from('signal_audit_log').insert([{
-                 id: signal.id,
-                 pair: signal.pair,
-                 status: signal.tier === 'Reject' ? 'REJECTED' : 'ACTIVE',
-                 tier: signal.tier,
-                 direction: signal.direction,
-                 entry: signal.entry,
-                 sl: signal.sl,
-                 tp1: signal.tp1,
-                 tp2: signal.tp2,
-                 tp3: signal.tp3,
-                 raw_4h_open: signal.diagnostics?.raw_4h?.open,
-                 raw_4h_close: signal.diagnostics?.raw_4h?.close,
-                 raw_4h_start_time: signal.diagnostics?.raw_4h?.start_time,
-                 raw_5m_open: signal.diagnostics?.raw_5m_bos?.open,
-                 raw_5m_close: signal.diagnostics?.raw_5m_bos?.close,
-                 raw_5m_start_time: signal.diagnostics?.raw_5m_bos?.start_time,
-                 pullback_high: signal.diagnostics?.pullbackHigh,
-                 pullback_low: signal.diagnostics?.pullbackLow,
-                 confidence_score: signal.aiConfidence,
-                 confidence_breakdown: signal.diagnostics?.confidenceBreakdown,
-                 rejection_reason: signal.tier === 'Reject' ? signal.aiReason : null,
-                 generated_at: signal.timestamp,
-                 created_at: signal.timestamp,
-                 filtered_at: signal.tier === 'Reject' ? signal.timestamp : null,
-                 evaluated_at: signal.timestamp,
-                 status_changed_at: signal.timestamp,
-                 momentum_score: scores?.momentumScore ?? null,
-                 volatility_score: scores?.atrScore ?? null,
-                 final_score: scores?.strengthScore ?? null
-             }]).then(({error}) => {
-                 if (error && !error.message.includes('Could not find')) {
-                     console.error("Audit log error:", error.message);
-                 } else if (!error) {
-                     console.log("Audit log INSERTED successfully for", signal.pair, signal.status);
-                 }
-             });
-          }
           if (signal.tier !== 'Reject') {
              scannerState.signals.unshift(signal);
              if (scannerState.signals.length > 100) scannerState.signals.pop();
@@ -754,13 +729,17 @@ export async function startScanner() {
 
           // Save Signal to public.signals for Active trades
           if (supabase && signal.tier !== 'Reject') {
+            // Map internal values to match DB check constraints
+            const dbDirection = signal.direction === 'LONG' ? 'BUY' : signal.direction === 'SHORT' ? 'SELL' : signal.direction;
+            const dbStatus = mapStatus(signal.status);
+
             const insertPayload: any = {
               pair: signal.pair,
-              direction: signal.direction,
+              direction: dbDirection,
               bias: signal.bias,
               score: signal.score,
-              // constraint requires 1-10 scale; precise 0-100% preserved in 'score'
-              confidence: Math.min(10, Math.max(1, signal.aiConfidence / 10)),
+              // constraint requires 1-10 integer scale; precise 0-100% preserved in 'score'
+              confidence: Math.min(10, Math.max(1, Math.round(signal.aiConfidence / 10))),
               tier: signal.tier,
               entry_price: signal.entry,
               sl: signal.sl,
@@ -769,13 +748,13 @@ export async function startScanner() {
               tp2: signal.tp2,
               tp3: signal.tp3,
               created_at: signal.timestamp,
-              status: signal.status,
+              status: dbStatus,
               is_active: signal.is_active !== undefined ? signal.is_active : true,
               result: signal.result || null,
               pips_won: signal.pips_won || null,
               pips_lost: signal.pips_lost || null
             };
-            
+
             try {
               const { data, error } = await supabase.from('signals').insert([insertPayload]) as any;
               if (error) {
@@ -787,78 +766,6 @@ export async function startScanner() {
             } catch (insertErr: any) {
               console.error("Supabase signals insert threw:", insertErr.message);
             }
-          }
-
-          if (supabase && signal.tier !== 'Reject') {
-            const tradePayload: any = {
-              id: signal.id,
-              pair: signal.pair,
-              direction: signal.direction,
-              entry: signal.entry,
-              sl: signal.sl,
-              original_sl: signal.sl,
-              tp1: signal.tp1,
-              tp2: signal.tp2,
-              tp3: signal.tp3,
-              confidence: signal.aiConfidence,
-              grade: signal.tier,
-              status: signal.status,
-              opened_at: signal.timestamp,
-              is_active: signal.is_active
-            };
-            
-            supabase.from('trades').insert([tradePayload]).then(async ({error}) => {
-                 if (error) {
-                     if (error.message.includes('Could not find') || error.message.includes('schema cache')) {
-                         delete tradePayload.original_sl;
-                         await supabase.from('trades').insert([tradePayload]);
-                     } else {
-                         console.error("Supabase trades insert error:", error.message);
-                     }
-                 }
-            });
-          }
-
-          if (supabase && signal.tier !== 'Reject') {
-            supabase.from('active_opportunities').upsert([{
-              id: signal.id,
-              pair: signal.pair,
-              direction: signal.direction,
-              entry: signal.entry,
-              sl: signal.sl,
-              tp1: signal.tp1,
-              tp2: signal.tp2,
-              tp3: signal.tp3,
-              confidence: signal.aiConfidence,
-              status: signal.status,
-              updated_at: signal.timestamp
-            }]).then(({error}) => {
-               if (error && !error.message.includes('Could not find') && !error.message.includes('schema cache')) {
-                   console.error("Supabase active_opportunities upsert error:", error.message);
-               }
-            });
-          }
-
-          // Save Signal Diagnostics to validation table
-          if (supabase && signal.diagnostics) {
-            supabase.from('signal_results').insert([{
-              id: signal.id,
-              pair: signal.pair,
-              direction: signal.direction,
-              tier: signal.tier,
-              score: signal.score,
-              entry: signal.entry,
-              sl: signal.sl,
-              tp1: signal.tp1,
-              tp2: signal.tp2,
-              tp3: signal.tp3,
-              result: 'PENDING',
-              created_at: signal.timestamp
-            }]).then(({error}) => {
-               if (error && !error.message.includes('Could not find')) {
-                   console.error("Supabase signal_results insert error:", error.message);
-               }
-            });
           }
 
           if (signal.tier !== 'Reject') {
@@ -939,18 +846,6 @@ export async function startScanner() {
       console.log("\n================ DIAGNOSTIC REPORT ================\n");
       console.log(`Total Assets Scanned: ${scannerState.stats.totalScannedAssets}\n`);
 
-      // Optional: Persist global stats to Supabase
-      if (supabase) {
-        supabase.from('scanner_stats').upsert([{ id: 1, ...scannerState.stats }]).then(({error}) => {
-           if (error) {
-             if (error.message.includes('Could not find') || error.message.includes('schema cache')) {
-               console.warn("Supabase: Schema not found or cache stale. Please run the SQL in supabase-schema.sql and reload.");
-             } else {
-               console.error("Supabase stats upsert error:", error.message);
-             }
-           }
-        });
-      }
     }
 
     // Schedule the next execution sequentially
