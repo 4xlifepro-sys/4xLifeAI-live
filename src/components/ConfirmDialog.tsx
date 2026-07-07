@@ -66,88 +66,78 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     dialog?.resolve?.(result);
   };
 
-  if (!dialog) return children;
-
-  const Icon = dialog.options.variant === 'danger' ? AlertTriangle
-    : dialog.options.variant === 'success' ? CheckCircle
-    : dialog.options.variant === 'warning' ? AlertTriangle
-    : Info;
-
-  const iconColor = dialog.options.variant === 'danger' ? 'text-rose-400'
-    : dialog.options.variant === 'success' ? 'text-emerald-400'
-    : dialog.options.variant === 'warning' ? 'text-amber-400'
-    : 'text-cyan-400';
-
-  const confirmBtnColor = dialog.options.variant === 'danger'
-    ? 'bg-rose-500 hover:bg-rose-600 text-white'
-    : dialog.options.variant === 'warning'
-    ? 'bg-amber-500 hover:bg-amber-600 text-black'
-    : 'bg-cyan-500 hover:bg-cyan-600 text-black';
-
+  // Always render Provider so useDialog() always works
   return (
     <DialogContext.Provider value={{ showConfirm, showAlert }}>
       {children}
 
-      {/* Modal overlay — only when dialog is open */}
       {dialog && (
-        <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-        {/* Dialog */}
-        <div className="relative w-full max-w-md mx-4 bg-[#1a1d24] border border-white/10 rounded-xl shadow-2xl">
-          {/* Close button */}
-          <button
-            onClick={() => handleClose(dialog.type === 'confirm' ? false : undefined)}
-            className="absolute top-4 right-4 text-white/40 hover:text-white/80 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-md mx-4 bg-[#1a1d24] border border-white/10 rounded-xl shadow-2xl">
+            <button
+              onClick={() => handleClose(dialog.type === 'confirm' ? false : undefined)}
+              className="absolute top-4 right-4 text-white/40 hover:text-white/80 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
-          {/* Content */}
-          <div className="p-6">
-            {/* Icon */}
-            <div className={cn("w-12 h-12 rounded-full flex items-center justify-center mb-4",
-              dialog.options.variant === 'danger' ? 'bg-rose-500/10'
-              : dialog.options.variant === 'warning' ? 'bg-amber-500/10'
-              : dialog.options.variant === 'success' ? 'bg-emerald-500/10'
-              : 'bg-cyan-500/10'
-            )}>
-              <Icon className={cn("w-6 h-6", iconColor)} />
+            <div className="p-6">
+              <div className={cn(
+                "w-12 h-12 rounded-full flex items-center justify-center mb-4",
+                dialog.options.variant === 'danger' ? 'bg-rose-500/10'
+                : dialog.options.variant === 'warning' ? 'bg-amber-500/10'
+                : dialog.options.variant === 'success' ? 'bg-emerald-500/10'
+                : 'bg-cyan-500/10'
+              )}>
+                {(() => {
+                  const Icon = dialog.options.variant === 'danger' ? AlertTriangle
+                    : dialog.options.variant === 'success' ? CheckCircle
+                    : dialog.options.variant === 'warning' ? AlertTriangle
+                    : Info;
+                  const color = dialog.options.variant === 'danger' ? 'text-rose-400'
+                    : dialog.options.variant === 'success' ? 'text-emerald-400'
+                    : dialog.options.variant === 'warning' ? 'text-amber-400'
+                    : 'text-cyan-400';
+                  return <Icon className={cn("w-6 h-6", color)} />;
+                })()}
+              </div>
+
+              {dialog.options.title && (
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  {dialog.options.title}
+                </h3>
+              )}
+
+              <p className="text-white/70 text-sm leading-relaxed">
+                {dialog.options.message}
+              </p>
             </div>
 
-            {/* Title */}
-            {dialog.options.title && (
-              <h3 className="text-lg font-semibold text-white mb-2">
-                {dialog.options.title}
-              </h3>
-            )}
-
-            {/* Message */}
-            <p className="text-white/70 text-sm leading-relaxed">
-              {dialog.options.message}
-            </p>
-          </div>
-
-          {/* Actions */}
-          <div className="px-6 py-4 border-t border-white/10 flex gap-3">
-            {dialog.type === 'confirm' && (
+            <div className="px-6 py-4 border-t border-white/10 flex gap-3">
+              {dialog.type === 'confirm' && (
+                <button
+                  onClick={() => handleClose(false)}
+                  className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white/70 rounded-lg font-medium transition-colors"
+                >
+                  {dialog.options.cancelText}
+                </button>
+              )}
               <button
-                onClick={() => handleClose(false)}
-                className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white/70 rounded-lg font-medium transition-colors"
+                onClick={() => handleClose(dialog.type === 'confirm' ? true : undefined)}
+                className={cn(
+                  "flex-1 px-4 py-2.5 rounded-lg font-medium transition-colors",
+                  dialog.options.variant === 'danger'
+                    ? 'bg-rose-500 hover:bg-rose-600 text-white'
+                    : dialog.options.variant === 'warning'
+                    ? 'bg-amber-500 hover:bg-amber-600 text-black'
+                    : 'bg-cyan-500 hover:bg-cyan-600 text-black'
+                )}
               >
-                {dialog.options.cancelText}
+                {dialog.options.confirmText}
               </button>
-            )}
-            <button
-              onClick={() => handleClose(dialog.type === 'confirm' ? true : undefined)}
-              className={cn("flex-1 px-4 py-2.5 rounded-lg font-medium transition-colors", confirmBtnColor)}
-            >
-              {dialog.options.confirmText}
-            </button>
+            </div>
           </div>
         </div>
-      </div>
-      </>
       )}
     </DialogContext.Provider>
   );
