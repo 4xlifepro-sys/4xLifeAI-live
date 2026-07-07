@@ -154,7 +154,7 @@ export default function Admin() {
          setBadges(b => ({ ...b, referrals: true }));
          fetchPayouts();
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments' }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payment_intents' }, () => {
          setBadges(b => ({ ...b, payments: true }));
          fetchPayments();
       })
@@ -178,12 +178,16 @@ export default function Admin() {
   const fetchPayments = async () => {
     try {
       if (!supabase) return;
-      const { data, error } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
-      if (error) {
-         console.warn("Failed to fetch payments:", error);
-         return;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/payments', {
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.warn("Failed to fetch payments:", data);
+        return;
       }
-      if (data) setPayments(data as any[]);
+      setPayments(await res.json());
     } catch (e) {
       console.error(e);
     }
@@ -223,15 +227,15 @@ export default function Admin() {
     if (!supabase) return;
     try {
       // 1. Total Registered Users
-      const { count: usersCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+      const { count: usersCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
       setTotalUsers(usersCount || 0);
 
       // 2. Active Subscriptions & Revenue
-      const { data: approvedPayments } = await supabase.from('payments').select('*').eq('status', 'APPROVED');
+      const { data: approvedPayments } = await supabase.from('payment_intents').select('*').eq('status', 'APPROVED');
       setActiveSubscriptions(approvedPayments?.length || 0);
       
       const rev = (approvedPayments || []).reduce((acc, p) => {
-        const amt = parseFloat(p.amount || '0');
+        const amt = parseFloat(String(p.amount_usd || p.amount || '0'));
         return acc + (isNaN(amt) ? 0 : amt);
       }, 0);
       setRevenue(rev);
@@ -344,7 +348,7 @@ export default function Admin() {
     if (!supabase) return;
     setConnectionStatus('testing');
     try {
-      const { error } = await supabase.from('profiles').select('id').limit(1);
+      const { error } = await supabase.from('users').select('id').limit(1);
       if (error) throw error;
       setConnectionStatus('success');
     } catch (e) {
@@ -356,31 +360,73 @@ export default function Admin() {
   };
 
   const handleApprove = async (id: string) => {
-    await dialog.showAlert({
-      title: "Manual Approval Disabled",
-      message: "Manual approval has been disabled until real blockchain TX hash verification is implemented. Do not manually grant ELITE privileges.",
-      variant: "warning",
-    });
-    return;
-    /*
     if (!supabase) return;
     try {
-      await supabase.from('payments').update({ status: 'APPROVED' }).eq('id', id);
-      await supabase.from('admin_audit_logs').insert([{ action: 'PAYMENT_APPROVED', details: { payment_id: id } }]);
+      const confirmed = await dialog.showConfirm({
+        title: "Approve Payment",
+        message: "Approve this payment and activate the user's plan/credits?",
+        variant: "warning",
+        confirmText: "Approve",
+        cancelText: "Cancel"
+      });
+      if (!confirmed) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/admin/payments/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        await dialog.showAlert({
+          title: "Approval Failed",
+          message: data.error || "Could not approve this payment.",
+          variant: "danger",
+        });
+        return;
+      }
       fetchPayments();
       fetchDashboardData();
+      await dialog.showAlert({
+        title: "Payment Approved",
+        message: "The user's plan and credits have been activated.",
+        variant: "success",
+      });
     } catch (e) {
       console.error(e);
     }
-    */
   };
 
   const handleReject = async (id: string) => {
     if (!supabase) return;
     try {
-      await supabase.from('payments').update({ status: 'REJECTED' }).eq('id', id);
-      await supabase.from('admin_audit_logs').insert([{ action: 'PAYMENT_REJECTED', details: { payment_id: id } }]);
+      const confirmed = await dialog.showConfirm({
+        title: "Reject Payment",
+        message: "Reject this payment request?",
+        variant: "danger",
+        confirmText: "Reject",
+        cancelText: "Cancel"
+      });
+      if (!confirmed) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/admin/payments/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        await dialog.showAlert({
+          title: "Reject Failed",
+          message: data.error || "Could not reject this payment.",
+          variant: "danger",
+        });
+        return;
+      }
       fetchPayments();
+      await dialog.showAlert({
+        title: "Payment Rejected",
+        message: "The payment has been marked as rejected.",
+        variant: "success",
+      });
     } catch (e) {
       console.error(e);
     }

@@ -13,7 +13,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export default function Account() {
   const dialog = useDialog();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [telegramAlerts, setTelegramAlerts] = useState(true);
   const [eliteOnly, setEliteOnly] = useState(false);
@@ -70,23 +70,22 @@ export default function Account() {
     e.preventDefault();
     if (!txid) return;
     try {
-      const { data: { user } } = await supabase!.auth.getUser();
       if (!user) return;
       
-      const { error } = await supabase!.from('payments').insert([{
-        user_id: user.id,
-        email: user.email,
-        proof_url: network,
-        tx_hash: txid,
-        plan: 'ELITE',
-        amount: '25',
-        status: 'PENDING'
-      }]);
-      if (error) {
-        console.error(error);
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ email: user.email, network, txid, plan: 'ELITE', amount_usd: 50, credits: 100 })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error(data);
         await dialog.showAlert({
           title: "Payment Error",
-          message: "Failed to submit payment details. Please try again.",
+          message: data.error || "Failed to submit payment details. Please try again.",
           variant: "danger",
         });
         return;
@@ -94,6 +93,11 @@ export default function Account() {
       setPaymentStatus('PENDING');
       setShowUpgradeForm(false);
       setTxid('');
+      await dialog.showAlert({
+        title: "Payment Submitted",
+        message: "Your payment has been submitted for review.",
+        variant: "success",
+      });
     } catch (err) {
       console.error(err);
     }

@@ -595,33 +595,55 @@ async function startServer() {
 
   app.post("/api/payments", requireAuth, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
-    const { email, network, txid } = req.body;
-    
-    // Ensure requester owns the data
+    const { email, network, txid, plan, amount_usd, credits } = req.body;
     const user = (req as any).user;
+
     if (user.email !== email) {
-        return res.status(403).json({ error: "Forbidden: You can only submit payments for your own account" });
+      return res.status(403).json({ error: "Forbidden: You can only submit payments for your own account" });
     }
 
-    const { error } = await supabase.from('payments').insert([{ user_id: user.id, email, proof_url: network, tx_hash: txid, status: 'PENDING' }]);
-    if (error && error.message.includes('find the table')) {
-      runtimePayments.push({ id: crypto.randomUUID(), email, network, txid, status: 'PENDING', created_at: new Date().toISOString() });
-      await sendNotification(email, 'Payment Submitted', `We received your payment. Our team will review and activate your account within 24 hours.`, 'payment');
-      return res.json({ success: true });
+    const cleanTxid = String(txid || '').trim();
+    if (!cleanTxid) return res.status(400).json({ error: "Transaction hash is required" });
+
+    const selectedPlan = String(plan || 'PREMIUM').toUpperCase();
+    const amount = Number(amount_usd || (selectedPlan === 'ELITE' ? 50 : 20));
+    const planCredits = Number(credits || (selectedPlan === 'ELITE' ? 100 : 25));
+    const payload = {
+      user_id: user.id,
+      email: user.email,
+      method: network || 'TRC20',
+      plan: selectedPlan,
+      amount_usd: amount,
+      credits: planCredits,
+      destination: cleanTxid,
+      tx_hash: cleanTxid,
+      status: 'PENDING'
+    };
+
+    let insert = await supabase.from('payment_intents').insert([payload]).select('*').single();
+    if (insert.error && insert.error.message.includes("'tx_hash' column")) {
+      const { tx_hash, ...fallbackPayload } = payload;
+      insert = await supabase.from('payment_intents').insert([fallbackPayload]).select('*').single();
     }
-    if (error) return res.status(500).json({ error: error.message });
-    await sendNotification(email, 'Payment Submitted', `We received your payment. Our team will review and activate your account within 24 hours.`, 'payment');
-    res.json({ success: true });
+
+    if (insert.error) return res.status(500).json({ error: insert.error.message });
+
+    await sendNotification(user.email, 'Payment Submitted', `We received your payment. Our team will review and activate your account within 24 hours.`, 'payment');
+    res.json({ success: true, payment: insert.data });
   });
 
   app.get("/api/payments", requireAdmin, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
-    const { data, error } = await supabase.from('payments').select('*').order('created_at', { ascending: false });
-    if (error && error.message.includes('find the table')) {
-      return res.json(runtimePayments);
-    }
+    const { data, error } = await supabase.from('payment_intents').select('*').order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    res.json((data || []).map((payment: any) => ({
+      ...payment,
+      amount: payment.amount_usd,
+      network: payment.method,
+      proof_url: payment.method,
+      tx_hash: payment.tx_hash || payment.destination,
+      txid: payment.tx_hash || payment.destination
+    })));
   });
 
   app.get("/api/payments/:email/status", requireAuth, async (req, res) => {
@@ -630,16 +652,12 @@ async function startServer() {
     const user = (req as any).user;
     const requestedEmail = req.params.email;
     if (user.email !== requestedEmail) {
-        const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
-        if (!profile?.is_admin) {
-             return res.status(403).json({ error: "Forbidden: email mismatch" });
-        }
+      const { data: userRecord } = await supabase.from('users').select('role').eq('email', user.email).single();
+      if (userRecord?.role !== 'ADMIN') {
+        return res.status(403).json({ error: "Forbidden: email mismatch" });
+      }
     }
-    const { data, error } = await supabase.from('payments').select('*').eq('email', req.params.email).order('created_at', { ascending: false }).limit(1);
-    if (error && error.message.includes('find the table')) {
-      const pm = runtimePayments.filter(p => p.email === req.params.email).sort((a,b) => b.created_at.localeCompare(a.created_at))[0];
-      return res.json(pm || null);
-    }
+    const { data, error } = await supabase.from('payment_intents').select('*').eq('email', req.params.email).order('created_at', { ascending: false }).limit(1);
     if (error) return res.status(500).json({ error: error.message });
     res.json(data[0] || null);
   });
@@ -648,11 +666,19 @@ async function startServer() {
   app.post("/api/admin/payments/:id/approve", requireAdmin, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
     const paymentId = req.params.id;
-    const { data: payment } = await supabase.from('payments').select('*').eq('id', paymentId).single();
-    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    const { data: payment, error: paymentError } = await supabase.from('payment_intents').select('*').eq('id', paymentId).single();
+    if (paymentError || !payment) return res.status(404).json({ error: 'Payment not found' });
 
-    await supabase.from('payments').update({ status: 'APPROVED' }).eq('id', paymentId);
-    await supabase.from('profiles').update({ plan_status: 'active', plan_activated_at: new Date().toISOString() }).eq('email', payment.email);
+    const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'APPROVED' }).eq('id', paymentId);
+    if (paymentUpdateError) return res.status(500).json({ error: paymentUpdateError.message });
+
+    const { data: existingUser } = await supabase.from('users').select('credits').eq('email', payment.email).single();
+    const nextCredits = Number(existingUser?.credits || 0) + Number(payment.credits || 0);
+    const { error: userUpdateError } = await supabase
+      .from('users')
+      .update({ plan_status: payment.plan || 'PREMIUM', credits: nextCredits })
+      .eq('email', payment.email);
+    if (userUpdateError) return res.status(500).json({ error: userUpdateError.message });
 
     await sendNotification(payment.email, 'Payment Approved', `Congratulations! Your subscription is now active. You have full access to all trading signals and premium features. Welcome to 4xLifeAI!`, 'success');
 
@@ -663,10 +689,11 @@ async function startServer() {
   app.post("/api/admin/payments/:id/reject", requireAdmin, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
     const paymentId = req.params.id;
-    const { data: payment } = await supabase.from('payments').select('*').eq('id', paymentId).single();
-    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    const { data: payment, error: paymentError } = await supabase.from('payment_intents').select('*').eq('id', paymentId).single();
+    if (paymentError || !payment) return res.status(404).json({ error: 'Payment not found' });
 
-    await supabase.from('payments').update({ status: 'REJECTED' }).eq('id', paymentId);
+    const { error: updateError } = await supabase.from('payment_intents').update({ status: 'REJECTED' }).eq('id', paymentId);
+    if (updateError) return res.status(500).json({ error: updateError.message });
 
     await sendNotification(payment.email, 'Payment Review Update', `We were unable to verify your payment. Please check your transaction details and contact support if you believe this is an error.`, 'warning');
 
@@ -819,39 +846,42 @@ async function startServer() {
     }
   });
 
-  app.get("/api/admin/users", async (req, res) => {
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
     const authUsersRes = await supabase.auth.admin.listUsers();
     if (authUsersRes.error) return res.status(500).json({ error: authUsersRes.error.message });
     
-    const { data: profiles } = await supabase.from('profiles').select('*');
+    const { data: users } = await supabase.from('users').select('*');
     
     const combinedUsers = authUsersRes.data.users.map(u => {
-       const profile = profiles?.find(p => p.id === u.id);
+       const userRecord = users?.find(p => p.id === u.id || p.email === u.email);
        return {
-         ...profile,
+         ...userRecord,
          id: u.id,
          email: u.email,
-         full_name: profile?.full_name || u.user_metadata?.full_name || '',
-         avatar_url: profile?.avatar_url || u.user_metadata?.avatar_url || '',
-         plan: profile?.plan || 'FREE',
-         is_admin: profile?.is_admin || false,
+         full_name: userRecord?.full_name || u.user_metadata?.full_name || '',
+         avatar_url: userRecord?.avatar_url || u.user_metadata?.avatar_url || '',
+         plan: userRecord?.plan_status || userRecord?.plan || 'FREE',
+         credits: userRecord?.credits || 0,
+         is_admin: userRecord?.role === 'ADMIN',
          created_at: u.created_at,
        };
     });
     res.json(combinedUsers);
   });
 
-  app.post("/api/admin/users/:id/plan", async (req, res) => {
+  app.post("/api/admin/users/:id/plan", requireAdmin, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
     const { id } = req.params;
     const { plan } = req.body;
-    const { data, error } = await supabase.from('profiles').update({ plan }).eq('id', id);
+    const authUsersRes = await supabase.auth.admin.getUserById(id);
+    if (authUsersRes.error || !authUsersRes.data.user?.email) return res.status(404).json({ error: "User not found" });
+    const { error } = await supabase.from('users').update({ plan_status: plan }).eq('email', authUsersRes.data.user.email);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   });
 
-  app.post("/api/admin/users/:id/delete", async (req, res) => {
+  app.post("/api/admin/users/:id/delete", requireAdmin, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
     const { id } = req.params;
     const { data, error } = await supabase.auth.admin.deleteUser(id);

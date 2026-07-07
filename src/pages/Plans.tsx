@@ -12,7 +12,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export default function Plans() {
   const dialog = useDialog();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [showUpgradeForm, setShowUpgradeForm] = useState(false);
   const [network, setNetwork] = useState('TRC20');
@@ -50,9 +50,14 @@ export default function Plans() {
        }
        
        // Check for pending payments
-       const { data: payment } = await supabase.from('payments').select('id').eq('email', user.email).order('created_at', { ascending: false }).limit(1).single();
-       if (payment) {
+       const res = await fetch(`/api/payments/${encodeURIComponent(user.email || '')}/status`, {
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+       });
+       const payment = res.ok ? await res.json() : null;
+       if (payment?.status === 'PENDING') {
           setPaymentStatus('PENDING');
+       } else if (payment?.status === 'APPROVED') {
+          setIsPremium(true);
        }
     };
     checkStatus();
@@ -82,8 +87,11 @@ export default function Plans() {
     try {
       const res = await fetch('/api/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, network, txid })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ email: user.email, network, txid, plan: 'PREMIUM', amount_usd: 20, credits: 25 })
       });
       const data = await res.json();
       if (!res.ok) {
