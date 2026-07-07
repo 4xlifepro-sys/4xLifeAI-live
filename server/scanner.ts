@@ -512,32 +512,6 @@ export async function startScanner() {
                     } else {
                        updatePayload.pips_lost = rawPips;
                     }
-                    
-                    // Send notification about trade close
-                    if (supabase) {
-                        const { data: allUsers } = await supabase
-                            .from('profiles')
-                            .select('email')
-                            .eq('plan_status', 'active')
-                            .neq('email', null);
-                        
-                        if (allUsers && allUsers.length > 0) {
-                            const isWin = finalResult === 'WIN' || finalResult === 'TP2 HIT' || finalResult === 'TP1 HIT';
-                            const closeMsg = `${s.pair} trade closed\nResult: ${finalResult}\n${isWin ? '✅' : '❌'} ${isWin ? '+' : '-'}${pipStr} pips\nEntry: ${sEntry} | Exit: ${hitPrice}`;
-                            
-                            for (const u of allUsers) {
-                                await supabase.from('notifications').insert([{
-                                    user_id: u.id,
-                                    email: u.email,
-                                    title: `Trade Closed: ${s.pair}`,
-                                    message: closeMsg,
-                                    type: isWin ? 'success' : 'warning',
-                                    is_read: false,
-                                    created_at: closedAt
-                                }]);
-                            }
-                        }
-                    }
                  }
                  
                  const updatePromises: any[] = [];
@@ -559,45 +533,6 @@ export async function startScanner() {
                              } else {
                                  console.error("Failed to update signals table:", error.message);
                              }
-                         }
-                     })
-                 );
-                 
-                 updatePromises.push(
-                     supabase.from('trades').update(updatePayload).eq('id', s.id).then(({error}) => {
-                         if (error && !error.message.includes('Could not find')) {
-                             console.error("Failed to update trades table:", error.message);
-                         }
-                     })
-                 );
-
-                 updatePromises.push(
-                     supabase.from('active_opportunities').update(updatePayload).eq('id', s.id).then(({error}) => {
-                         if (error && !error.message.includes('Could not find')) {
-                             console.error("Failed to update active_opportunities table:", error.message);
-                         }
-                     })
-                 );
-
-                 // Insert into trade_events
-                 const eventsToInsert = [{
-                    trade_id: s.id,
-                    event_type: hitLevel + '_HIT',
-                    price: hitPrice,
-                    pips: rawPips
-                 }];
-                 if (finalClose) {
-                    eventsToInsert.push({
-                        trade_id: s.id,
-                        event_type: 'CLOSED',
-                        price: hitPrice,
-                        pips: rawPips
-                    });
-                 }
-                 updatePromises.push(
-                     supabase.from('trade_events').insert(eventsToInsert).then(({error}) => {
-                         if (error && !error.message.includes('Could not find') && !error.message.includes('schema cache')) {
-                             console.error("trade_events insert error:", error.message);
                          }
                      })
                  );
@@ -680,13 +615,16 @@ export async function startScanner() {
         // 2. Database check (for cross-restart protection)
         if (!cooldownTriggered && signal.tier !== 'Reject' && supabase) {
           const cooldownAgo = new Date(Date.now() - PAIR_COOLDOWN_MS).toISOString();
-          const { data: recentSignals } = await supabase
+          const { data: recentSignals, error: cooldownErr } = await supabase
             .from('signals')
-            .select('id, timestamp')
+            .select('id')
             .eq('pair', pair)
             .in('status', ['ACTIVE', 'TP1 HIT', 'TP2 HIT'])
-            .gte('timestamp', cooldownAgo)
+            .gte('created_at', cooldownAgo)
             .limit(1);
+          if (cooldownErr) {
+            console.error("Cooldown DB check error:", cooldownErr.message);
+          }
           if (recentSignals && recentSignals.length > 0) {
             cooldownTriggered = true;
             console.log(`COOLDOWN_BLOCKED (db): ${pair} fired within last ${PAIR_COOLDOWN_MS / 60000}m`);
@@ -796,7 +734,6 @@ export async function startScanner() {
           // Save Signal to public.signals for Active trades
           if (supabase && signal.tier !== 'Reject') {
             const insertPayload: any = {
-              id: signal.id,
               pair: signal.pair,
               direction: signal.direction,
               bias: signal.bias,
@@ -811,25 +748,20 @@ export async function startScanner() {
               tp3: signal.tp3,
               created_at: signal.timestamp,
               status: signal.status,
-              is_active: signal.is_active,
-              result: signal.result,
-              pips_won: signal.pips_won,
-              pips_lost: signal.pips_lost
+              is_active: signal.is_active !== undefined ? signal.is_active : true,
+              result: signal.result || null,
+              pips_won: signal.pips_won || null,
+              pips_lost: signal.pips_lost || null
             };
             
-            supabase.from('signals').insert([insertPayload]).select('id').single().then(async ({data, error}) => {
+            supabase.from('signals').insert([insertPayload]).then(({data, error}) => {
                if (error) {
-                   if (error.message.includes('Could not find') || error.message.includes('schema cache')) {
-                       delete insertPayload.original_sl;
-                       const retryResult = await supabase.from('signals').insert([insertPayload]).select('id').single();
-                       if (retryResult.data && retryResult.data.id) {
-                           generateAiReason(retryResult.data.id, signal);
-                       }
-                   } else {
-                       console.error("Supabase signals insert error:", error.message);
-                   }
-               } else if (data && data.id) {
-                   generateAiReason(data.id, signal);
+                   console.error("Supabase signals insert error:", error.message);
+               } else if (data) {
+                   const dbId = data[0]?.id;
+                   if (dbId) generateAiReason(String(dbId), signal);
+               }
+            });
                    
                    // Send notifications to all active users
                    const { data: allUsers } = await supabase
