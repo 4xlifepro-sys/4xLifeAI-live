@@ -19,6 +19,9 @@ function mapStatus(s: string | undefined): string {
 // Per-pair cooldown: after a signal fires (and closes), wait this many ms before firing again
 // Prevents the scanner from re-firing the same setup within seconds
 const PAIR_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours cooldown per pair
+const MAX_ACTIVE_TRADES = 2;
+const MIN_LIVE_SIGNAL_CONFIDENCE = 70;
+const OPEN_SIGNAL_STATUSES = ['LIVE', 'TP1_HIT', 'TP2_HIT'];
 
 // EMERGENCY KILL SWITCH - set to true to pause ALL Telegram signals immediately
 const TELEGRAM_SIGNALS_DISABLED = process.env.DISABLE_TELEGRAM_SIGNALS === 'true';
@@ -202,6 +205,27 @@ function updatePairStatus(pair: string, status: 'scanning' | 'success' | 'error'
 
 const htfCache = new Map<string, { data: any, timestamp: number }>();
 
+async function getGlobalActiveTradeCount() {
+  const memoryCount = scannerState.signals.filter((signal: any) => OPEN_SIGNAL_STATUSES.includes(signal.status || 'LIVE')).length;
+  let dbCount = 0;
+
+  if (supabase) {
+    const { count, error } = await supabase
+      .from('signals')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true)
+      .in('status', OPEN_SIGNAL_STATUSES);
+
+    if (error) {
+      console.error('Global active trade count error:', error.message);
+    } else {
+      dbCount = count || 0;
+    }
+  }
+
+  return supabase ? dbCount : memoryCount;
+}
+
 export async function startScanner() {
   console.log("Starting 24/7 4xLifeAI Scanner...");
 
@@ -328,8 +352,6 @@ export async function startScanner() {
       // ==== 4xLifeAI REAL-TIME TP/SL TRACKING ====
       if (supabase) {
         try {
-          const currentPrice = entryTf[entryTf.length - 1]; 
-          
           const activeSignals = supabaseResponse?.data;
           const fetchSignalsError = supabaseResponse?.error;
 
@@ -339,6 +361,13 @@ export async function startScanner() {
 
           if (activeSignals && activeSignals.length > 0) {
             for (const s of activeSignals) {
+              const openedAt = new Date(s.created_at || s.timestamp || 0).getTime();
+              const trackingCandles = entryTf.filter((candle: any) => new Date(candle.timestamp).getTime() > openedAt);
+              const currentPrice = trackingCandles[trackingCandles.length - 1];
+              if (!currentPrice || !Number.isFinite(Number(currentPrice.close))) {
+                 continue;
+              }
+
               const pipMult = getPipMultiplier(pair);
               const calculatePips = (price1: number, price2: number) => {
                  return Math.abs(price1 - price2) / pipMult;
@@ -364,37 +393,37 @@ export async function startScanner() {
               }
 
               if (isLong) {
-                 if (currentPrice.low <= effectiveSL) {
+                 if (currentPrice.close <= effectiveSL) {
                     isHit = true; finalClose = true;
                     hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'STOP_LOSS_HIT';
                     rawPips = calculatePips(sEntry, effectiveSL);
-                 } else if (currentPrice.high >= s.tp3 && s.status !== 'TP3_HIT') {
+                 } else if (currentPrice.close >= s.tp3 && s.status !== 'TP3_HIT') {
                     isHit = true; finalClose = true;
                     hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'TP3_HIT'; tpRecordStr = 'tp3_hit_at';
                     rawPips = calculatePips(s.tp3, sEntry);
-                 } else if (currentPrice.high >= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
+                 } else if (currentPrice.close >= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2_HIT'; tpRecordStr = 'tp2_hit_at';
                     rawPips = calculatePips(s.tp2, sEntry);
-                 } else if (currentPrice.high >= s.tp1 && s.status === 'LIVE') {
+                 } else if (currentPrice.close >= s.tp1 && s.status === 'LIVE') {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1_HIT'; tpRecordStr = 'tp1_hit_at';
                     rawPips = calculatePips(s.tp1, sEntry);
                  }
               } else { 
-                 if (currentPrice.high >= effectiveSL) {
+                 if (currentPrice.close >= effectiveSL) {
                     isHit = true; finalClose = true;
                     hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'STOP_LOSS_HIT';
                     rawPips = calculatePips(sEntry, effectiveSL);
-                 } else if (currentPrice.low <= s.tp3 && s.status !== 'TP3_HIT') {
+                 } else if (currentPrice.close <= s.tp3 && s.status !== 'TP3_HIT') {
                     isHit = true; finalClose = true;
                     hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'TP3_HIT'; tpRecordStr = 'tp3_hit_at';
                     rawPips = calculatePips(sEntry, s.tp3);
-                 } else if (currentPrice.low <= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
+                 } else if (currentPrice.close <= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2_HIT'; tpRecordStr = 'tp2_hit_at';
                     rawPips = calculatePips(sEntry, s.tp2);
-                 } else if (currentPrice.low <= s.tp1 && s.status === 'LIVE') {
+                 } else if (currentPrice.close <= s.tp1 && s.status === 'LIVE') {
                     isHit = true; finalClose = false;
                     hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1_HIT'; tpRecordStr = 'tp1_hit_at';
                     rawPips = calculatePips(sEntry, s.tp1);
@@ -579,13 +608,38 @@ export async function startScanner() {
       
       let finalSignal = signal;
 
+      if (finalSignal && finalSignal.tier !== 'Reject') {
+        const globalActiveTradeCount = await getGlobalActiveTradeCount();
+        if (globalActiveTradeCount >= MAX_ACTIVE_TRADES) {
+          console.log(`MAX_ACTIVE_TRADES_BLOCKED: ${globalActiveTradeCount}/${MAX_ACTIVE_TRADES} active trades already open`);
+          finalSignal.tier = 'Reject';
+          finalSignal.status = 'REJECTED';
+          finalSignal.aiReason = 'MAX_ACTIVE_TRADES_REACHED';
+          finalSignal.rejection_reason = 'MAX_ACTIVE_TRADES_REACHED';
+          rejectionStats.ACTIVE_TRADE_EXISTS++;
+          if (finalSignal.diagnostics) {
+            finalSignal.diagnostics.confidenceBreakdown = 'MAX_ACTIVE_TRADES_REACHED';
+          }
+        } else if (finalSignal.aiConfidence < MIN_LIVE_SIGNAL_CONFIDENCE) {
+          console.log(`LOW_CONFIDENCE_BLOCKED: ${pair} ${finalSignal.aiConfidence}% below ${MIN_LIVE_SIGNAL_CONFIDENCE}% live threshold`);
+          finalSignal.tier = 'Reject';
+          finalSignal.status = 'REJECTED';
+          finalSignal.aiReason = 'LOW_CONFIDENCE_FOR_LIVE_SLOT';
+          finalSignal.rejection_reason = 'LOW_CONFIDENCE_FOR_LIVE_SLOT';
+          rejectionStats.LOW_CONFIDENCE++;
+          if (finalSignal.diagnostics) {
+            finalSignal.diagnostics.confidenceBreakdown = 'LOW_CONFIDENCE_FOR_LIVE_SLOT';
+          }
+        }
+      }
+
       if (finalSignal && finalSignal.tier !== 'Reject' && supabase) {
         try {
           const { data: activePairTrades, error: activeTradesErr } = await supabase
             .from('signals')
             .select('id')
             .eq('pair', pair)
-            .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT'])
+            .in('status', OPEN_SIGNAL_STATUSES)
             .limit(1);
             
           if (!activeTradesErr && activePairTrades && activePairTrades.length > 0) {
