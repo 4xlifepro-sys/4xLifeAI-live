@@ -669,7 +669,7 @@ async function startServer() {
     const { data: payment, error: paymentError } = await supabase.from('payment_intents').select('*').eq('id', paymentId).single();
     if (paymentError || !payment) return res.status(404).json({ error: 'Payment not found' });
 
-    const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'APPROVED' }).eq('id', paymentId);
+    const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'CONFIRMED' }).eq('id', paymentId);
     if (paymentUpdateError) return res.status(500).json({ error: paymentUpdateError.message });
 
     const { data: existingUser } = await supabase.from('users').select('credits').eq('email', payment.email).single();

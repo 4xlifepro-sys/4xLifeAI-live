@@ -231,7 +231,7 @@ export default function Admin() {
       setTotalUsers(usersCount || 0);
 
       // 2. Active Subscriptions & Revenue
-      const { data: approvedPayments } = await supabase.from('payment_intents').select('*').eq('status', 'APPROVED');
+      const { data: approvedPayments } = await supabase.from('payment_intents').select('*').eq('status', 'CONFIRMED');
       setActiveSubscriptions(approvedPayments?.length || 0);
       
       const rev = (approvedPayments || []).reduce((acc, p) => {
@@ -493,7 +493,7 @@ export default function Admin() {
                     <td className="p-4">
                        <span className={cn(
                           "px-2 py-1 rounded text-[10px] font-bold tracking-wider",
-                          payment.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' :
+                          payment.status === 'CONFIRMED' ? 'bg-emerald-500/10 text-emerald-400' :
                           payment.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-400' :
                           'bg-amber-500/10 text-amber-400'
                        )}>

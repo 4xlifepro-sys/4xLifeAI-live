@@ -59,7 +59,7 @@ export default function Plans() {
          const payment = res.ok ? await res.json() : null;
          if (payment?.status === 'PENDING') {
             setPaymentStatus('PENDING');
-         } else if (payment?.status === 'APPROVED') {
+         } else if (payment?.status === 'CONFIRMED') {
             setIsPremium(true);
          }
        }
