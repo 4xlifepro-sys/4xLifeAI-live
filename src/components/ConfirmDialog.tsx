@@ -88,8 +88,11 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     <DialogContext.Provider value={{ showConfirm, showAlert }}>
       {children}
 
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      {/* Modal overlay — only when dialog is open */}
+      {dialog && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
         {/* Dialog */}
         <div className="relative w-full max-w-md mx-4 bg-[#1a1d24] border border-white/10 rounded-xl shadow-2xl">
           {/* Close button */}
@@ -144,6 +147,8 @@ export function DialogProvider({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
+      </>
+      )}
     </DialogContext.Provider>
   );
 }
