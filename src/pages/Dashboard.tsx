@@ -33,10 +33,11 @@ export default function Dashboard() {
   useEffect(() => {
     let mounted = true;
     const fetchSignals = async () => {
-      if (!supabase) return;
       try {
-        const { data } = await supabase.from('signals').select('*').order('created_at', { ascending: false }).limit(200);
-        if (mounted && data) setAllSignals(data);
+        const response = await fetch('/api/today-signals');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (mounted && data) setAllSignals(data.filter((signal: any) => signal.status !== 'REJECTED'));
       } catch {}
     };
     fetchSignals();
@@ -44,8 +45,7 @@ export default function Dashboard() {
     let ch: any;
     if (supabase) {
       ch = supabase.channel('dash-realtime').on('postgres_changes', { event: '*', schema: 'public', table: 'signals' }, (pl: any) => {
-        if (pl.eventType === 'INSERT') setAllSignals(p => [pl.new, ...p].slice(0, 200));
-        else if (pl.eventType === 'UPDATE') setAllSignals(p => p.map(s => s.id === pl.new.id ? pl.new : s));
+        fetchSignals();
       }).subscribe();
     }
     return () => { mounted = false; clearInterval(si); if (ch) supabase!.removeChannel(ch); };
@@ -134,7 +134,7 @@ export default function Dashboard() {
 
     const activeMapped = active.map(s => {
       const isLong = s.direction === 'BUY';
-      const entry = s.entry_price || prices[s.pair] || 0;
+      const entry = s.entry_price || s.entry || prices[s.pair] || 0;
       const currentPrice = prices[s.pair] || entry;
       const pips = calcPips(s.pair, entry, currentPrice) * (isLong ? 1 : -1);
       let status: 'profit' | 'loss' | 'pending' = 'pending';
@@ -160,7 +160,7 @@ export default function Dashboard() {
 
     const historyMapped = closed.slice(0, 10).map(s => {
       const isLong = s.direction === 'BUY';
-      const entry = s.entry_price || 0;
+      const entry = s.entry_price || s.entry || 0;
       const isWin = ['TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'CLOSED'].includes(s.status) && s.status !== 'STOP_LOSS_HIT';
       const exit = isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
       const pips = calcPips(s.pair, entry, exit) * (isLong ? 1 : -1);
