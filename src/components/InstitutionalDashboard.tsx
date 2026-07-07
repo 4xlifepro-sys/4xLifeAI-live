@@ -422,7 +422,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       ? `In profit +${s.statusPips ?? 0} pips`
       : s.status === "loss"
       ? `In loss ${s.statusPips ?? 0} pips`
-      : "Pending";
+      : "Active — waiting for TP1";
 
   return (
     <div className="x4-signal">
