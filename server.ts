@@ -6,14 +6,41 @@ import { createServer as createViteServer } from "vite";
 import { startScanner, scannerState, latestMarketState } from "./server/scanner.js";
 import { rejectionStats } from "./server/engine.js";
 import { supabase } from './server/supabase.js';
+import { sendTelegramMessage } from './server/telegram.js';
 
 import { GoogleGenAI } from "@google/genai";
+
+const adminAlertCooldown = new Map<string, number>();
+
+function escapeTelegramHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function shouldSendAdminAlert(key: string, cooldownMs = 60000) {
+  const now = Date.now();
+  const lastSent = adminAlertCooldown.get(key) || 0;
+  if (now - lastSent < cooldownMs) return false;
+  adminAlertCooldown.set(key, now);
+  return true;
+}
 
 // Notification helper - inserts into Supabase notifications table
 async function sendNotification(userEmail: string, title: string, message: string, type: string = 'info') {
   if (!supabase) return;
+  let userId: string | null = null;
+  try {
+    const { data: authUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const targetUser = authUsers?.users?.find(user => (user.email || '').toLowerCase() === userEmail.toLowerCase());
+    userId = targetUser?.id || null;
+  } catch (error: any) {
+    console.error('Notification user lookup error:', error?.message || error);
+  }
+
   const { error } = await supabase.from('notifications').insert([{
-    user_id: null,
+    user_id: userId,
     email: userEmail,
     title,
     message,
@@ -22,6 +49,52 @@ async function sendNotification(userEmail: string, title: string, message: strin
     created_at: new Date().toISOString()
   }]);
   if (error) console.error('Notification insert error:', error.message);
+}
+
+async function sendAdminWebNotification(title: string, message: string, type: string = 'system_alert') {
+  if (!supabase) return;
+
+  const { data: admins, error } = await supabase
+    .from('users')
+    .select('email')
+    .eq('role', 'ADMIN');
+
+  if (error || !admins?.length) {
+    console.error('[ADMIN NOTIFY] Failed to load admins:', error?.message || 'No admins found');
+    return;
+  }
+
+  const { data: authUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const rows = admins
+    .map((admin: any) => {
+      const authUser = authUsers?.users?.find(user => (user.email || '').toLowerCase() === String(admin.email || '').toLowerCase());
+      if (!authUser?.id) return null;
+      return {
+        user_id: authUser.id,
+        email: admin.email,
+        title,
+        message,
+        type,
+        is_read: false,
+        created_at: new Date().toISOString()
+      };
+    })
+    .filter(Boolean);
+
+  if (!rows.length) return;
+
+  const { error: insertError } = await supabase.from('notifications').insert(rows);
+  if (insertError) console.error('[ADMIN NOTIFY] Web notification insert error:', insertError.message);
+}
+
+async function notifyAdmin(title: string, message: string, type: string = 'system_alert', dedupeKey?: string) {
+  const key = dedupeKey || `${type}:${title}:${message.slice(0, 80)}`;
+  if (!shouldSendAdminAlert(key)) return;
+
+  await Promise.allSettled([
+    sendTelegramMessage(`<b>${escapeTelegramHtml(title)}</b>\n${escapeTelegramHtml(message)}`),
+    sendAdminWebNotification(title, message, type)
+  ]);
 }
 
 function getPrompts() {
@@ -129,6 +202,8 @@ async function ensureAdminUser() {
 process.on('uncaughtException', (err) => {
   if (!err?.message?.includes('terminated')) {
     console.error('Uncaught Exception:', err);
+    notifyAdmin('Server Exception', err?.message || String(err), 'server_error', `uncaught:${err?.message || String(err)}`)
+      .catch(error => console.error('[ADMIN NOTIFY] Uncaught exception alert failed:', error?.message || error));
   }
 });
 
@@ -136,6 +211,8 @@ process.on('unhandledRejection', (reason, promise) => {
   const err = reason as any;
   if (!err?.message?.includes('terminated')) {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    notifyAdmin('Unhandled Server Rejection', err?.message || String(reason), 'server_error', `unhandled:${err?.message || String(reason)}`)
+      .catch(error => console.error('[ADMIN NOTIFY] Unhandled rejection alert failed:', error?.message || error));
   }
 });
 
@@ -152,6 +229,19 @@ async function startServer() {
   await startScanner();
 
   app.use(express.json());
+  app.use((req, res, next) => {
+    res.on('finish', () => {
+      if (req.path.startsWith('/api/') && res.statusCode >= 500) {
+        notifyAdmin(
+          'API Error',
+          `${req.method} ${req.path} returned ${res.statusCode}`,
+          'api_error',
+          `api-error:${req.method}:${req.path}:${res.statusCode}`
+        ).catch(error => console.error('[ADMIN NOTIFY] API error alert failed:', error?.message || error));
+      }
+    });
+    next();
+  });
 
   // Health check endpoint for external monitoring (UptimeRobot, etc.)
   app.get("/api/health", (req, res) => {
@@ -170,6 +260,22 @@ async function startServer() {
         isDegraded: scannerState.stats.isDegraded
       }
     });
+  });
+
+  app.post("/api/admin/notify-signup", async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const fullName = String(req.body?.fullName || 'New user').trim();
+
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    await notifyAdmin(
+      'New User Signup',
+      `${fullName} signed up.\nEmail: ${email}`,
+      'user_signup',
+      `signup:${email}`
+    );
+
+    res.json({ success: true });
   });
 
   // API Routes
@@ -629,6 +735,12 @@ async function startServer() {
     if (insert.error) return res.status(500).json({ error: insert.error.message });
 
     await sendNotification(user.email, 'Payment Submitted', `We received your payment. Our team will review and activate your account within 24 hours.`, 'payment');
+    await notifyAdmin(
+      'New Payment Submitted',
+      `${user.email} submitted ${selectedPlan} payment.\nMethod: ${payload.method}\nAmount: $${amount}\nCredits: ${planCredits}\nTXID: ${cleanTxid}`,
+      'payment_submitted',
+      `payment-submitted:${insert.data?.id || cleanTxid}`
+    );
     res.json({ success: true, payment: insert.data });
   });
 
@@ -681,6 +793,12 @@ async function startServer() {
     if (userUpdateError) return res.status(500).json({ error: userUpdateError.message });
 
     await sendNotification(payment.email, 'Payment Approved', `Congratulations! Your subscription is now active. You have full access to all trading signals and premium features. Welcome to 4xLifeAI!`, 'success');
+    await notifyAdmin(
+      'Payment Confirmed',
+      `${payment.email} was approved.\nPlan: ${payment.plan || 'PREMIUM'}\nCredits added: ${payment.credits || 0}\nNew credits: ${nextCredits}`,
+      'payment_confirmed',
+      `payment-confirmed:${paymentId}`
+    );
 
     res.json({ success: true });
   });
@@ -696,6 +814,12 @@ async function startServer() {
     if (updateError) return res.status(500).json({ error: updateError.message });
 
     await sendNotification(payment.email, 'Payment Review Update', `We were unable to verify your payment. Please check your transaction details and contact support if you believe this is an error.`, 'warning');
+    await notifyAdmin(
+      'Payment Rejected',
+      `${payment.email} payment was rejected.\nPlan: ${payment.plan || 'N/A'}\nTXID: ${payment.tx_hash || payment.destination || 'N/A'}`,
+      'payment_rejected',
+      `payment-rejected:${paymentId}`
+    );
 
     res.json({ success: true });
   });

@@ -52,6 +52,11 @@ export default function Signup() {
       });
 
       if (error) throw error;
+      fetch('/api/admin/notify-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, fullName })
+      }).catch(() => {});
       setSuccess(true);
     } catch (err: any) {
       let msg = err.message || 'Failed to sign up';

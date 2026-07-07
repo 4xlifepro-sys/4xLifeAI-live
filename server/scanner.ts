@@ -314,7 +314,7 @@ export async function startScanner() {
             .select('*')
             .eq('pair', pair)
             .eq('is_active', true)
-            .in('status', ['ACTIVE', 'TP1 HIT', 'TP2 HIT']) as any;
+            .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT']) as any;
       }
       
       const [setup, supabaseResponse] = await Promise.all([setupPromise, activeSignalsPromise]);
@@ -350,53 +350,53 @@ export async function startScanner() {
               let hitLevel = '';
               let hitPrice = 0;
               let rawPips = 0;
-              let newStatus = s.status || 'ACTIVE';
+              let newStatus = s.status || 'LIVE';
               let tpRecordStr = '';
           
               const isLong = s.direction === 'LONG' || s.signal === 'BUY';
 
               // Determine current effective SL based on trailing logic
               let effectiveSL = s.sl;
-              if (s.status === 'TP2 HIT') {
+              if (s.status === 'TP2_HIT') {
                   effectiveSL = s.tp1;
-              } else if (s.status === 'TP1 HIT') {
+              } else if (s.status === 'TP1_HIT') {
                   effectiveSL = sEntry;
               }
 
               if (isLong) {
                  if (currentPrice.low <= effectiveSL) {
                     isHit = true; finalClose = true;
-                    hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'CLOSED';
+                    hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'STOP_LOSS_HIT';
                     rawPips = calculatePips(sEntry, effectiveSL);
-                 } else if (currentPrice.high >= s.tp3 && s.status !== 'TP3 HIT') {
+                 } else if (currentPrice.high >= s.tp3 && s.status !== 'TP3_HIT') {
                     isHit = true; finalClose = true;
-                    hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'CLOSED'; tpRecordStr = 'tp3_hit_at';
+                    hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'TP3_HIT'; tpRecordStr = 'tp3_hit_at';
                     rawPips = calculatePips(s.tp3, sEntry);
-                 } else if (currentPrice.high >= s.tp2 && !['TP2 HIT', 'TP3 HIT'].includes(s.status)) {
+                 } else if (currentPrice.high >= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
                     isHit = true; finalClose = false;
-                    hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2 HIT'; tpRecordStr = 'tp2_hit_at';
+                    hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2_HIT'; tpRecordStr = 'tp2_hit_at';
                     rawPips = calculatePips(s.tp2, sEntry);
-                 } else if (currentPrice.high >= s.tp1 && s.status === 'ACTIVE') {
+                 } else if (currentPrice.high >= s.tp1 && s.status === 'LIVE') {
                     isHit = true; finalClose = false;
-                    hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1 HIT'; tpRecordStr = 'tp1_hit_at';
+                    hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1_HIT'; tpRecordStr = 'tp1_hit_at';
                     rawPips = calculatePips(s.tp1, sEntry);
                  }
               } else { 
                  if (currentPrice.high >= effectiveSL) {
                     isHit = true; finalClose = true;
-                    hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'CLOSED';
+                    hitLevel = 'SL'; hitPrice = effectiveSL; newStatus = 'STOP_LOSS_HIT';
                     rawPips = calculatePips(sEntry, effectiveSL);
-                 } else if (currentPrice.low <= s.tp3 && s.status !== 'TP3 HIT') {
+                 } else if (currentPrice.low <= s.tp3 && s.status !== 'TP3_HIT') {
                     isHit = true; finalClose = true;
-                    hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'CLOSED'; tpRecordStr = 'tp3_hit_at';
+                    hitLevel = 'TP3'; hitPrice = s.tp3; newStatus = 'TP3_HIT'; tpRecordStr = 'tp3_hit_at';
                     rawPips = calculatePips(sEntry, s.tp3);
-                 } else if (currentPrice.low <= s.tp2 && !['TP2 HIT', 'TP3 HIT'].includes(s.status)) {
+                 } else if (currentPrice.low <= s.tp2 && !['TP2_HIT', 'TP3_HIT'].includes(s.status)) {
                     isHit = true; finalClose = false;
-                    hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2 HIT'; tpRecordStr = 'tp2_hit_at';
+                    hitLevel = 'TP2'; hitPrice = s.tp2; newStatus = 'TP2_HIT'; tpRecordStr = 'tp2_hit_at';
                     rawPips = calculatePips(sEntry, s.tp2);
-                 } else if (currentPrice.low <= s.tp1 && s.status === 'ACTIVE') {
+                 } else if (currentPrice.low <= s.tp1 && s.status === 'LIVE') {
                     isHit = true; finalClose = false;
-                    hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1 HIT'; tpRecordStr = 'tp1_hit_at';
+                    hitLevel = 'TP1'; hitPrice = s.tp1; newStatus = 'TP1_HIT'; tpRecordStr = 'tp1_hit_at';
                     rawPips = calculatePips(sEntry, s.tp1);
                  }
               }
@@ -409,8 +409,13 @@ export async function startScanner() {
                  if (finalClose) {
                      if (hitLevel === 'TP3') finalResult = 'WIN';
                      else if (hitLevel === 'SL') {
-                         if (s.status === 'TP2 HIT') finalResult = 'TP2 HIT';
-                         else if (s.status === 'TP1 HIT') finalResult = 'TP1 HIT';
+                         if (s.status === 'TP2_HIT') {
+                             finalResult = 'PARTIAL WIN';
+                             rawPips = calculatePips(s.tp2, sEntry);
+                         } else if (s.status === 'TP1_HIT') {
+                             finalResult = 'PARTIAL WIN';
+                             rawPips = calculatePips(s.tp1, sEntry);
+                         }
                          else finalResult = 'LOSS';
                      }
                  } else {
@@ -421,9 +426,9 @@ export async function startScanner() {
                  let titleText = `4XLIFEAI — ${hitLevel} HIT`;
                  let statusLine = '';
                  if (hitLevel === 'SL') {
-                     if (finalResult === 'TP2 HIT') {
+                     if (finalResult === 'PARTIAL WIN') {
                          headerEmoji = '✅';
-                         titleText = '4XLIFEAI — BREAKEVEN+ LOCKED IN';
+                         titleText = s.status === 'TP2_HIT' ? '4XLIFEAI — TP2 SECURED' : '4XLIFEAI — TP1 SECURED';
                      } else if (finalResult === 'BREAKEVEN') {
                          headerEmoji = '🛡️';
                          titleText = '4XLIFEAI — STOPPED AT BREAKEVEN';
@@ -440,7 +445,7 @@ export async function startScanner() {
                      statusLine = '\n\nStatus: TRADE CLOSED';
                  }
 
-                 const isWinOutcome = finalResult === 'WIN' || finalResult === 'TP2 HIT' || (hitLevel !== 'SL' && finalResult !== 'BREAKEVEN');
+                 const isWinOutcome = finalResult === 'WIN' || finalResult === 'PARTIAL WIN' || (hitLevel !== 'SL' && finalResult !== 'BREAKEVEN');
                  const isBreakevenOutcome = finalResult === 'BREAKEVEN';
                  const resultEmoji = isWinOutcome ? '✅' : (isBreakevenOutcome ? '🛡️' : '❌');
                  const sign = isWinOutcome ? '+' : (isBreakevenOutcome ? '' : '-');
@@ -467,11 +472,11 @@ export async function startScanner() {
                      const hours = Math.floor(durationMs / (1000 * 60 * 60));
                      const mins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
                      
-                     const tp1Status = (hitLevel === 'TP3' || hitLevel === 'TP2' || s.status === 'TP1 HIT' || s.status === 'TP2 HIT' || hitLevel === 'TP1') ? 'HIT ✅' : 'MISSED ❌';
-                     const tp2Status = (hitLevel === 'TP3' || hitLevel === 'TP2' || s.status === 'TP2 HIT') ? 'HIT ✅' : 'MISSED ❌';
+                     const tp1Status = (hitLevel === 'TP3' || hitLevel === 'TP2' || s.status === 'TP1_HIT' || s.status === 'TP2_HIT' || hitLevel === 'TP1') ? 'HIT ✅' : 'MISSED ❌';
+                     const tp2Status = (hitLevel === 'TP3' || hitLevel === 'TP2' || s.status === 'TP2_HIT') ? 'HIT ✅' : 'MISSED ❌';
                      const tp3Status = (hitLevel === 'TP3') ? 'HIT ✅' : 'MISSED ❌';
                      
-                     const isWin = finalResult === 'WIN' || finalResult === 'TP2 HIT' || finalResult === 'TP1 HIT';
+                     const isWin = finalResult === 'WIN' || finalResult === 'PARTIAL WIN';
                      const isBreakeven = finalResult === 'BREAKEVEN';
                      const totalPips = isWin ? `+${pipStr}` : (isBreakeven ? `0.0` : `-${pipStr}`);
                      const summaryEmoji = isWin ? '🟢' : (isBreakeven ? '🛡️' : '🔴');
@@ -499,14 +504,17 @@ export async function startScanner() {
                  
                  // Payload construction for Supabase update
                  const updatePayload: any = { status: mapStatus(newStatus) };
+                 if (hitLevel === 'SL' && finalResult === 'PARTIAL WIN') {
+                    updatePayload.status = mapStatus('CLOSED');
+                 }
                  if (tpRecordStr) {
                     updatePayload[tpRecordStr] = closedAt;
                  }
                  if (hitLevel === 'TP3') {
-                     if (s.status !== 'TP2 HIT' && s.status !== 'TP1 HIT') updatePayload['tp1_hit_at'] = closedAt;
-                     if (s.status !== 'TP2 HIT') updatePayload['tp2_hit_at'] = closedAt;
+                     if (s.status !== 'TP2_HIT' && s.status !== 'TP1_HIT') updatePayload['tp1_hit_at'] = closedAt;
+                     if (s.status !== 'TP2_HIT') updatePayload['tp2_hit_at'] = closedAt;
                  } else if (hitLevel === 'TP2') {
-                     if (s.status !== 'TP1 HIT') updatePayload['tp1_hit_at'] = closedAt;
+                     if (s.status !== 'TP1_HIT') updatePayload['tp1_hit_at'] = closedAt;
                  }
                  
                  // Update Trailing SL in DB
@@ -522,8 +530,11 @@ export async function startScanner() {
                     updatePayload.is_active = false;
                     updatePayload.closed_at = closedAt;
                     updatePayload.result = finalResult;
-                    if (finalResult === 'WIN' || finalResult === 'TP2 HIT') {
+                    if (finalResult === 'WIN' || finalResult === 'PARTIAL WIN') {
                        updatePayload.pips_won = rawPips;
+                    } else if (finalResult === 'BREAKEVEN') {
+                       updatePayload.pips_won = 0;
+                       updatePayload.pips_lost = 0;
                     } else {
                        updatePayload.pips_lost = rawPips;
                     }
@@ -634,7 +645,7 @@ export async function startScanner() {
             .from('signals')
             .select('id')
             .eq('pair', pair)
-            .in('status', ['ACTIVE', 'TP1 HIT', 'TP2 HIT'])
+            .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT'])
             .gte('created_at', cooldownAgo)
             .limit(1);
           if (cooldownErr) {
@@ -657,7 +668,7 @@ export async function startScanner() {
         let isDuplicate = false;
         
         // 0. Active trade check
-        const activeTrade = scannerState.activeOpportunities.find(o => o.pair === signal.pair && ['ACTIVE', 'TP1 HIT', 'TP2 HIT'].includes(o.status));
+        const activeTrade = scannerState.activeOpportunities.find(o => o.pair === signal.pair && ['LIVE', 'TP1_HIT', 'TP2_HIT', 'ACTIVE', 'TP1 HIT', 'TP2 HIT'].includes(o.status));
         if (activeTrade && signal.tier !== 'Reject') {
             signal.tier = 'Reject';
             signal.aiReason = 'REJECT_ACTIVE_TRADE_EXISTS';

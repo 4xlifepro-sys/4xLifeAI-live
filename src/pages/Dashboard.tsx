@@ -125,11 +125,20 @@ export default function Dashboard() {
 
     let totalPipsClosed = 0;
     monthClosed.forEach(s => {
-      const entry = s.entry || 0;
+      const storedPips = Number(s.pips_won || 0) - Number(s.pips_lost || 0);
+      if (storedPips !== 0 || s.result === 'BREAKEVEN') {
+        totalPipsClosed += storedPips;
+        return;
+      }
+
+      const entry = s.entry_price || s.entry || 0;
       const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result) || s.status?.includes('TP');
-      const exit = isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
-      const isLong = s.direction === 'LONG' || s.signal === 'BUY';
-      totalPipsClosed += calcPips(s.pair, entry, exit) * (isLong ? 1 : -1);
+      const exit = s.result === 'PARTIAL WIN'
+        ? (s.tp2_hit_at ? s.tp2 : s.tp1)
+        : isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
+      const isLong = s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY';
+      const fallbackPips = calcPips(s.pair, entry, exit);
+      totalPipsClosed += isWin ? Math.abs(fallbackPips) : -Math.abs(fallbackPips);
     });
 
     const activeMapped = active.map(s => {
@@ -159,11 +168,17 @@ export default function Dashboard() {
     });
 
     const historyMapped = closed.slice(0, 10).map(s => {
-      const isLong = s.direction === 'BUY';
+      const isLong = s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY';
       const entry = s.entry_price || s.entry || 0;
-      const isWin = ['TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'CLOSED'].includes(s.status) && s.status !== 'STOP_LOSS_HIT';
-      const exit = isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
-      const pips = calcPips(s.pair, entry, exit) * (isLong ? 1 : -1);
+      const storedPips = Number(s.pips_won || 0) - Number(s.pips_lost || 0);
+      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result) || (['TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'CLOSED'].includes(s.status) && s.status !== 'STOP_LOSS_HIT');
+      const exit = s.result === 'PARTIAL WIN'
+        ? (s.tp2_hit_at ? s.tp2 : s.tp1)
+        : isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
+      const fallbackPips = calcPips(s.pair, entry, exit);
+      const pips = storedPips !== 0 || s.result === 'BREAKEVEN'
+        ? storedPips
+        : isWin ? Math.abs(fallbackPips) : -Math.abs(fallbackPips);
       let result: 'win' | 'loss' | 'breakeven' = 'loss';
       if (Math.abs(pips) < 1) result = 'breakeven';
       else if (pips > 0) result = 'win';
