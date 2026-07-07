@@ -40,17 +40,17 @@ export default function Plans() {
 
     if (!user) return;
     
-    // Check if user has an elite plan
+    // Check if user has an elite/premium plan
     const checkStatus = async () => {
-       const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
-       if (profile?.plan === 'ELITE') {
+       const { data: userRecord } = await supabase.from('users').select('plan_status, credits').eq('email', user.email).single();
+       if (userRecord?.plan_status === 'PREMIUM' || userRecord?.plan_status === 'ELITE' || (userRecord?.credits || 0) > 0) {
           setIsPremium(true);
        }
        
        // Check for pending payments
-       const { data: payment } = await supabase.from('payments').select('status').eq('email', user.email).order('created_at', { ascending: false }).limit(1).single();
+       const { data: payment } = await supabase.from('payments').select('id').eq('email', user.email).order('created_at', { ascending: false }).limit(1).single();
        if (payment) {
-          setPaymentStatus(payment.status);
+          setPaymentStatus('PENDING');
        }
     };
     checkStatus();
@@ -78,21 +78,15 @@ export default function Plans() {
     e.preventDefault();
     if (!txid) return;
     try {
-      const { data: { user } } = await supabase!.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase!.from('payments').insert([{
-        user_id: user.id,
-        email: user.email,
-        proof_url: network,
-        tx_hash: txid,
-        plan: 'ELITE',
-        amount: '25',
-        status: 'PENDING'
-      }]);
-      if (error) {
-         console.error(error);
-         alert("Failed to submit payment");
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, network, txid })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+         console.error(data);
+         alert(data.error || "Failed to submit payment");
          return;
       }
       setPaymentStatus('PENDING');
@@ -100,6 +94,7 @@ export default function Plans() {
       setTxid('');
     } catch (err) {
       console.error(err);
+      alert("Failed to submit payment");
     }
   };
 
