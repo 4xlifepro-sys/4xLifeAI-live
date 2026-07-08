@@ -437,19 +437,39 @@ async function startServer() {
   app.get("/api/today-signals", async (req, res) => {
     try {
       if (supabase) {
-        // Fix: Use a rolling 24-hour window instead of UTC midnight 
-        // to prevent dropping signals for users in non-UTC timezones
-        const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        
-        const { data, error } = await supabase
-          .from('signals')
-          .select('*')
-          .gte('created_at', last24Hours.toISOString())
-          .order('created_at', { ascending: false });
-          
-        if (error) {
-          console.error("Supabase error fetching today signals:", error);
-        } else if (data && data.length > 0) {
+        // Keep "today" rows AND always include currently active trades
+        // so dashboard/Today page don't drop live positions after 24h.
+        const startOfTodayUtc = new Date();
+        startOfTodayUtc.setUTCHours(0, 0, 0, 0);
+
+        const [{ data: todayData, error: todayError }, { data: activeData, error: activeError }] = await Promise.all([
+          supabase
+            .from('signals')
+            .select('*')
+            .gte('created_at', startOfTodayUtc.toISOString())
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('signals')
+            .select('*')
+            .eq('is_active', true)
+            .order('created_at', { ascending: false }),
+        ]);
+
+        if (todayError) {
+          console.error("Supabase error fetching today signals:", todayError);
+        }
+        if (activeError) {
+          console.error("Supabase error fetching active signals:", activeError);
+        }
+
+        const merged = new Map<any, any>();
+        for (const row of todayData || []) merged.set(row.id, row);
+        for (const row of activeData || []) merged.set(row.id, row);
+        const data = Array.from(merged.values()).sort(
+          (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        if (data.length > 0) {
           return res.json(data.map((d: any) => ({
             id: d.id,
             pair: d.pair,
