@@ -78,7 +78,22 @@ export default function Dashboard() {
     };
   }, []);
 
-  const PAIRS = ['EURUSD','USDJPY','USDCAD','NZDUSD','EURJPY','GBPJPY','XAUUSD','XAGUSD','BTCUSD','ETHUSD'];
+  const PAIRS = [
+    'XAUUSD',
+    'BTCUSD',
+    'SOLUSD',
+    'GBPNZD',
+    'CADJPY',
+    'NZDJPY',
+    'EURNZD',
+    'USDCAD',
+    'XAGUSD',
+    'LTCUSD',
+    'ETHUSD',
+    'GBPAUD',
+    'BNBUSD',
+    'AUDUSD',
+  ];
 
   const dashboardData = useMemo(() => {
     const safeRawPrices = rawPrices || fallbackPrices;
