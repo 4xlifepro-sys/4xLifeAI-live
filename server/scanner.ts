@@ -334,10 +334,10 @@ export async function startScanner() {
       let activeSignalsPromise: any = null;
       
       if (supabase) {
+          // Track ALL open trades globally (including pairs removed from current scan list)
           activeSignalsPromise = supabase
             .from('signals')
             .select('*')
-            .eq('pair', pair)
             .eq('is_active', true)
             .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT']) as any;
       }
@@ -361,16 +361,30 @@ export async function startScanner() {
           }
 
           if (activeSignals && activeSignals.length > 0) {
+            const candleCache = new Map<string, any[]>();
+            if (entryTf) candleCache.set(pair, entryTf as any[]);
+
             for (const s of activeSignals) {
+              let signalCandles = candleCache.get(s.pair);
+              if (!signalCandles) {
+                signalCandles = await fetchCandles(s.pair, '5min') as any[];
+                if (signalCandles && signalCandles.length > 0) {
+                  candleCache.set(s.pair, signalCandles);
+                }
+              }
+              if (!signalCandles || signalCandles.length === 0) {
+                continue;
+              }
+
               const trackingStartTime = s.tp2_hit_at || s.tp1_hit_at || s.created_at || s.timestamp || 0;
               const openedAt = new Date(trackingStartTime).getTime();
-              const trackingCandles = entryTf.filter((candle: any) => new Date(candle.timestamp).getTime() > openedAt);
+              const trackingCandles = signalCandles.filter((candle: any) => new Date(candle.timestamp).getTime() > openedAt);
               let currentPrice = trackingCandles[trackingCandles.length - 1];
               if (!currentPrice || !Number.isFinite(Number(currentPrice.close))) {
                  continue;
               }
 
-              const pipMult = getPipMultiplier(pair);
+              const pipMult = getPipMultiplier(s.pair);
               const calculatePips = (price1: number, price2: number) => {
                  return Math.abs(price1 - price2) / pipMult;
               };
