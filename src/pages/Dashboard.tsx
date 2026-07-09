@@ -199,8 +199,9 @@ export default function Dashboard() {
       const pips = storedPips !== 0 || s.result === 'BREAKEVEN'
         ? storedPips
         : isWin ? Math.abs(fallbackPips) : -Math.abs(fallbackPips);
-      let result: 'win' | 'loss' | 'breakeven' = 'loss';
-      if (Math.abs(pips) < 1) result = 'breakeven';
+      let result: 'win' | 'loss' | 'breakeven' | 'invalid' = 'loss';
+      if (s.result === 'INVALID') result = 'invalid';
+      else if (Math.abs(pips) < 1) result = 'breakeven';
       else if (pips > 0) result = 'win';
       const d = new Date(s.created_at || s.timestamp);
       const closedAt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +

@@ -57,7 +57,7 @@ interface ClosedSignal {
   direction: "LONG" | "SHORT";
   entry: number;
   exit: number;
-  result: "win" | "loss" | "breakeven";
+  result: "win" | "loss" | "breakeven" | "invalid";
   pips: number;
   closedAt: string; // e.g. "Jul 4, 14:20"
 }
@@ -356,7 +356,7 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
                 <span>{fmtPrice(h.entry)}</span>
                 <span>{fmtPrice(h.exit)}</span>
                 <span className={`x4-result x4-result--${h.result}`}>
-                  {h.result === "win" ? "WIN" : h.result === "loss" ? "LOSS" : "B/E"}
+                  {h.result === "win" ? "WIN" : h.result === "loss" ? "LOSS" : h.result === "invalid" ? "INVALID" : "B/E"}
                 </span>
                 <span className={h.pips >= 0 ? "up" : "down"}>
                   {h.pips >= 0 ? "+" : ""}
@@ -969,6 +969,7 @@ const CSS = `
 .x4-result--win { background: rgba(51,209,122,0.14); color: var(--x4-green); }
 .x4-result--loss { background: rgba(255,92,92,0.14); color: var(--x4-red); }
 .x4-result--breakeven { background: var(--x4-panel-2); color: var(--x4-text-dim); }
+.x4-result--invalid { background: rgba(245,158,11,0.14); color: var(--x4-amber); }
 
 /* Footer */
 .x4-footer {

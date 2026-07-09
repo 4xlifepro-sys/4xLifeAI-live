@@ -173,12 +173,14 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   const isWin = signal.result === 'WIN' || signal.result === 'PARTIAL WIN';
                   const isLoss = signal.result === 'LOSS';
                   const isBreakeven = signal.result === 'BREAKEVEN';
-                  const isUnknown = !isWin && !isLoss && !isBreakeven;
-                  const pips = isWin ? signal.pips_won : (isLoss ? signal.pips_lost : (isBreakeven ? 0 : null));
+                  const isInvalid = signal.result === 'INVALID';
+                  const isUnknown = !isWin && !isLoss && !isBreakeven && !isInvalid;
+                  const pips = isWin ? signal.pips_won : (isLoss ? signal.pips_lost : (isBreakeven || isInvalid ? 0 : null));
                   const formattedPips = pips !== null ? Math.abs(pips).toFixed(1) : '';
                   
                   let closedLevel = "Closed";
-                  if (isLoss) closedLevel = "Closed at SL";
+                  if (isInvalid) closedLevel = "Closed: invalid SL equals entry";
+                  else if (isLoss) closedLevel = "Closed at SL";
                   else if (isBreakeven) closedLevel = "Closed at Entry";
                   else if (signal.result === 'PARTIAL WIN') {
                     if (signal.tp2_hit_at) closedLevel = "Closed at SL after TP2";
@@ -192,7 +194,8 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   }
 
                   let badgeText = "CLOSED";
-                  if (isBreakeven) badgeText = "BREAKEVEN 0.0 pips";
+                  if (isInvalid) badgeText = "INVALID";
+                  else if (isBreakeven) badgeText = "BREAKEVEN 0.0 pips";
                   else if (isWin) badgeText = `WIN ${formattedPips ? `+${formattedPips} pips` : ''}`;
                   else if (isLoss) badgeText = `LOSS ${formattedPips ? `-${formattedPips} pips` : ''}`;
                   
@@ -200,7 +203,8 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     <div className="flex flex-col items-end gap-1">
                       <span className={cn(
                         "px-2 py-1 rounded text-[10px] font-bold border",
-                        isBreakeven ? "bg-[#8A95A5]/10 text-[#8A95A5] border-[#8A95A5]/20"
+                        isInvalid ? "bg-[#F5A524]/10 text-[#F5A524] border-[#F5A524]/20"
+                                    : isBreakeven ? "bg-[#8A95A5]/10 text-[#8A95A5] border-[#8A95A5]/20"
                                     : isWin ? "bg-[#00E08A]/10 text-[#00E08A] border-[#00E08A]/20" 
                                     : isLoss ? "bg-[#FF4D6D]/10 text-[#FF4D6D] border-[#FF4D6D]/20"
                                     : "bg-[#8A95A5]/10 text-[#8A95A5] border-[#8A95A5]/20"
