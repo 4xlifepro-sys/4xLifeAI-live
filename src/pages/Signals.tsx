@@ -49,52 +49,17 @@ export default function Signals() {
     async function fetchSignals() {
       try {
         let fetchedData: Signal[] = [];
-        let useFallback = false;
-        
-        if (supabase) {
-           let query = supabase
-             .from('signal_audit_log')
-             .select('*')
-             .order('generated_at', { ascending: false })
-             .limit(100);
-             
-           if (currentView.tier) {
-               query = query.eq('tier', currentView.tier);
-           }
-           
-           if (currentView.filterByDate === 'today') {
-               const today = new Date();
-               today.setHours(0, 0, 0, 0);
-               query = query.gte('generated_at', today.toISOString()).neq('tier', 'Reject');
-           }
-             
-           const { data, error } = await query;
-           if (error) {
-             useFallback = true;
-           } else {
-             fetchedData = (data || []).map((d: any) => ({
-                 ...d,
-                 timestamp: d.generated_at,
-                 aiConfidence: d.confidence_score,
-                 score: d.confidence_score
-             }));
-           }
-        } else {
-           useFallback = true;
-        }
+        const res = await fetch('/api/today-signals');
+        if (!res.ok) throw new Error('Failed to fetch signals');
+        const data = await res.json();
+        fetchedData = (data || []).filter((s: any) => s.status !== 'REJECTED');
 
-        if (useFallback) {
-           const res = await fetch('/api/signals');
-           if (!res.ok) throw new Error('Failed to fetch signals');
-           const data = await res.json();
-           fetchedData = data || [];
-           if (currentView.tier) {
-               fetchedData = fetchedData.filter((s: Signal) => s.tier === currentView.tier);
-           }
-           if (currentView.filterByDate === 'today') {
-               const todayStr = new Date().toDateString();
-               fetchedData = fetchedData.filter((s: Signal) => new Date(s.timestamp).toDateString() === todayStr && s.tier !== 'Reject');
-           }
+        if (currentView.tier) {
+          fetchedData = fetchedData.filter((s: Signal) => s.tier === currentView.tier);
+        }
+        if (currentView.filterByDate === 'today') {
+          const todayStr = new Date().toDateString();
+          fetchedData = fetchedData.filter((s: Signal) => new Date(s.timestamp).toDateString() === todayStr && s.tier !== 'Reject');
         }
         
         setSignals(fetchedData);
@@ -187,10 +152,10 @@ export default function Signals() {
                     <td className="py-4 px-6">
                        <span className={cn(
                           "px-2 py-1 rounded text-xs font-bold uppercase tracking-widest border",
-                          sig.direction === 'iONG' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
+                          sig.direction === 'LONG' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
                        )}>
                           <span className="flex items-center gap-1">
-                             {sig.direction === 'iONG' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                             {sig.direction === 'LONG' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                              {sig.direction}
                           </span>
                        </span>

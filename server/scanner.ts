@@ -99,7 +99,7 @@ async function generateAiReason(dbId: string, signal: Signal) {
       .replace(/\${signal\.diagnostics\?\.confidenceBreakdown\?\.regime\s*===\s*5\s*\?\s*'Trending\s*\(Clean\)'\s*:\s*'Chop\s*\/\s*Mixed'}/g, regimeLabel);
     
     const response = await ai.models.generateContent({
-       model: "gemini-3.5-flash",
+       model: "gemini-1.5-flash",
        contents: prompt
     });
     
@@ -761,7 +761,7 @@ export async function startScanner() {
             .from('signals')
             .select('id')
             .eq('pair', pair)
-            .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT'])
+            .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_LOSS_HIT', 'CLOSED'])
             .gte('created_at', cooldownAgo)
             .limit(1);
           if (cooldownErr) {
@@ -865,7 +865,7 @@ export async function startScanner() {
               pair: signal.pair,
               direction: dbDirection,
               bias: signal.bias,
-              score: signal.score,
+              score: signal.aiConfidence || null,
               // constraint requires 1-10 integer scale; precise 0-100% preserved in 'score'
               confidence: Math.min(10, Math.max(1, Math.round(signal.aiConfidence / 10))),
               tier: signal.tier,

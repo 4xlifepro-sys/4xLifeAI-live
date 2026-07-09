@@ -3,8 +3,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { startScanner, scannerState, latestMarketState } from "./server/scanner.js";
-import { rejectionStats } from "./server/engine.js";
+import { startScanner, scannerState, latestMarketState, rejectionStats } from "./server/scanner.js";
 import { supabase } from './server/supabase.js';
 import { sendTelegramMessage } from './server/telegram.js';
 
@@ -531,7 +530,6 @@ async function startServer() {
            ...d,
            opened_at: d.created_at,
            entry: d.entry_price,
-           tp1_hit_at: d.status === 'TP1_HIT' || d.status === 'TP2_HIT' || d.status === 'TP3_HIT' || d.status === 'CLOSED' ? new Date().toISOString() : null,
         }));
         openTrades = allTrades.filter((t: any) => t.is_active);
         closedTrades = allTrades.filter((t: any) => !t.is_active && t.result);
@@ -581,7 +579,7 @@ async function startServer() {
         if (t.tp1_hit_at || t.status === 'TP1 HIT' || t.status === 'TP2 HIT' || t.status === 'TP3 HIT' || t.result === 'PARTIAL WIN' || t.result === 'WIN') tp1Hits++;
         if (t.tp2_hit_at || t.status === 'TP2 HIT' || t.status === 'TP3 HIT' || t.result === 'WIN') tp2Hits++;
         if (t.tp3_hit_at || t.status === 'TP3 HIT' || (t.result === 'WIN' && t.status === 'CLOSED' && !t.tp2_hit_at)) tp3Hits++; // Best guess if exact level hit not saved
-        if (t.result === 'LOSS' || t.status === 'CLOSED' && t.result !== 'WIN') slHits++;
+        if (t.result === 'LOSS' || (t.status === 'CLOSED' && t.result !== 'WIN' && t.result !== 'PARTIAL WIN' && t.result !== 'BREAKEVEN')) slHits++;
 
         const pWon = t.pips_won || 0;
         const pLost = t.pips_lost || 0;

@@ -224,15 +224,15 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     {renderCopyableValue(`${signal.id}:sl`, signal.sl, "text-[#FF4D6D]")}
                   </div>
                   <div>
-                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP1 (1:1)</p>
+                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP1 (1:1.5)</p>
                     {renderCopyableValue(`${signal.id}:tp1`, signal.tp1, "text-[#00E08A]")}
                   </div>
                   <div>
-                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP2 (1:2)</p>
+                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP2 (1:3)</p>
                     {renderCopyableValue(`${signal.id}:tp2`, signal.tp2, "text-[#00E08A]")}
                   </div>
                   <div>
-                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP3 (1:3)</p>
+                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP3 (1:5)</p>
                     {renderCopyableValue(`${signal.id}:tp3`, signal.tp3, "text-[#00E08A]")}
                   </div>
                   <div>

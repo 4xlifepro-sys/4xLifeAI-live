@@ -107,19 +107,22 @@ export default function Dashboard() {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
     const recent30 = closed.filter(s => new Date(s.created_at) > thirtyDaysAgo);
-    const wins30 = recent30.filter(s => ['WIN', 'PARTIAL WIN'].includes(s.result) || s.status?.includes('TP')).length;
-    const losses30 = recent30.filter(s => s.result === 'LOSS' || s.status === 'SL HIT').length;
+    const wins30 = recent30.filter(s => ['WIN', 'PARTIAL WIN'].includes(s.result)).length;
+    const losses30 = recent30.filter(s => s.result === 'LOSS').length;
     const winRate30d = wins30 + losses30 > 0 ? (wins30 / (wins30 + losses30)) * 100 : 0;
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthSignals = allSignals.filter(s => new Date(s.created_at) >= monthStart).length;
     const monthClosed = closed.filter(s => new Date(s.created_at) >= monthStart);
-    const monthWins = monthClosed.filter(s => ['WIN', 'PARTIAL WIN'].includes(s.result) || s.status?.includes('TP'));
-    const monthLosses = monthClosed.filter(s => s.result === 'LOSS' || s.status === 'SL HIT');
+    const monthWins = monthClosed.filter(s => ['WIN', 'PARTIAL WIN'].includes(s.result));
+    const monthLosses = monthClosed.filter(s => s.result === 'LOSS');
 
     const calcPips = (pair: string, entry: number, exit: number) => {
       if (!entry || !exit) return 0;
       const diff = exit - entry;
+      if (pair.includes('BTC')) return Math.round(diff * 100);
+      if (pair.includes('ETH')) return Math.round(diff * 10);
+      if (pair.includes('SOL') || pair.includes('BNB') || pair.includes('LTC')) return Math.round(diff * 10);
       if (pair.includes('JPY')) return Math.round(diff * 100);
       if (pair.includes('XAU') || pair.includes('XAG')) return Math.round(diff * 10);
       return Math.round(diff * 10000);
@@ -165,8 +168,9 @@ export default function Dashboard() {
       if (pips > 0) status = 'profit';
       else if (pips < 0) status = 'loss';
       let tier: 'Strong' | 'Good' | 'Valid' = 'Valid';
-      if (s.confidence >= 80) tier = 'Strong';
-      else if (s.confidence >= 65) tier = 'Good';
+      const conf = s.aiConfidence ?? s.confidence ?? 0;
+      if (conf >= 80) tier = 'Strong';
+      else if (conf >= 65) tier = 'Good';
       return {
         pair: s.pair,
         direction: isLong ? 'LONG' as const : 'SHORT' as const,
@@ -187,7 +191,7 @@ export default function Dashboard() {
       const isLong = s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY';
       const entry = s.entry_price || s.entry || 0;
       const storedPips = Number(s.pips_won || 0) - Number(s.pips_lost || 0);
-      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result) || (['TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'CLOSED'].includes(s.status) && s.status !== 'STOP_LOSS_HIT');
+      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result);
       const exit = s.result === 'PARTIAL WIN'
         ? (s.tp2_hit_at ? s.tp2 : s.tp1)
         : isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
