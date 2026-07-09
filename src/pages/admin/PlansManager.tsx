@@ -25,8 +25,8 @@ export default function PlansManager() {
   const visiblePlans = useMemo(() => {
     const freePlan = plans.find((plan) => String(plan.name || '').toLowerCase() === 'free')
       || plans.find((plan) => String(plan.name || '').toLowerCase() === 'starter');
-    const proPlan = plans.find((plan) => String(plan.name || '').toLowerCase() === 'pro')
-      || plans.find((plan) => String(plan.name || '').toLowerCase() === 'premium');
+    const proPlan = plans.find((plan) => String(plan.name || '').toLowerCase() === 'premium')
+      || plans.find((plan) => String(plan.name || '').toLowerCase() === 'pro');
 
     return [
       freePlan ? { ...freePlan, name: 'Free', is_popular: false } : null,

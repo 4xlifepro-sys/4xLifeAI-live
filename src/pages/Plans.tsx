@@ -26,9 +26,10 @@ export default function Plans() {
   const [plansError, setPlansError] = useState<string | null>(null);
 
   const visiblePlans = React.useMemo(() => {
-    const proFromDb = dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'pro')
-      || dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'premium');
-    const freeFromDb = dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'free');
+    const proFromDb = dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'premium')
+      || dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'pro');
+    const freeFromDb = dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'free')
+      || dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'starter');
 
     const freePlan = freeFromDb || {
       id: 'free',
