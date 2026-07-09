@@ -67,12 +67,10 @@ export default function PlansManager() {
       is_popular: plan.is_popular,
     };
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('plans')
       .update(updatePayload)
-      .eq('id', plan.id)
-      .select('*')
-      .single();
+      .eq('id', plan.id);
     
     if (error) {
       await dialog.showAlert({
@@ -81,9 +79,6 @@ export default function PlansManager() {
         variant: "danger",
       });
     } else {
-      if (data) {
-        setPlans((currentPlans) => currentPlans.map((currentPlan) => currentPlan.id === plan.id ? data : currentPlan));
-      }
       await fetchPlans();
       await dialog.showAlert({
         title: "Success",
