@@ -25,6 +25,43 @@ export default function Plans() {
   const [plansLoading, setPlansLoading] = useState(true);
   const [plansError, setPlansError] = useState<string | null>(null);
 
+  const visiblePlans = React.useMemo(() => {
+    const proFromDb = dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'pro')
+      || dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'premium');
+    const freeFromDb = dbPlans.find((plan) => String(plan.name || '').toLowerCase() === 'free');
+
+    const freePlan = freeFromDb || {
+      id: 'free',
+      name: 'Free',
+      price: 0,
+      original_price: null,
+      billing_period: '/month',
+      is_popular: false,
+      features: ['Limited signals', 'Basic alerts'],
+    };
+
+    const proPlan = proFromDb
+      ? {
+          ...proFromDb,
+          name: 'Pro',
+          is_popular: true,
+          features: proFromDb.features?.length
+            ? proFromDb.features
+            : ['Unlimited signals', 'Priority alerts', 'All pairs', 'AI Coach access'],
+        }
+      : {
+          id: 'pro',
+          name: 'Pro',
+          price: 20,
+          original_price: 30,
+          billing_period: '/month',
+          is_popular: true,
+          features: ['Unlimited signals', 'Priority alerts', 'All pairs', 'AI Coach access'],
+        };
+
+    return [freePlan, proPlan];
+  }, [dbPlans]);
+
   useEffect(() => {
     // Fetch plans from DB
     const fetchPlans = async () => {
@@ -106,7 +143,7 @@ export default function Plans() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ email: user.email, network, txid, plan: 'PREMIUM', amount_usd: 20, credits: 25 })
+        body: JSON.stringify({ email: user.email, network, txid, plan: 'PRO', amount_usd: 20, credits: 25 })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -165,7 +202,7 @@ export default function Plans() {
               <p className="font-bold mb-2">Error loading plans</p>
               <p className="text-sm">{plansError}</p>
             </div>
-          ) : dbPlans.length > 0 ? dbPlans.map((plan) => (
+          ) : visiblePlans.map((plan) => (
             <div key={plan.id} className={cn(
               "rounded-3xl p-8 flex flex-col relative overflow-hidden",
               plan.is_popular 
@@ -185,7 +222,7 @@ export default function Plans() {
                     </span>
                   </span>
                 ) : (
-                  <span className="px-3 py-1 bg-[#202735] text-[#8A95A5] rounded-full text-xs font-semibold uppercase tracking-wider">Starter</span>
+                  <span className="px-3 py-1 bg-[#202735] text-[#8A95A5] rounded-full text-xs font-semibold uppercase tracking-wider">Free</span>
                 )}
               </div>
               
@@ -215,7 +252,7 @@ export default function Plans() {
                   </ul>
                   
                   <div className="mt-10">
-                    {plan.name === 'Free' ? (
+                    {String(plan.name).toLowerCase() === 'free' ? (
                       <button disabled className="w-full py-4 rounded-xl bg-[#1A2235] text-[#8A95A5] font-bold text-sm tracking-widest uppercase cursor-not-allowed">
                         {isPremium ? "Available" : "Free Account Logged"}
                       </button>
@@ -302,9 +339,7 @@ export default function Plans() {
               </div>
             )}
           </div>
-          )) : (
-            <div className="col-span-2 text-center text-[#8A95A5] py-12">No plans configured yet.</div>
-          )}
+          ))}
         </div>
 
         {/* Global info notice */}
