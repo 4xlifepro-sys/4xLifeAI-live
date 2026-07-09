@@ -58,19 +58,29 @@ export default function PlansManager() {
 
   const handleSave = async (plan: Plan) => {
     setSaving(true);
-    const updatePayload = {
+    const updatePayload: any = {
       name: plan.name,
       price: cleanNumber(plan.price, 0),
       billing_period: plan.billing_period,
       original_price: cleanNumber(plan.original_price, null),
       features: plan.features.filter((feature) => feature.trim() !== ''),
       is_popular: plan.is_popular,
+      scan_limit: plan.scan_limit,
     };
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('plans')
       .update(updatePayload)
       .eq('id', plan.id);
+
+    if (error && error.message.toLowerCase().includes('scan_limit')) {
+      delete updatePayload.scan_limit;
+      const retry = await supabase
+        .from('plans')
+        .update(updatePayload)
+        .eq('id', plan.id);
+      error = retry.error;
+    }
     
     if (error) {
       await dialog.showAlert({
@@ -167,7 +177,7 @@ export default function PlansManager() {
                   <input 
                     type="text" 
                     value={plan.price}
-                    onChange={(e) => updatePlan(plan.id, { price: e.target.value })}
+                    onChange={(e) => updatePlan(plan.id, { price: e.target.value.replace(/[^0-9.]/g, '') })}
                     className="w-full bg-[#0D1017] border border-[#202735] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                   />
                 </div>
@@ -189,7 +199,7 @@ export default function PlansManager() {
                   <input 
                     type="text" 
                     value={plan.original_price || ''}
-                    onChange={(e) => updatePlan(plan.id, { original_price: e.target.value })}
+                    onChange={(e) => updatePlan(plan.id, { original_price: e.target.value.replace(/[^0-9.]/g, '') })}
                     className="w-full bg-[#0D1017] border border-[#202735] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                     placeholder="$39"
                   />
