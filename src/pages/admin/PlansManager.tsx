@@ -49,17 +49,30 @@ export default function PlansManager() {
     setLoading(false);
   };
 
+  const cleanNumber = (value: string | null, fallback: number | null = null) => {
+    const cleaned = String(value || '').replace(/[^0-9.]/g, '');
+    if (!cleaned) return fallback;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
   const handleSave = async (plan: Plan) => {
     setSaving(true);
-    const { error } = await supabase.from('plans').update({
+    const updatePayload = {
       name: plan.name,
-      price: plan.price,
+      price: cleanNumber(plan.price, 0),
       billing_period: plan.billing_period,
-      original_price: plan.original_price,
-      features: plan.features,
+      original_price: cleanNumber(plan.original_price, null),
+      features: plan.features.filter((feature) => feature.trim() !== ''),
       is_popular: plan.is_popular,
-      scan_limit: plan.scan_limit
-    }).eq('id', plan.id);
+    };
+
+    const { data, error } = await supabase
+      .from('plans')
+      .update(updatePayload)
+      .eq('id', plan.id)
+      .select('*')
+      .single();
     
     if (error) {
       await dialog.showAlert({
@@ -68,6 +81,10 @@ export default function PlansManager() {
         variant: "danger",
       });
     } else {
+      if (data) {
+        setPlans((currentPlans) => currentPlans.map((currentPlan) => currentPlan.id === plan.id ? data : currentPlan));
+      }
+      await fetchPlans();
       await dialog.showAlert({
         title: "Success",
         message: "Plan saved successfully.",
