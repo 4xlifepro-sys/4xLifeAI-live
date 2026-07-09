@@ -101,8 +101,8 @@ export default function Dashboard() {
     const prices = scannerState.prices || {};
     const marketStates = (scannerState.marketStates || []).filter((s: any) => PAIRS.includes(s.pair));
 
-    const active = allSignals.filter(s => PAIRS.includes(s.pair) && ['LIVE', 'TP1_HIT', 'TP2_HIT'].includes(s.status));
-    const closed = allSignals.filter(s => PAIRS.includes(s.pair) && ['CLOSED', 'TP3_HIT', 'STOP_LOSS_HIT'].includes(s.status));
+    const active = allSignals.filter(s => PAIRS.includes(s.pair) && s.is_active !== false && ['LIVE', 'TP1_HIT', 'TP2_HIT'].includes(s.status));
+    const closed = allSignals.filter(s => PAIRS.includes(s.pair) && (s.is_active === false || ['CLOSED', 'TP3_HIT', 'STOP_LOSS_HIT'].includes(s.status)));
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
@@ -150,7 +150,7 @@ export default function Dashboard() {
       }
 
       const entry = s.entry_price || s.entry || 0;
-      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result) || s.status?.includes('TP');
+      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result);
       const exit = s.result === 'PARTIAL WIN'
         ? (s.tp2_hit_at ? s.tp2 : s.tp1)
         : isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;

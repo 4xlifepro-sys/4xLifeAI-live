@@ -340,36 +340,37 @@ async function startServer() {
 
     if (supabase) {
       const { data } = await supabase
-        .from('signal_audit_log')
+        .from('signals')
         .select('*')
-        .order('generated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(20);
       
       if (data) {
         recentSignals = data.map((d: any) => ({
           ...d,
-          timestamp: d.generated_at,
-          aiConfidence: d.confidence_score,
-          score: d.confidence_score,
+          entry: d.entry_price,
+          timestamp: d.created_at,
+          aiConfidence: (d.confidence || 0) * 10,
+          score: d.score || ((d.confidence || 0) * 10),
         }));
       }
 
       // Fetch authentic counts from Supabase database to avoid 20-item local limitation mismatch
       const { count: activeCount } = await supabase
-        .from('signal_audit_log')
+        .from('signals')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'ACTIVE')
-        .neq('tier', 'Reject');
+        .eq('is_active', true)
+        .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT']);
       if (activeCount !== null) activeSignalsCount = activeCount;
 
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
 
       const { count: todayCount } = await supabase
-        .from('signal_audit_log')
+        .from('signals')
         .select('*', { count: 'exact', head: true })
-        .gte('generated_at', startOfDay.toISOString())
-        .neq('tier', 'Reject');
+        .gte('created_at', startOfDay.toISOString())
+        .neq('status', 'REJECTED_BY_ADMIN');
       if (todayCount !== null) signalsTodayCount = todayCount;
 
       const { data: activeOpps } = await supabase
@@ -416,16 +417,17 @@ async function startServer() {
   app.get("/api/signals", async (req, res) => {
     if (supabase) {
       const { data } = await supabase
-        .from('signal_audit_log')
+        .from('signals')
         .select('*')
-        .order('generated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(100);
       if (data) {
         res.json(data.map((d: any) => ({
           ...d,
-          timestamp: d.generated_at,
-          aiConfidence: d.confidence_score,
-          score: d.confidence_score,
+          entry: d.entry_price,
+          timestamp: d.created_at,
+          aiConfidence: (d.confidence || 0) * 10,
+          score: d.score || ((d.confidence || 0) * 10),
         })));
         return;
       }

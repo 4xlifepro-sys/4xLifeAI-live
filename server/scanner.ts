@@ -207,7 +207,7 @@ function updatePairStatus(pair: string, status: 'scanning' | 'success' | 'error'
 const htfCache = new Map<string, { data: any, timestamp: number }>();
 
 async function getGlobalActiveTradeCount() {
-  const memoryCount = scannerState.signals.filter((signal: any) => OPEN_SIGNAL_STATUSES.includes(signal.status || 'LIVE')).length;
+  const memoryCount = scannerState.signals.filter((signal: any) => ['ACTIVE', ...OPEN_SIGNAL_STATUSES].includes(signal.status || 'LIVE')).length;
   let dbCount = 0;
 
   if (supabase) {
@@ -701,6 +701,7 @@ export async function startScanner() {
             .from('signals')
             .select('id')
             .eq('pair', pair)
+            .eq('is_active', true)
             .in('status', OPEN_SIGNAL_STATUSES)
             .limit(1);
             
