@@ -180,11 +180,15 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   let closedLevel = "Closed";
                   if (isLoss) closedLevel = "Closed at SL";
                   else if (isBreakeven) closedLevel = "Closed at Entry";
-                  else if (signal.result === 'PARTIAL WIN') closedLevel = "Closed at SL";
-                  else if (isWin) {
+                  else if (signal.result === 'PARTIAL WIN') {
+                    if (signal.tp2_hit_at) closedLevel = "Closed at SL after TP2";
+                    else if (signal.tp1_hit_at) closedLevel = "Closed at SL after TP1";
+                    else closedLevel = "Closed at SL";
+                  } else if (isWin) {
                     if (signal.tp3_hit_at) closedLevel = "Closed at TP3";
-                    else if (signal.tp2_hit_at) closedLevel = "Closed at SL"; // Win but not TP3 means it hit SL after TP2
-                    else closedLevel = "Closed at TP3"; // Fallback
+                    else if (signal.tp2_hit_at) closedLevel = "Closed at TP2";
+                    else if (signal.tp1_hit_at) closedLevel = "Closed at TP1";
+                    else closedLevel = "Closed";
                   }
 
                   let badgeText = "CLOSED";

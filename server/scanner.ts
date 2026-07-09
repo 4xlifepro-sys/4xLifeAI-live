@@ -390,6 +390,17 @@ export async function startScanner() {
               };
           
               const sEntry = s.entry_price || s.entry || 0;
+              const sSL = s.sl || 0;
+              if (sEntry && sSL && Math.abs(sEntry - sSL) < 1e-12) {
+                console.log(`[OUTCOME TRACKER] ${s.pair} invalid signal: entry ${sEntry} equals SL ${sSL}. Closing as invalid.`);
+                const closedAt = new Date().toISOString();
+                await supabase
+                  .from('signals')
+                  .update({ is_active: false, status: 'CLOSED', result: 'INVALID', closed_at: closedAt })
+                  .eq('id', s.id);
+                continue;
+              }
+
               let isHit = false;
               let finalClose = false;
               let hitLevel = '';
@@ -670,6 +681,16 @@ export async function startScanner() {
           rejectionStats.LOW_CONFIDENCE++;
           if (finalSignal.diagnostics) {
             finalSignal.diagnostics.confidenceBreakdown = 'LOW_CONFIDENCE_FOR_LIVE_SLOT';
+          }
+        } else if (finalSignal.entry === finalSignal.sl || Math.abs(finalSignal.entry - finalSignal.sl) < 1e-12) {
+          console.log(`INVALID_SL_BLOCKED: ${pair} entry ${finalSignal.entry} equals SL ${finalSignal.sl}`);
+          finalSignal.tier = 'Reject';
+          finalSignal.status = 'REJECTED';
+          finalSignal.aiReason = 'INVALID_STOP_LOSS';
+          finalSignal.rejection_reason = 'INVALID_STOP_LOSS';
+          rejectionStats.LOW_CONFIDENCE++;
+          if (finalSignal.diagnostics) {
+            finalSignal.diagnostics.confidenceBreakdown = 'INVALID_STOP_LOSS';
           }
         }
       }

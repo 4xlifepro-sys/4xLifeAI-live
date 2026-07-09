@@ -481,7 +481,7 @@ async function startServer() {
             tp2: d.tp2,
             tp3: d.tp3,
             confidence: d.confidence,
-            aiConfidence: d.confidence,
+            aiConfidence: (d.confidence || 0) * 10,
             score: d.score || d.confidence,
             status: d.status,
             is_active: d.is_active,

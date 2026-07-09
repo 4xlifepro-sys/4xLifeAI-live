@@ -172,6 +172,9 @@ export function detectSignalV2(
   function getFloorRisk(pair: string, pipMultiplier: number): number {
     if (pair.includes('BTC')) return 250; // dollars, not pips
     if (pair.includes('ETH')) return 15; // dollars
+    if (pair.includes('BNB')) return 2.5; // dollars
+    if (pair.includes('SOL')) return 1.5; // dollars
+    if (pair.includes('LTC')) return 1.0; // dollars
     if (pair.includes('XAU')) return 12; // dollars
     if (pair.includes('XAG')) return 0.50; // dollars
     if (pair.includes('JPY')) return 8 * pipMultiplier; // 8 pips
