@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useDialog } from '../../components/ConfirmDialog';
 import { RefreshCw, Save, Plus, X } from 'lucide-react';
@@ -21,6 +21,18 @@ export default function PlansManager() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const visiblePlans = useMemo(() => {
+    const freePlan = plans.find((plan) => String(plan.name || '').toLowerCase() === 'free')
+      || plans.find((plan) => String(plan.name || '').toLowerCase() === 'starter');
+    const proPlan = plans.find((plan) => String(plan.name || '').toLowerCase() === 'pro')
+      || plans.find((plan) => String(plan.name || '').toLowerCase() === 'premium');
+
+    return [
+      freePlan ? { ...freePlan, name: 'Free', is_popular: false } : null,
+      proPlan ? { ...proPlan, name: 'Pro', is_popular: true } : null,
+    ].filter(Boolean) as Plan[];
+  }, [plans]);
 
   useEffect(() => {
     fetchPlans();
@@ -63,6 +75,10 @@ export default function PlansManager() {
       });
     }
     setSaving(false);
+  };
+
+  const updatePlan = (planId: string, updates: Partial<Plan>) => {
+    setPlans(plans.map((plan) => plan.id === planId ? { ...plan, ...updates } : plan));
   };
 
   const handleFeatureChange = (planId: string, index: number, value: string) => {
@@ -113,14 +129,14 @@ export default function PlansManager() {
         </div>
       </div>
       
-      {plans.length === 0 && (
+      {visiblePlans.length === 0 && (
         <div className="bg-[#11141A] border border-[#202735] rounded-2xl p-8 text-center">
-          <p className="text-[#8A95A5] text-sm">No plans found. Please seed the database with initial plans.</p>
+          <p className="text-[#8A95A5] text-sm">No Free/Pro plans found. Please seed the database with initial plans.</p>
         </div>
       )}
 
       <div className="grid md:grid-cols-2 gap-8">
-        {plans.map((plan) => (
+        {visiblePlans.map((plan) => (
           <div key={plan.id} className="bg-[#11141A] border border-[#202735] rounded-2xl p-6 relative">
             <div className="space-y-4">
               <div>
@@ -128,7 +144,7 @@ export default function PlansManager() {
                 <input 
                   type="text" 
                   value={plan.name}
-                  onChange={(e) => setPlans(plans.map(p => p.id === plan.id ? { ...p, name: e.target.value } : p))}
+                  onChange={(e) => updatePlan(plan.id, { name: e.target.value })}
                   className="w-full bg-[#0D1017] border border-[#202735] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                 />
               </div>
@@ -139,7 +155,7 @@ export default function PlansManager() {
                   <input 
                     type="text" 
                     value={plan.price}
-                    onChange={(e) => setPlans(plans.map(p => p.id === plan.id ? { ...p, price: e.target.value } : p))}
+                    onChange={(e) => updatePlan(plan.id, { price: e.target.value })}
                     className="w-full bg-[#0D1017] border border-[#202735] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                   />
                 </div>
@@ -148,7 +164,7 @@ export default function PlansManager() {
                   <input 
                     type="text" 
                     value={plan.billing_period || ''}
-                    onChange={(e) => setPlans(plans.map(p => p.id === plan.id ? { ...p, billing_period: e.target.value } : p))}
+                    onChange={(e) => updatePlan(plan.id, { billing_period: e.target.value })}
                     className="w-full bg-[#0D1017] border border-[#202735] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                     placeholder="/per month"
                   />
@@ -161,7 +177,7 @@ export default function PlansManager() {
                   <input 
                     type="text" 
                     value={plan.original_price || ''}
-                    onChange={(e) => setPlans(plans.map(p => p.id === plan.id ? { ...p, original_price: e.target.value } : p))}
+                    onChange={(e) => updatePlan(plan.id, { original_price: e.target.value })}
                     className="w-full bg-[#0D1017] border border-[#202735] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                     placeholder="$39"
                   />
@@ -171,7 +187,7 @@ export default function PlansManager() {
                   <input 
                     type="number" 
                     value={plan.scan_limit === null ? '' : plan.scan_limit}
-                    onChange={(e) => setPlans(plans.map(p => p.id === plan.id ? { ...p, scan_limit: e.target.value === '' ? null : parseInt(e.target.value) } : p))}
+                    onChange={(e) => updatePlan(plan.id, { scan_limit: e.target.value === '' ? null : parseInt(e.target.value) })}
                     className="w-full bg-[#0D1017] border border-[#202735] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                     placeholder="Empty for unlimited"
                   />
@@ -182,7 +198,7 @@ export default function PlansManager() {
                 <input 
                   type="checkbox" 
                   checked={plan.is_popular}
-                  onChange={(e) => setPlans(plans.map(p => p.id === plan.id ? { ...p, is_popular: e.target.checked } : p))}
+                  onChange={(e) => updatePlan(plan.id, { is_popular: e.target.checked })}
                   id={`popular-${plan.id}`}
                   className="w-4 h-4 rounded border-[#202735] bg-[#0D1017]"
                 />
