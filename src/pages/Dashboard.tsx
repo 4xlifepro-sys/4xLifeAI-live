@@ -34,10 +34,15 @@ export default function Dashboard() {
     let mounted = true;
     const fetchSignals = async () => {
       try {
-        const response = await fetch('/api/today-signals');
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const response = await fetch('/api/today-signals', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         if (!response.ok) return;
         const data = await response.json();
-        if (mounted && data) setAllSignals(data.filter((signal: any) => signal.status !== 'REJECTED'));
+        const signals = data.signals || data || [];
+        if (mounted) setAllSignals(signals.filter((signal: any) => signal.status !== 'REJECTED'));
       } catch {}
     };
     fetchSignals();
