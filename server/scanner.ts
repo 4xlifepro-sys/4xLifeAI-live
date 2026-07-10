@@ -598,7 +598,12 @@ export async function startScanner() {
                      if (s.status !== 'TP1_HIT') updatePayload['tp1_hit_at'] = closedAt;
                  }
                  
-                 // Update Trailing SL in DB
+                 // Do NOT overwrite original SL in DB. The `sl` column stores the
+                 // original stop loss for accurate historical reporting. Trailing
+                 // stops are tracked in memory only (sEntry / s.tp1).
+                 // Previously this block corrupted the DB by setting sl = entry
+                 // after TP1 hit, which then triggered the INVALID detector.
+                 /*
                  if (!finalClose) {
                      if (hitLevel === 'TP1') {
                          updatePayload.sl = sEntry;
@@ -606,6 +611,7 @@ export async function startScanner() {
                          updatePayload.sl = s.tp1;
                      }
                  }
+                 */
                  
                  if (finalClose) {
                     updatePayload.is_active = false;

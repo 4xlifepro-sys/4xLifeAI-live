@@ -424,6 +424,7 @@ async function startServer() {
       if (data) {
         res.json(data.map((d: any) => ({
           ...d,
+          sl: d.original_sl ?? d.sl,
           entry: d.entry_price,
           timestamp: d.created_at,
           aiConfidence: (d.confidence || 0) * 10,
@@ -477,8 +478,8 @@ async function startServer() {
             direction: d.direction,
             entry: d.entry_price,
             entry_price: d.entry_price,
-            sl: d.sl,
-            tp1: d.tp1,
+            sl: d.original_sl ?? d.sl,
+            original_sl: d.original_sl,
             tp2: d.tp2,
             tp3: d.tp3,
             confidence: d.confidence,
