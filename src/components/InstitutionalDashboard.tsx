@@ -378,17 +378,6 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
         </span>
         <span className="x4-muted">© {new Date().getFullYear()} {d.brand}. All rights reserved.</span>
       </footer>
-
-      <div className="x4-disclaimer">
-        <p><strong>How We Calculate Stop Loss</strong></p>
-        <p>Every signal we send includes an SL level calculated using real-time market volatility (ATR), combined with a pair-specific minimum and maximum safety range. This means:</p>
-        <ul>
-          <li>SL is never placed so tight that normal market noise would trigger it early</li>
-          <li>SL is never placed so wide that a single spike risks more than expected</li>
-          <li>The same fair, transparent logic applies across all pairs — forex, metals, and crypto</li>
-        </ul>
-        <p><strong>Important:</strong> 4xFiveAI provides trading signals only. We do not execute trades or manage your account. You are responsible for placing and managing your own trades using the entry, SL, and TP levels we provide.</p>
-      </div>
     </div>
   );
 }
