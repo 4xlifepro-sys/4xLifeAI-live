@@ -100,7 +100,7 @@ export default function PlansManager() {
   };
 
   const updatePlan = (planId: string, updates: Partial<Plan>) => {
-    setPlans(plans.map((plan) => plan.id === planId ? { ...plan, ...updates } : plan));
+    setPlans(prevPlans => prevPlans.map((plan) => plan.id === planId ? { ...plan, ...updates } : plan));
   };
 
   const handleFeatureChange = (planId: string, index: number, value: string) => {
