@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Mail, Lock, Loader2, Target, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Loader2, Target, AlertCircle, ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../App';
 import { Logo } from '../../components/Logo';
 
@@ -10,11 +10,17 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [acceptRisk, setAcceptRisk] = useState(false);
+  const [riskExpanded, setRiskExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptRisk) {
+      setError('You must read and accept the Risk Agreement to continue.');
+      return;
+    }
     if (!supabase) {
       setError('System temporarily unavailable. Please try again later.');
       return;
@@ -121,9 +127,9 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className="relative flex items-center justify-center">
+            <div className="pt-2">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center mt-0.5">
                    <input
                      type="checkbox"
                      checked={rememberMe}
@@ -134,9 +140,53 @@ export default function Login() {
                 </div>
                 <span className="text-sm font-medium text-[#8A95A5] group-hover:text-white transition-colors">Remember Me</span>
               </label>
-              <Link to="/forgot-password" className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">
-                Forgot password?
-              </Link>
+            </div>
+
+            {/* Risk Agreement Box */}
+            <div className="border border-[#202735] rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setRiskExpanded(!riskExpanded)}
+                className="w-full flex items-center justify-between p-3 bg-[#0A0D12] text-left hover:bg-[#11141A] transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-red-400" />
+                  <span className="text-sm font-medium text-white">Risk Agreement — please read</span>
+                </div>
+                {riskExpanded ? (
+                  <ChevronUp className="w-4 h-4 text-[#5D6B80]" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-[#5D6B80]" />
+                )}
+              </button>
+              
+              {riskExpanded && (
+                <div className="p-4 bg-[#0A0D12] space-y-2">
+                  <p className="text-sm text-[#8A95A5]">• 4XLIFE is an AI educational tool, not financial advice.</p>
+                  <p className="text-sm text-[#8A95A5]">• Forex and trading are high risk — you may lose all of your invested capital.</p>
+                  <p className="text-sm text-[#8A95A5]">• The AI can be wrong; signals, analysis and predictions are not guaranteed.</p>
+                  <p className="text-sm text-[#8A95A5]">• You are fully responsible for your own trading decisions and any losses.</p>
+                  <p className="text-sm text-[#8A95A5]">• Only trade with money you can afford to lose.</p>
+                  <p className="text-sm text-red-400">• 4XLIFE, its creators and affiliates are not liable for any financial losses you incur.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-1">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center mt-0.5">
+                   <input
+                     type="checkbox"
+                     checked={acceptRisk}
+                     onChange={(e) => setAcceptRisk(e.target.checked)}
+                     className="w-5 h-5 rounded bg-[#0A0D12] border border-[#202735] appearance-none checked:bg-emerald-600 checked:border-emerald-600 transition-colors"
+                   />
+                   {acceptRisk && <Target className="w-3.5 h-3.5 text-white absolute pointer-events-none" />}
+                </div>
+                <span className="text-sm text-[#8A95A5] leading-snug group-hover:text-white transition-colors">
+                   I have read and accept the Risk Agreement.
+                </span>
+              </label>
             </div>
 
             <button
@@ -182,6 +232,16 @@ export default function Login() {
             Sign up now
           </Link>
         </p>
+      </div>
+
+      {/* Bottom Risk Warning Banner */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0A0D12] border-t border-red-500/30 px-4 py-2 z-50">
+        <div className="max-w-md mx-auto flex items-center justify-center gap-2 text-center">
+          <ShieldAlert className="w-4 h-4 text-red-400 flex-shrink-0" />
+          <span className="text-xs text-[#8A95A5]">
+            <span className="text-red-400 font-medium">Risk Warning</span> High-risk trading. You may lose all capital. NOT financial advice.
+          </span>
+        </div>
       </div>
     </div>
   );
