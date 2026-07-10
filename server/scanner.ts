@@ -391,14 +391,28 @@ export async function startScanner() {
           
               const sEntry = s.entry_price || s.entry || 0;
               const sSL = s.sl || 0;
+              
+              // Safety guard: never mark a TP-hit signal as INVALID just because sl was
+              // corrupted/overwritten to entry (trailing-stop bug). If TP was hit, trust the TP.
+              const hasAnyTPHit = s.tp1_hit_at || s.tp2_hit_at || s.tp3_hit_at;
               if (sEntry && sSL && Math.abs(sEntry - sSL) < 1e-12) {
-                console.log(`[OUTCOME TRACKER] ${s.pair} invalid signal: entry ${sEntry} equals SL ${sSL}. Closing as invalid.`);
-                const closedAt = new Date().toISOString();
-                await supabase
-                  .from('signals')
-                  .update({ is_active: false, status: 'CLOSED', result: 'INVALID', closed_at: closedAt })
-                  .eq('id', s.id);
-                continue;
+                if (hasAnyTPHit) {
+                  const alertMsg = `🛡️ <b>Auto-Safety Blocked Invalid</b>\n\nPair: ${s.pair}\nIssue: SL equals entry after TP was already hit\nRestored original SL: ${s.original_sl || 'n/a'}\nSignal will keep its real TP outcome.`;
+                  console.log(`[OUTCOME TRACKER] ${s.pair} SL equals entry but TP was already hit — NOT marking invalid. Restoring original SL ${s.original_sl || 'n/a'}.`);
+                  sendTelegramMessage(alertMsg).catch(() => {});
+                  if (s.original_sl) {
+                    await supabase.from('signals').update({ sl: s.original_sl }).eq('id', s.id);
+                  }
+                  // Continue processing below with the real TP outcome, skip the invalid block.
+                } else {
+                  console.log(`[OUTCOME TRACKER] ${s.pair} invalid signal: entry ${sEntry} equals SL ${sSL}. Closing as invalid.`);
+                  const closedAt = new Date().toISOString();
+                  await supabase
+                    .from('signals')
+                    .update({ is_active: false, status: 'CLOSED', result: 'INVALID', closed_at: closedAt })
+                    .eq('id', s.id);
+                  continue;
+                }
               }
 
               let isHit = false;
