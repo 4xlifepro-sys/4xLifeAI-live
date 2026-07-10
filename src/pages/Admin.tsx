@@ -328,7 +328,7 @@ export default function Admin() {
       // 6. Load signals list
       let sigData = null;
       try {
-         const res = await supabase.from('signals').select('*').order('timestamp', { ascending: false }).limit(50);
+         const res = await supabase.from('signal_audit_log').select('*').order('generated_at', { ascending: false }).limit(50);
          if (res.error) throw res.error;
          sigData = res.data;
       } catch (e) {

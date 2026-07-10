@@ -104,7 +104,7 @@ export default function PlansManager() {
   };
 
   const handleFeatureChange = (planId: string, index: number, value: string) => {
-    setPlans(plans.map(p => {
+    setPlans(prevPlans => prevPlans.map(p => {
       if (p.id === planId) {
         const newFeatures = [...p.features];
         newFeatures[index] = value;
@@ -115,7 +115,7 @@ export default function PlansManager() {
   };
 
   const handleAddFeature = (planId: string) => {
-    setPlans(plans.map(p => {
+    setPlans(prevPlans => prevPlans.map(p => {
       if (p.id === planId) {
         return { ...p, features: [...p.features, ""] };
       }
