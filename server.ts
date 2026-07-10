@@ -436,11 +436,38 @@ async function startServer() {
     res.json(scannerState.signals);
   });
 
-  app.get("/api/today-signals", async (req, res) => {
+  app.get("/api/today-signals", requireAuth, async (req, res) => {
     try {
+      const user = (req as any).user;
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.replace('Bearer ', '');
+      
+      // Get user plan and scan limit
+      let planStatus = 'FREE';
+      let scanLimit: number | null = null;
+      if (supabase) {
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('plan_status, credits')
+          .eq('email', user.email)
+          .single();
+        planStatus = (userRecord?.plan_status || 'FREE').toUpperCase();
+        
+        // Fetch scan_limit from plans table
+        const { data: planRecord } = await supabase
+          .from('plans')
+          .select('scan_limit')
+          .ilike('name', planStatus === 'FREE' ? 'Free' : planStatus === 'PRO' ? 'Pro' : '%')
+          .single();
+        scanLimit = planRecord?.scan_limit ?? null;
+      }
+      
+      const isPremium = planStatus === 'PRO' || planStatus === 'PREMIUM' || planStatus === 'ELITE' || planStatus === 'PAID';
+      
+      let signalsList: any[] = [];
+      
       if (supabase) {
         // Keep "today" rows AND always include currently active trades
-        // so dashboard/Today page don't drop live positions after 24h.
         const startOfTodayUtc = new Date();
         startOfTodayUtc.setUTCHours(0, 0, 0, 0);
 
@@ -467,50 +494,90 @@ async function startServer() {
         const merged = new Map<any, any>();
         for (const row of todayData || []) merged.set(row.id, row);
         for (const row of activeData || []) merged.set(row.id, row);
-        const data = Array.from(merged.values()).sort(
+        signalsList = Array.from(merged.values()).sort(
           (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
-
-        if (data.length > 0) {
-          return res.json(data.map((d: any) => ({
-            id: d.id,
-            pair: d.pair,
-            direction: d.direction,
-            entry: d.entry_price,
-            entry_price: d.entry_price,
-            sl: d.original_sl ?? d.sl,
-            original_sl: d.original_sl,
-            tp2: d.tp2,
-            tp3: d.tp3,
-            confidence: d.confidence,
-            aiConfidence: (d.confidence || 0) * 10,
-            score: d.score || d.confidence,
-            status: d.status,
-            is_active: d.is_active,
-            result: d.result,
-            pips_won: d.pips_won,
-            pips_lost: d.pips_lost,
-            closed_at: d.closed_at,
-            created_at: d.created_at,
-            timestamp: d.created_at,
-            tp1_hit_at: d.tp1_hit_at,
-            tp2_hit_at: d.tp2_hit_at,
-            tp3_hit_at: d.tp3_hit_at
-          })));
-        }
       }
       
       // In-memory fallback
-      const fallbackToday = new Date();
-      fallbackToday.setUTCHours(0,0,0,0);
-      const fallback = scannerState.signals
-        .filter(s => s.tier !== 'Reject' && new Date(s.timestamp).getTime() >= fallbackToday.getTime())
-        .map(s => ({
-           ...s,
-           aiConfidence: s.aiConfidence || s.score
-        }))
-        .reverse();
-      res.json(fallback);
+      if (signalsList.length === 0) {
+        const fallbackToday = new Date();
+        fallbackToday.setUTCHours(0,0,0,0);
+        signalsList = scannerState.signals
+          .filter(s => s.tier !== 'Reject' && new Date(s.timestamp).getTime() >= fallbackToday.getTime())
+          .reverse();
+      }
+      
+      // Enforce Free plan scan limit
+      let limitInfo = { limited: false, limit: scanLimit, viewed: 0, remaining: null as number | null };
+      
+      if (!isPremium && scanLimit !== null && scanLimit > 0 && supabase) {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Count unique signals viewed today
+        const { count, error: countError } = await supabase
+          .from('user_signal_views')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('view_date', today);
+        
+        if (countError) {
+          console.error('Error counting signal views:', countError.message);
+        }
+        
+        const viewed = count || 0;
+        const remaining = Math.max(0, scanLimit - viewed);
+        limitInfo = { limited: true, limit: scanLimit, viewed, remaining };
+        
+        // Record views for signals being returned
+        const toRecord = signalsList.slice(0, remaining);
+        if (toRecord.length > 0) {
+          const inserts = toRecord.map((s: any) => ({
+            user_id: user.id,
+            view_date: today,
+            signal_id: s.id,
+          }));
+          // Insert one by one, ignore duplicates
+          for (const insert of inserts) {
+            await supabase.from('user_signal_views').insert([insert]).catch(() => {});
+          }
+        }
+        
+        // Slice to remaining limit
+        signalsList = signalsList.slice(0, remaining);
+      }
+      
+      const mapped = signalsList.map((d: any) => ({
+        id: d.id,
+        pair: d.pair,
+        direction: d.direction,
+        entry: d.entry_price,
+        entry_price: d.entry_price,
+        sl: d.original_sl ?? d.sl,
+        original_sl: d.original_sl,
+        tp1: d.tp1,
+        tp2: d.tp2,
+        tp3: d.tp3,
+        confidence: d.confidence,
+        aiConfidence: (d.confidence || 0) * 10,
+        score: d.score || d.confidence,
+        status: d.status,
+        is_active: d.is_active,
+        result: d.result,
+        pips_won: d.pips_won,
+        pips_lost: d.pips_lost,
+        closed_at: d.closed_at,
+        created_at: d.created_at,
+        timestamp: d.created_at,
+        tp1_hit_at: d.tp1_hit_at,
+        tp2_hit_at: d.tp2_hit_at,
+        tp3_hit_at: d.tp3_hit_at
+      }));
+      
+      res.json({
+        signals: mapped,
+        limit: limitInfo,
+      });
     } catch (e) {
       console.error("Route error:", e);
       res.status(500).json({ error: "Internal Server Error" });

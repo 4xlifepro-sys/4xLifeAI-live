@@ -14,15 +14,21 @@ export default function TodaySignals() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [limitInfo, setLimitInfo] = useState<any>(null);
 
   useEffect(() => {
     const fetchSignals = async () => {
       try {
-        const response = await fetch('/api/today-signals');
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const response = await fetch('/api/today-signals', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!response.ok) throw new Error('Failed to fetch today signals');
         const data = await response.json();
         // Filter out rejected signals just to show real opportunities
-        setSignals(data.filter((s: any) => s.status !== 'REJECTED'));
+        setSignals((data.signals || []).filter((s: any) => s.status !== 'REJECTED'));
+        setLimitInfo(data.limit || null);
       } catch (err) {
         console.error(err);
       } finally {
@@ -126,7 +132,26 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
           <p className="text-[#8A95A5]">No signals found for today yet.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-4">
+          {limitInfo?.limited && limitInfo.remaining === 0 && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
+              <p className="text-red-400 font-medium">Daily signal limit reached</p>
+              <p className="text-sm text-[#8A95A5] mt-1">
+                You've viewed {limitInfo.viewed} of {limitInfo.limit} signals today. 
+                Upgrade to Pro for unlimited access.
+              </p>
+            </div>
+          )}
+          
+          {limitInfo?.limited && limitInfo.remaining > 0 && (
+            <div className="bg-[#151922] border border-[#202735] rounded-lg p-3 text-center">
+              <p className="text-sm text-[#8A95A5]">
+                Free plan: {limitInfo.remaining} of {limitInfo.limit} signals remaining today
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredSignals.map((signal) => (
             <motion.div 
               key={signal.id}
@@ -272,6 +297,7 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
               </div>
             </motion.div>
           ))}
+          </div>
         </div>
       )}
     </div>
