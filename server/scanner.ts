@@ -912,11 +912,12 @@ export async function startScanner() {
              + `<b>Setup:</b> Premium signal\n\n`
              + `<b>Entry:</b> ${signal.entry}\n`
              + `<b>SL:</b> ${signal.sl} (${risk} pips)\n`
-             + `<b>TP1:</b> ${signal.tp1} (1:1)\n`
-             + `<b>TP2:</b> ${signal.tp2} (1:2)\n`
-             + `<b>TP3:</b> ${signal.tp3} (1:3)\n\n`
+            + `<b>TP1:</b> ${signal.tp1} (1:1.5)\n`
+            + `<b>TP2:</b> ${signal.tp2} (1:3)\n`
+            + `<b>TP3:</b> ${signal.tp3} (1:5)\n\n`
              + `<b>Confidence:</b> ${signal.aiConfidence}% (${signal.tier})\n`
-             + `<b>Timestamp:</b> ${dt}`;
+            + `<b>Timestamp:</b> ${dt}\n\n`
+            + `🛡️ <b>Risk Management:</b> Every signal includes an SL calculated using real-time market volatility with pair-specific safety ranges — never too tight, never too wide. This is a signal service only — you place and manage your own trades based on our levels.`;
              
              if (!scannerState.stats.isDegraded) {
               if (TELEGRAM_SIGNALS_DISABLED) {

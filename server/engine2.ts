@@ -170,18 +170,62 @@ export function detectSignalV2(
   const slMultiplier = isCrypto ? 2.0 : 1.5;
 
   function getFloorRisk(pair: string, pipMultiplier: number): number {
-    if (pair.includes('BTC')) return 250; // dollars, not pips
-    if (pair.includes('ETH')) return 15; // dollars
-    if (pair.includes('BNB')) return 2.5; // dollars
-    if (pair.includes('SOL')) return 1.5; // dollars
-    if (pair.includes('LTC')) return 1.0; // dollars
-    if (pair.includes('XAU')) return 12; // dollars
-    if (pair.includes('XAG')) return 0.50; // dollars
-    if (pair.includes('JPY')) return 8 * pipMultiplier; // 8 pips
-    return 5 * pipMultiplier; // 5 pips for standard forex majors
+    const minimumStopByPair: Record<string, number> = {
+      AUDUSD: 6 * 0.0001,  // Even-rounded from 5 pips
+      USDCAD: 6 * 0.0001,  // Even-rounded from 5 pips
+      EURNZD: 8 * 0.0001,
+      GBPAUD: 8 * 0.0001,
+      GBPNZD: 10 * 0.0001,
+      CADJPY: 8 * 0.01,    // Even-rounded from 7 pips
+      NZDJPY: 8 * 0.01,    // Even-rounded from 7 pips
+      XAUUSD: 12,
+      XAGUSD: 0.50,
+      BTCUSD: 250,
+      ETHUSD: 15,
+      SOLUSD: 1.5,
+      LTCUSD: 0.8,
+      BNBUSD: 2.5,
+    };
+
+    return minimumStopByPair[pair] ?? (pair.includes('JPY') ? 8 * pipMultiplier : 6 * pipMultiplier);
   }
+
+  function getMaxRisk(pair: string, pipMultiplier: number): number {
+    const maximumStopByPair: Record<string, number> = {
+      AUDUSD: 20 * 0.0001,
+      USDCAD: 20 * 0.0001,
+      EURNZD: 25 * 0.0001,
+      GBPAUD: 25 * 0.0001,
+     GBPNZD: 100 * 0.0001,
+      CADJPY: 25 * 0.01,
+      NZDJPY: 25 * 0.01,
+      XAUUSD: 30,
+      XAGUSD: 1.50,
+     BTCUSD: 2500,
+      ETHUSD: 50,
+      SOLUSD: 5,
+      LTCUSD: 3,
+      BNBUSD: 8,
+    };
+
+    return maximumStopByPair[pair] ?? (pair.includes('JPY') ? 25 * pipMultiplier : 20 * pipMultiplier);
+  }
+
   const floorRisk = getFloorRisk(pair, pipMultiplier);
-  const risk = Math.max(currentAtr * slMultiplier, floorRisk);
+  const maxRisk = getMaxRisk(pair, pipMultiplier);
+  let risk = Math.min(Math.max(currentAtr * slMultiplier, floorRisk), maxRisk);
+
+  // Even-pip rounding: ensures SL/TP ratios (1:1.5, 1:3, 1:5) look exact visually
+  const riskPips = risk / pipMultiplier;
+  let evenRiskPips = Math.round(riskPips / 2) * 2;
+  
+  // Guard: never round below floor
+  const floorPips = Math.ceil(floorRisk / pipMultiplier);
+  if (evenRiskPips < floorPips) {
+    evenRiskPips = Math.ceil(floorPips / 2) * 2;
+  }
+  
+  risk = evenRiskPips * pipMultiplier;
 
   if (risk === 0) return null;
 
