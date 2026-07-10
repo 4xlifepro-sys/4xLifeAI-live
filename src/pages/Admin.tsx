@@ -206,7 +206,7 @@ export default function Admin() {
   const fetchSupportTickets = async () => {
     try {
       if (!supabase) return;
-      const { data } = await supabase.from('support_tickets').select('*, profiles(full_name)').order('created_at', { ascending: false });
+      const { data } = await supabase.from('support_tickets').select('*').order('created_at', { ascending: false });
       if (data) setTicketsList(data);
     } catch (e) {
       console.error(e);
@@ -241,9 +241,9 @@ export default function Admin() {
       setRevenue(rev);
       
       // 3. Scanner Stats
-      const { data: scanStats } = await supabase.from('scanner_stats').select('*').limit(1).single();
-      if (scanStats) {
-        setScannerStats(scanStats);
+      const { data: scanStatsData } = await supabase.from('scanner_stats').select('*').limit(1);
+      if (scanStatsData && scanStatsData.length > 0) {
+        setScannerStats(scanStatsData[0]);
       }
 
       // 4. Signal engine validation metrics, chart, and signal performance
@@ -328,7 +328,7 @@ export default function Admin() {
       // 6. Load signals list
       let sigData = null;
       try {
-         const res = await supabase.from('signal_audit_log').select('*').order('generated_at', { ascending: false }).limit(50);
+         const res = await supabase.from('signals').select('*').order('created_at', { ascending: false }).limit(50);
          if (res.error) throw res.error;
          sigData = res.data;
       } catch (e) {
