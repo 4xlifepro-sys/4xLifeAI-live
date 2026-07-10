@@ -724,10 +724,11 @@ async function startServer() {
           .reverse();
       }
       
-      // Enforce Free plan scan limit
+      // Enforce Free plan scan limit only when not explicitly disabled (e.g. dashboard overview)
       let limitInfo = { limited: false, limit: scanLimit, viewed: 0, remaining: null as number | null };
+      const noLimit = req.query.noLimit === '1' || req.query.noLimit === 'true';
       
-      if (!isPremium && scanLimit !== null && scanLimit > 0 && supabase) {
+      if (!noLimit && !isPremium && scanLimit !== null && scanLimit > 0 && supabase) {
         const today = new Date().toISOString().split('T')[0];
         
         // Count unique signals viewed today

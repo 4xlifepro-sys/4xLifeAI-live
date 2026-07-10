@@ -275,7 +275,7 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
             label="AVG RISK:REWARD"
             value={d.stats.avgRR != null ? `1:${d.stats.avgRR.toFixed(1)}` : "1:--"}
             sub="From closed trades"
-            foot={`Total: ${d.stats.totalPipsClosed >= 0 ? "+" : ""}${d.stats.totalPipsClosed} pips`}
+            foot={`Total: ${d.stats.totalPipsClosed >= 0 ? "+" : ""}${d.stats.totalPipsClosed.toFixed(1)} pips`}
           />
         </section>
 

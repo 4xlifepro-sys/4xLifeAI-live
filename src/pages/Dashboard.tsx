@@ -36,7 +36,7 @@ export default function Dashboard() {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
-        const response = await fetch('/api/today-signals', {
+        const response = await fetch('/api/today-signals?noLimit=1', {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
         if (!response.ok) return;
