@@ -534,14 +534,14 @@ export async function startScanner() {
                  
                  const directionStr = isLong ? 'BUY' : 'SELL';
                  const hitMsg = `${headerEmoji} <b>${titleText}</b>\n\n`
-                 + `Pair: ${pair}\n`
+                 + `Pair: ${s.pair}\n`
                  + `Signal: ${directionStr}\n\n`
                  + `Entry: ${sEntry}\n\n`
                  + `${hitLevel}: ${hitPrice}\n\n`
                  + `Result: ${sign}${pipStr} pips ${resultEmoji}${statusLine}\n\n`
                  + `Timestamp: ${dt.toUTCString()}`;
                  
-                 console.log(`[OUTCOME TRACKER] ${pair} ${hitLevel} HIT @ ${closedAt}`);
+                 console.log(`[OUTCOME TRACKER] ${s.pair} ${hitLevel} HIT @ ${closedAt}`);
                  if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(hitMsg); else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
                  
                  if (finalClose) {
@@ -567,7 +567,7 @@ export async function startScanner() {
                      const riskRewardStr = isWin ? `1:${rrRatio}` : (isBreakeven ? '0:0' : `-1:1`);
                      
                     const summaryMsg = `📊 <b>4xFiveAI — TRADE SUMMARY</b>\n\n`
-                     + `Pair: ${pair}\n`
+                     + `Pair: ${s.pair}\n`
                      + `Direction: ${directionStr}\n`
                      + `Entry: ${sEntry}\n`
                      + `Exit: ${hitPrice}\n\n`
