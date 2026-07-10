@@ -11,7 +11,7 @@ async function run() {
   const sql = `
     CREATE TABLE IF NOT EXISTS public.plans (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      name TEXT NOT NULL,
+      name TEXT NOT NULL UNIQUE,
       price TEXT NOT NULL,
       billing_period TEXT,
       original_price TEXT,
@@ -31,18 +31,31 @@ async function run() {
     CREATE POLICY "Allow admin write access" ON public.plans
       FOR ALL USING (auth.jwt() ->> 'email' = '4xlifepro@gmail.com');
 
-    -- Insert seed data if table is empty
+    -- Upsert Free plan (insert or update if exists)
     INSERT INTO public.plans (name, price, billing_period, original_price, features, is_popular, scan_limit)
-    SELECT 'Free', '$0', '/forever', NULL, 
+    VALUES ('Free', '$0', '/forever', NULL, 
       '["5 scans per day", "Standard Forex Major pairs support", "Public Traders Desk access"]'::jsonb, 
-      false, 5
-    WHERE NOT EXISTS (SELECT 1 FROM public.plans WHERE name = 'Free');
+      false, 5)
+    ON CONFLICT (name) DO UPDATE SET
+      price = EXCLUDED.price,
+      billing_period = EXCLUDED.billing_period,
+      original_price = EXCLUDED.original_price,
+      features = EXCLUDED.features,
+      is_popular = EXCLUDED.is_popular,
+      scan_limit = EXCLUDED.scan_limit;
 
+    -- Upsert Pro plan (insert or update if exists)
     INSERT INTO public.plans (name, price, billing_period, original_price, features, is_popular, scan_limit)
-    SELECT 'Premium', '$25', '/per month', '$39', 
+    VALUES ('Pro', '$25', '/per month', '$39', 
       '["Unlimited scans", "Telegram alerts", "AI Coach", "Institutional execution templates", "Priority Support"]'::jsonb, 
-      true, NULL
-    WHERE NOT EXISTS (SELECT 1 FROM public.plans WHERE name = 'Premium');
+      true, NULL)
+    ON CONFLICT (name) DO UPDATE SET
+      price = EXCLUDED.price,
+      billing_period = EXCLUDED.billing_period,
+      original_price = EXCLUDED.original_price,
+      features = EXCLUDED.features,
+      is_popular = EXCLUDED.is_popular,
+      scan_limit = EXCLUDED.scan_limit;
   `;
   
   const { error } = await supabaseAdmin.rpc('exec_sql', { query: sql });
