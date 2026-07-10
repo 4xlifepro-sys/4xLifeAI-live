@@ -127,7 +127,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex items-center justify-between">
               <label className="flex items-start gap-3 cursor-pointer group">
                 <div className="relative flex items-center justify-center mt-0.5">
                    <input
@@ -140,6 +140,9 @@ export default function Login() {
                 </div>
                 <span className="text-sm font-medium text-[#8A95A5] group-hover:text-white transition-colors">Remember Me</span>
               </label>
+              <Link to="/forgot-password" className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                Forgot password?
+              </Link>
             </div>
 
             {/* Risk Agreement Box */}
