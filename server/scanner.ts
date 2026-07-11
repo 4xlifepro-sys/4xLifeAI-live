@@ -561,7 +561,8 @@ export async function startScanner() {
                  if (finalClose) {
                      scannerState.stats.lastTradeTimestamp = closedAt;
                      
-                     // Trade Summary Alert
+                     // Trade Summary Alert — only for TP hits, not SL hits
+                     if (hitLevel !== 'SL' || finalResult === 'PARTIAL WIN' || finalResult === 'BREAKEVEN') {
                      const openedAtDt = new Date(s.timestamp || s.created_at || sEntry); // roughly
                      const durationMs = dt.getTime() - openedAtDt.getTime();
                      const hours = Math.floor(durationMs / (1000 * 60 * 60));
@@ -595,6 +596,7 @@ export async function startScanner() {
                      + `Timestamp: ${dt.toUTCString()}`;
                      
                      if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(summaryMsg); else console.log('[KILL SWITCH] Telegram summary msg BLOCKED');
+                     }
                  }
                  
                  // Payload construction for Supabase update
