@@ -563,7 +563,7 @@ export async function startScanner() {
                      
                      // Trade Summary Alert — only for TP hits, not SL hits
                      if (hitLevel !== 'SL' || finalResult === 'PARTIAL WIN' || finalResult === 'BREAKEVEN') {
-                     const openedAtDt = new Date(s.timestamp || s.created_at || sEntry); // roughly
+                     const openedAtDt = new Date(s.created_at || s.timestamp || dt); // roughly
                      const durationMs = dt.getTime() - openedAtDt.getTime();
                      const hours = Math.floor(durationMs / (1000 * 60 * 60));
                      const mins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
