@@ -10,7 +10,7 @@ function mapStatus(s: string | undefined): string {
   if (s === 'TP2 HIT' || s === 'TP2_HIT') return 'TP2_HIT';
   if (s === 'TP3 HIT' || s === 'TP3_HIT') return 'TP3_HIT';
   if (s === 'STOP_LOSS_HIT' || s === 'SL HIT') return 'STOP_LOSS_HIT';
-  if (s === 'WIN' || s === 'LOSS' || s === 'VOID' || s === 'CANCELLED') return 'CLOSED';
+  if (s === 'WIN' || s === 'LOSS' || s === 'VOID' || s === 'CANCELLED' || s === 'CLOSED') return 'CLOSED';
   if (s === 'REJECTED' || s === 'REJECTED_BY_ADMIN') return 'REJECTED_BY_ADMIN';
   if (s === 'LIVE' || s === 'PENDING_APPROVAL') return s;
   return 'LIVE';

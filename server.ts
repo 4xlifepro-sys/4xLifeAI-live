@@ -798,7 +798,6 @@ async function startServer() {
         .from('signals')
         .select('*')
         .eq('is_active', false)
-        .in('status', ['CLOSED', 'STOP_LOSS_HIT', 'TP3_HIT'])
         .order('closed_at', { ascending: false })
         .limit(20);
       
