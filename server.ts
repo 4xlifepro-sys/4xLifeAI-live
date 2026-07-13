@@ -199,20 +199,7 @@ async function ensureAdminUser() {
     return;
   }
 
-  const { error: profileError } = await supabase.from('profiles').upsert([{
-    id: adminUserId,
-    full_name: 'Admin',
-    avatar_url: null,
-    plan: 'FREE',
-    is_admin: true
-  }], { onConflict: 'id' });
-
-  if (profileError) {
-    console.error('[AUTH] Failed to ensure admin profile row:', profileError.message);
-    return;
-  }
-
-  console.log(`[AUTH] Admin profile ensured in Supabase users table: ${adminEmail}`);
+  console.log(`[AUTH] Admin role confirmed via user_metadata: ${adminEmail}`);
 }
 
 process.on('uncaughtException', (err) => {
