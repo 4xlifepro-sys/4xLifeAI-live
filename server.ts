@@ -590,8 +590,6 @@ async function startServer() {
 
   const priceCache: { timestamp: number; data: any } = { timestamp: 0, data: [] };
   const PRICE_CACHE_TTL = 5000;
-  let symbolsCache: any[] | null = null;
-  let symbolInfoCache: Record<string, any> = {};
 
   app.get("/api/prices", async (req, res) => {
     if (priceCache.data.length > 0 && Date.now() - priceCache.timestamp < PRICE_CACHE_TTL) {
@@ -616,47 +614,10 @@ async function startServer() {
         'BNBUSD',
         'AUDUSD',
       ];
-
-      // Get client once and cache symbols for all pairs
-      const client = await liveModule.getClient();
-      if (!symbolsCache) {
-        symbolsCache = await client.getSymbols();
-      }
-
       const results: any[] = [];
       for (const [index, pair] of approved.entries()) {
-        try {
-          const symbol = symbolsCache.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
-          if (!symbol) {
-            results.push({ pair, price: null, digits: null, timestamp: Date.now(), error: 'symbol_not_found' });
-            continue;
-          }
-          const symbolId = symbol.symbolId;
-          const trendbarResp = await client.raw.market.getTrendbars({
-            symbolId,
-            period: liveModule.TrendbarPeriod?.M1 ?? 1,
-            count: 2
-          });
-          const bars = Array.isArray(trendbarResp) ? trendbarResp : trendbarResp?.trendbars || [];
-          if (!bars.length) {
-            results.push({ pair, price: null, digits: null, timestamp: Date.now(), error: 'no_trendbars' });
-            continue;
-          }
-          const last = bars[bars.length - 1];
-          if (!symbolInfoCache[pair]) {
-            symbolInfoCache[pair] = await client.getSymbolInfo(pair).catch(() => null);
-          }
-          const full = symbolInfoCache[pair];
-          const digits = Number(full?.digits ?? symbol?.digits ?? 5);
-          const decoded = liveModule.decodeTrendbar(last, digits);
-          if (decoded && Number.isFinite(decoded.close)) {
-            results.push({ pair, price: decoded.close, digits, timestamp: Date.now() });
-          } else {
-            results.push({ pair, price: null, digits, timestamp: Date.now(), error: 'invalid_close' });
-          }
-        } catch (itemError: any) {
-          results.push({ pair, price: null, digits: null, timestamp: Date.now(), error: itemError?.message || 'pair_failed' });
-        }
+        const item = await liveModule.getLatestPrice(pair);
+        results.push(item);
         if (index !== approved.length - 1) {
           await new Promise(r => setTimeout(r, 35));
         }
@@ -666,6 +627,7 @@ async function startServer() {
       priceCache.data = results;
       res.json({ prices: results, cached: false });
     } catch (error: any) {
+      console.error('[API /api/prices] error:', error?.message || error);
       res.status(500).json({ error: 'Failed to fetch prices', message: error?.message || String(error) });
     }
   });

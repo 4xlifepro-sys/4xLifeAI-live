@@ -99,6 +99,9 @@ async function getClient() {
   return connectingPromise;
 }
 
+let symbolsCache: any[] | null = null;
+let symbolInfoCache: Record<string, any> = {};
+
 export async function getLatestPrice(pair: string): Promise<{ pair: string; price: number | null; digits: number | null; timestamp: number; raw?: any; error?: string }> {
   const result: { pair: string; price: number | null; digits: number | null; timestamp: number; raw?: any; error?: string } = {
     pair,
@@ -109,8 +112,10 @@ export async function getLatestPrice(pair: string): Promise<{ pair: string; pric
 
   try {
     const client = await getClient();
-    const symbols = await client.getSymbols();
-    const symbol = symbols.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
+    if (!symbolsCache) {
+      symbolsCache = await client.getSymbols();
+    }
+    const symbol = symbolsCache.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
     if (!symbol) {
       result.error = 'symbol_not_found';
       return result;
@@ -127,8 +132,11 @@ export async function getLatestPrice(pair: string): Promise<{ pair: string; pric
       return result;
     }
     const last = bars[bars.length - 1];
-    const full = await client.getSymbolInfo(pair).catch(() => null);
-    const digits = Number(full?.digits ?? 5);
+    if (!symbolInfoCache[pair]) {
+      symbolInfoCache[pair] = await client.getSymbolInfo(pair).catch(() => null);
+    }
+    const full = symbolInfoCache[pair];
+    const digits = Number(full?.digits ?? symbol?.digits ?? 5);
     result.digits = digits;
     result.raw = { last, full: { symbolId: full?.symbolId, digits: full?.digits, name: full?.symbolName } };
     const decoded = decodeTrendbar(last, digits);
