@@ -1,6 +1,8 @@
 import { Candle } from '../src/types.js';
 import { connect, TrendbarPeriod } from 'ctrader-ts';
 
+export { TrendbarPeriod };
+
 const htfCache: Record<string, {data: Candle[], timestamp: number}> = {};
 const HTF_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 let ctClient: any = null;
@@ -20,7 +22,7 @@ function decodePrice(value: any, digits: number): number {
   return n / Math.pow(10, digits);
 }
 
-function decodeTrendbar(bar: any, _digits: number): { timestamp: string; open: number; high: number; low: number; close: number } | null {
+export function decodeTrendbar(bar: any, _digits: number): { timestamp: string; open: number; high: number; low: number; close: number } | null {
   // cTrader trendbars are scaled by a fixed factor of 100000 across all symbols.
   // Verified empirically against live BTCUSD, ETHUSD, SOLUSD, XAUUSD, XAGUSD, FX pairs.
   const SCALE = 100000;

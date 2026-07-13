@@ -6,6 +6,7 @@ import InstitutionalDashboard from '../components/InstitutionalDashboard';
 export default function Dashboard() {
   const [rawPrices, setRawPrices] = useState<any>(null);
   const [allSignals, setAllSignals] = useState<any[]>([]);
+  const [closedSignals, setClosedSignals] = useState<any[]>([]);
   const [scannerState, setScannerState] = useState<any>({ stats: null, marketStates: [], prices: {} });
   const [loading, setLoading] = useState(true);
   const fallbackPrices = {
@@ -36,13 +37,24 @@ export default function Dashboard() {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
-        const response = await fetch('/api/today-signals?noLimit=1', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        const signals = data.signals || data || [];
-        if (mounted) setAllSignals(signals.filter((signal: any) => signal.status !== 'REJECTED'));
+        const [todayRes, closedRes] = await Promise.all([
+          fetch('/api/today-signals?noLimit=1', {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          }),
+          fetch('/api/recent-closed-signals', {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          })
+        ]);
+        if (todayRes.ok) {
+          const data = await todayRes.json();
+          const signals = data.signals || data || [];
+          if (mounted) setAllSignals(signals.filter((signal: any) => signal.status !== 'REJECTED'));
+        }
+        if (closedRes.ok) {
+          const data = await closedRes.json();
+          const signals = data.signals || [];
+          if (mounted) setClosedSignals(signals.filter((signal: any) => signal.status !== 'REJECTED'));
+        }
       } catch {}
     };
     fetchSignals();
@@ -107,18 +119,21 @@ export default function Dashboard() {
     const marketStates = (scannerState.marketStates || []).filter((s: any) => PAIRS.includes(s.pair));
 
     const active = allSignals.filter(s => PAIRS.includes(s.pair) && s.is_active !== false && ['LIVE', 'TP1_HIT', 'TP2_HIT'].includes(s.status));
-    const closed = allSignals.filter(s => PAIRS.includes(s.pair) && (s.is_active === false || ['CLOSED', 'TP3_HIT', 'STOP_LOSS_HIT'].includes(s.status)));
+    const closed = [...closedSignals, ...allSignals.filter(s => PAIRS.includes(s.pair) && (s.is_active === false || ['CLOSED', 'TP3_HIT', 'STOP_LOSS_HIT'].includes(s.status)))];
+
+    // Deduplicate by id
+    const uniqueClosed = Array.from(new Map(closed.map(s => [s.id, s])).values());
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
-    const recent30 = closed.filter(s => new Date(s.created_at) > thirtyDaysAgo);
+    const recent30 = uniqueClosed.filter(s => new Date(s.created_at) > thirtyDaysAgo);
     const wins30 = recent30.filter(s => ['WIN', 'PARTIAL WIN'].includes(s.result)).length;
     const losses30 = recent30.filter(s => s.result === 'LOSS').length;
     const winRate30d = wins30 + losses30 > 0 ? (wins30 / (wins30 + losses30)) * 100 : 0;
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthSignals = allSignals.filter(s => new Date(s.created_at) >= monthStart).length;
-    const monthClosed = closed.filter(s => new Date(s.created_at) >= monthStart);
+    const monthClosed = uniqueClosed.filter(s => new Date(s.created_at) >= monthStart);
     const monthWins = monthClosed.filter(s => ['WIN', 'PARTIAL WIN'].includes(s.result));
     const monthLosses = monthClosed.filter(s => s.result === 'LOSS');
 
@@ -192,7 +207,7 @@ export default function Dashboard() {
       };
     });
 
-    const historyMapped = closed.slice(0, 10).map(s => {
+    const historyMapped = uniqueClosed.slice(0, 10).map(s => {
       const isLong = s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY';
       const entry = s.entry_price || s.entry || 0;
       const storedPips = Number(s.pips_won || 0) - Number(s.pips_lost || 0);

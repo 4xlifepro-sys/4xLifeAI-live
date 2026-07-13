@@ -590,6 +590,8 @@ async function startServer() {
 
   const priceCache: { timestamp: number; data: any } = { timestamp: 0, data: [] };
   const PRICE_CACHE_TTL = 5000;
+  let symbolsCache: any[] | null = null;
+  let symbolInfoCache: Record<string, any> = {};
 
   app.get("/api/prices", async (req, res) => {
     if (priceCache.data.length > 0 && Date.now() - priceCache.timestamp < PRICE_CACHE_TTL) {
@@ -614,10 +616,47 @@ async function startServer() {
         'BNBUSD',
         'AUDUSD',
       ];
+
+      // Get client once and cache symbols for all pairs
+      const client = await liveModule.getClient();
+      if (!symbolsCache) {
+        symbolsCache = await client.getSymbols();
+      }
+
       const results: any[] = [];
       for (const [index, pair] of approved.entries()) {
-        const item = await liveModule.getLatestPrice(pair);
-        results.push(item);
+        try {
+          const symbol = symbolsCache.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
+          if (!symbol) {
+            results.push({ pair, price: null, digits: null, timestamp: Date.now(), error: 'symbol_not_found' });
+            continue;
+          }
+          const symbolId = symbol.symbolId;
+          const trendbarResp = await client.raw.market.getTrendbars({
+            symbolId,
+            period: liveModule.TrendbarPeriod?.M1 ?? 1,
+            count: 2
+          });
+          const bars = Array.isArray(trendbarResp) ? trendbarResp : trendbarResp?.trendbars || [];
+          if (!bars.length) {
+            results.push({ pair, price: null, digits: null, timestamp: Date.now(), error: 'no_trendbars' });
+            continue;
+          }
+          const last = bars[bars.length - 1];
+          if (!symbolInfoCache[pair]) {
+            symbolInfoCache[pair] = await client.getSymbolInfo(pair).catch(() => null);
+          }
+          const full = symbolInfoCache[pair];
+          const digits = Number(full?.digits ?? symbol?.digits ?? 5);
+          const decoded = liveModule.decodeTrendbar(last, digits);
+          if (decoded && Number.isFinite(decoded.close)) {
+            results.push({ pair, price: decoded.close, digits, timestamp: Date.now() });
+          } else {
+            results.push({ pair, price: null, digits, timestamp: Date.now(), error: 'invalid_close' });
+          }
+        } catch (itemError: any) {
+          results.push({ pair, price: null, digits: null, timestamp: Date.now(), error: itemError?.message || 'pair_failed' });
+        }
         if (index !== approved.length - 1) {
           await new Promise(r => setTimeout(r, 35));
         }
@@ -795,6 +834,55 @@ async function startServer() {
         signals: mapped,
         limit: limitInfo,
       });
+    } catch (e) {
+      console.error("Route error:", e);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // Recent closed signals for dashboard history (auth required)
+  app.get("/api/recent-closed-signals", requireAuth, async (req, res) => {
+    try {
+      if (!supabase) return res.json({ signals: [] });
+      
+      const { data, error } = await supabase
+        .from('signals')
+        .select('*')
+        .eq('is_active', false)
+        .in('status', ['CLOSED', 'STOP_LOSS_HIT', 'TP3_HIT'])
+        .order('closed_at', { ascending: false })
+        .limit(20);
+      
+      if (error) {
+        console.error("Error fetching recent closed signals:", error.message);
+        return res.status(500).json({ error: error.message });
+      }
+      
+      const mapped = (data || []).map((d: any) => ({
+        id: d.id,
+        pair: d.pair,
+        direction: d.direction,
+        entry: d.entry_price,
+        entry_price: d.entry_price,
+        sl: d.original_sl ?? d.sl,
+        original_sl: d.original_sl,
+        tp1: d.tp1,
+        tp2: d.tp2,
+        tp3: d.tp3,
+        confidence: d.confidence,
+        aiConfidence: (d.confidence || 0) * 10,
+        score: d.score || d.confidence,
+        status: d.status,
+        is_active: d.is_active,
+        result: d.result,
+        pips_won: d.pips_won,
+        pips_lost: d.pips_lost,
+        closed_at: d.closed_at,
+        created_at: d.created_at,
+        timestamp: d.created_at,
+      }));
+      
+      res.json({ signals: mapped });
     } catch (e) {
       console.error("Route error:", e);
       res.status(500).json({ error: "Internal Server Error" });
