@@ -585,8 +585,8 @@ async function startServer() {
 
     try {
       const liveModule: any = await import('./server/live-market-feed.js');
-      // Kept in sync with server/scanner.ts APPROVED_PAIRS (all 25
-      // backtested pairs + 3 previously-live extras).
+      // Kept in sync with server/scanner.ts APPROVED_PAIRS (28 total:
+      // 25 backtested pairs + 3 previously-live extras).
       const approved = [
         'XAUUSD', 'XAGUSD',
         'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOGEUSD',

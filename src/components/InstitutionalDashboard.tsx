@@ -345,15 +345,19 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
               <div className="x4-rows">
                 {group.items.map((item) => (
                   <div className="x4-row" key={item.pair}>
-                    <span className="x4-row__pair">{item.pair}</span>
-                    <span className={`x4-row__price x4-row__price--${item.trend.toLowerCase()}`}>{fmtPrice(item.price)}</span>
-                    {item.changePct != null && (
-                      <span className={`x4-row__chg ${item.changePct >= 0 ? "up" : "down"}`}>
-                        {item.changePct >= 0 ? "+" : ""}
-                        {item.changePct.toFixed(2)}%
-                      </span>
-                    )}
-                    <span className={`x4-pill ${trendClass(item.trend)}`}>{item.trend}</span>
+                    <div className="x4-row__top">
+                      <span className="x4-row__pair">{item.pair}</span>
+                      <span className={`x4-pill ${trendClass(item.trend)}`}>{item.trend}</span>
+                    </div>
+                    <div className="x4-row__bottom">
+                      <span className={`x4-row__price x4-row__price--${item.trend.toLowerCase()}`}>{fmtPrice(item.price)}</span>
+                      {item.changePct != null && (
+                        <span className={`x4-row__chg ${item.changePct >= 0 ? "up" : "down"}`}>
+                          {item.changePct >= 0 ? "+" : ""}
+                          {item.changePct.toFixed(2)}%
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1012,47 +1016,63 @@ const CSS = `
   border-radius: 3px;
 }
 .x4-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
 }
 .x4-row {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  background: var(--x4-panel);
+  flex-direction: column;
+  gap: 4px;
+  background: linear-gradient(180deg, var(--x4-panel) 0%, var(--x4-panel-2) 100%);
   border: 1px solid var(--x4-line);
-  border-radius: 5px;
-  padding: 10px 14px;
-  transition: background 0.15s ease;
+  border-radius: 7px;
+  padding: 9px 12px;
+  transition: border-color 0.15s ease, transform 0.1s ease;
 }
-.x4-row:hover { background: var(--x4-panel-2); }
+.x4-row:hover { border-color: var(--x4-cyan); transform: translateY(-1px); }
+.x4-row__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 .x4-row__pair {
   font-weight: 700;
   font-family: var(--x4-font-mono);
-  width: 90px;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+}
+.x4-row__bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
 .x4-row__price {
   font-family: var(--x4-font-mono);
-  font-size: 14px;
-  width: 110px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--x4-text);
 }
+.x4-row__price--bull { color: var(--x4-green); }
+.x4-row__price--bear { color: var(--x4-red); }
+.x4-row__price--neutral { color: var(--x4-text); }
 .x4-row__chg {
   font-family: var(--x4-font-mono);
-  font-size: 12px;
-  width: 60px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 .x4-pill {
-  margin-left: auto;
   font-family: var(--x4-font-mono);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  padding: 3px 9px;
+  padding: 2px 7px;
   border-radius: 3px;
+  flex-shrink: 0;
 }
-.x4-pill--bull { background: rgba(51,209,122,0.14); color: var(--x4-green); }
-.x4-pill--bear { background: rgba(255,92,92,0.14); color: var(--x4-red); }
+.x4-pill--bull { background: rgba(51,209,122,0.14); color: var(--x4-green); border: 1px solid rgba(51,209,122,0.3); }
+.x4-pill--bear { background: rgba(255,92,92,0.14); color: var(--x4-red); border: 1px solid rgba(255,92,92,0.3); }
 .x4-pill--neutral { background: var(--x4-panel-2); color: var(--x4-text-dim); border: 1px solid var(--x4-line); }
 
 /* History table */
