@@ -123,6 +123,34 @@ function isGoodSession(timestamp: string): boolean {
   return hour >= 7 && hour <= 21;
 }
 
+// Rejection-candle confirmation: within the last N candles, price must have
+// touched/dipped into the pullback zone AND closed back beyond it with a
+// candle body confirming the trend direction. This replaces "enter on touch"
+// with "enter only after the pullback shows proof of rejection".
+function hasRejectionConfirmation(
+  m5Window: Candle[],
+  pullbackZone: number,
+  currentAtr: number,
+  trend: 'BULL' | 'BEAR',
+  lookback: number = 8
+): boolean {
+  const recent = m5Window.slice(-lookback);
+  for (const c of recent) {
+    if (trend === 'BULL') {
+      const touchedZone = c.low <= pullbackZone + currentAtr * 0.3;
+      const closedBackAbove = c.close > pullbackZone;
+      const greenCandle = c.close > c.open;
+      if (touchedZone && closedBackAbove && greenCandle) return true;
+    } else {
+      const touchedZone = c.high >= pullbackZone - currentAtr * 0.3;
+      const closedBackBelow = c.close < pullbackZone;
+      const redCandle = c.close < c.open;
+      if (touchedZone && closedBackBelow && redCandle) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * MAIN SIGNAL FUNCTION
  *
@@ -137,7 +165,10 @@ function isGoodSession(timestamp: string): boolean {
 export function detectSignalV2(
   pair: string,
   h4Candles: Candle[],
-  m5Candles: Candle[]
+  m5Candles: Candle[],
+  requireConfirmation: boolean = false,
+  slBoost: number = 1.0,
+  requireTrendStrength: boolean = false
 ): TradeSignal | null {
   if (h4Candles.length < 30 || m5Candles.length < 50) return null;
 
@@ -149,6 +180,22 @@ export function detectSignalV2(
   const h4Closes = h4Candles.map(c => c.close);
   const h4Ema20 = ema(h4Closes, 20);
   const h4Trend = h4Closes[h4Closes.length - 1] > h4Ema20[h4Ema20.length - 1] ? 'BULL' : 'BEAR';
+
+  // Trend strength filter: EMA20 slope over last 5 H4 candles must be meaningful
+  if (requireTrendStrength) {
+    const lookback = 5;
+    if (h4Ema20.length > lookback) {
+      const slope = h4Ema20[h4Ema20.length - 1] - h4Ema20[h4Ema20.length - 1 - lookback];
+      const h4Atr = atr(h4Candles, 14);
+      const currentH4Atr = h4Atr.length > 0 ? h4Atr[h4Atr.length - 1] : 0;
+      if (currentH4Atr > 0) {
+        const slopeInAtr = Math.abs(slope) / currentH4Atr;
+        if (slopeInAtr < 0.3) return null;
+        if (h4Trend === 'BULL' && slope <= 0) return null;
+        if (h4Trend === 'BEAR' && slope >= 0) return null;
+      }
+    }
+  }
 
   // === M5 INDICATORS ===
   const m5Window = m5Candles.slice(-200);
@@ -213,7 +260,7 @@ export function detectSignalV2(
 
   const floorRisk = getFloorRisk(pair, pipMultiplier);
   const maxRisk = getMaxRisk(pair, pipMultiplier);
-  let risk = Math.min(Math.max(currentAtr * slMultiplier, floorRisk), maxRisk);
+  let risk = Math.min(Math.max(currentAtr * slMultiplier * slBoost, floorRisk), maxRisk * slBoost);
 
   // Even-pip rounding: ensures SL/TP ratios (1:1.5, 1:3, 1:5) look exact visually
   const riskPips = risk / pipMultiplier;
@@ -238,6 +285,11 @@ export function detectSignalV2(
 
     if (currentPrice > pullbackZone + currentAtr * 0.5) return null;
     // EMA9 filter removed - pullbacks naturally break short-term momentum
+
+    if (requireConfirmation) {
+      const rejectionOk = hasRejectionConfirmation(m5Window, pullbackZone, currentAtr, 'BULL');
+      if (!rejectionOk) return null;
+    }
 
     const entry = currentPrice;
     const sl = entry - risk;
@@ -273,6 +325,11 @@ export function detectSignalV2(
 
     if (currentPrice < pullbackZone - currentAtr * 0.5) return null;
     // EMA9 filter removed - pullbacks naturally break short-term momentum
+
+    if (requireConfirmation) {
+      const rejectionOk = hasRejectionConfirmation(m5Window, pullbackZone, currentAtr, 'BEAR');
+      if (!rejectionOk) return null;
+    }
 
     const entry = currentPrice;
     const sl = entry + risk;

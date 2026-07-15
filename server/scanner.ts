@@ -1,5 +1,6 @@
-import { fetchCandles } from './live-market-feed.js';
+import { fetchCandles, fetchHistoricalCandles } from './live-market-feed.js';
 import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
+import { CURATED_LIVE_CRYPTO_PAIRS, detectCryptoTrendBreakoutLive } from './engine-trend-breakout.js';
 
 // Map internal status values to real DB check constraint values
 // DB allows: PENDING_APPROVAL, LIVE, TP1_HIT, TP2_HIT, TP3_HIT, STOP_LOSS_HIT, CLOSED, REJECTED_BY_ADMIN
@@ -143,12 +144,19 @@ export const isWeekend = () => {
   return day === 0 || day === 6
 }
 
-export const WEEKEND_PAIRS = ['BTCUSD', 'SOLUSD', 'BNBUSD', 'LTCUSD', 'ETHUSD', 'XAGUSD', 'XAUUSD'];
+export const WEEKEND_PAIRS = ['SOLUSD', 'LTCUSD', 'ETHUSD', 'ADAUSD', 'DOGEUSD', 'XAGUSD', 'XAUUSD'];
 
+// CRYPTO NOTE: BTCUSD/BNBUSD removed - confirmed losing pairs in the
+// isolated crypto trend-breakout backtest (0% WR/-1.000R and 25% WR/-0.478R
+// respectively, still negative after per-coin threshold tuning). ADAUSD and
+// DOGEUSD added - part of the curated 5-coin profitable subset (73 closed
+// trades, 43.8% WR, +0.092 avgR in backtest). These 5 curated pairs
+// (ETHUSD, SOLUSD, LTCUSD, ADAUSD, DOGEUSD) are routed through
+// detectCryptoTrendBreakoutLive() below instead of detectTrendMomentumScannerV5.
 export const APPROVED_PAIRS = [
-  'XAUUSD', 'BTCUSD', 'SOLUSD', 'GBPNZD', 'CADJPY', 'NZDJPY',
+  'XAUUSD', 'SOLUSD', 'GBPNZD', 'CADJPY', 'NZDJPY',
   'EURNZD', 'USDCAD', 'XAGUSD', 'LTCUSD', 'ETHUSD', 'GBPAUD',
-  'BNBUSD', 'AUDUSD'
+  'ADAUSD', 'DOGEUSD', 'AUDUSD'
 ];
 
 export const PAIRS = [...APPROVED_PAIRS]; // Initialized, mutable by mode switch
@@ -295,7 +303,7 @@ export async function startScanner() {
     const pair = PAIRS[currentIndex];
 
     // On weekends, skip forex pairs to save API credits and reduce latency
-    const isCryptoOrMetal = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOTUSD', 'XAUUSD', 'XAGUSD'].includes(pair);
+    const isCryptoOrMetal = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD', 'DOTUSD', 'XAUUSD', 'XAGUSD'].includes(pair);
     if (isWeekend() && !isCryptoOrMetal) {
        currentIndex++;
        if (currentIndex >= PAIRS.length) {
@@ -330,7 +338,14 @@ export async function startScanner() {
          await new Promise(r => setTimeout(r, 1500));
       }
       
-      let setupPromise = fetchCandles(pair, '5min');
+      // Curated crypto pairs (ETH/SOL/LTC/ADA/DOGE) run through the trend-breakout
+      // engine, which needs 250+ M5 candles for EMA200 + slope lookback -
+      // the standard fetchCandles() only pulls 100. Pull more history for these
+      // pairs only; every other pair keeps the existing lightweight fetch.
+      const isCuratedCrypto = CURATED_LIVE_CRYPTO_PAIRS.has(pair);
+      let setupPromise = isCuratedCrypto
+        ? fetchHistoricalCandles(pair, '5min', 300)
+        : fetchCandles(pair, '5min');
       let activeSignalsPromise: any = null;
       
       if (supabase) {
@@ -678,7 +693,9 @@ export async function startScanner() {
       }
       // ===========================================
 
-      const { signal, scores, regime, regimeReason } = detectTrendMomentumScannerV5(pair, htf, setup, entryTf);
+      const { signal, scores, regime, regimeReason } = isCuratedCrypto
+        ? detectCryptoTrendBreakoutLive(pair, entryTf)
+        : detectTrendMomentumScannerV5(pair, htf, setup, entryTf);
       
       let finalSignal = signal;
 

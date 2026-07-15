@@ -95,9 +95,12 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Kept in sync with server/scanner.ts APPROVED_PAIRS. BTCUSD/BNBUSD removed
+  // (confirmed losing pairs, no longer scanned) - ADAUSD/DOGEUSD added (curated
+  // profitable crypto trend-breakout subset). If this list is stale, Today
+  // Signal / Recent History silently drop the new pairs' signals.
   const PAIRS = [
     'XAUUSD',
-    'BTCUSD',
     'SOLUSD',
     'GBPNZD',
     'CADJPY',
@@ -108,7 +111,8 @@ export default function Dashboard() {
     'LTCUSD',
     'ETHUSD',
     'GBPAUD',
-    'BNBUSD',
+    'ADAUSD',
+    'DOGEUSD',
     'AUDUSD',
   ];
 

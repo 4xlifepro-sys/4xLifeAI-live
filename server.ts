@@ -585,9 +585,11 @@ async function startServer() {
 
     try {
       const liveModule: any = await import('./server/live-market-feed.js');
+      // Kept in sync with server/scanner.ts APPROVED_PAIRS. BTCUSD/BNBUSD
+      // removed (confirmed losing pairs, no longer scanned) - ADAUSD/DOGEUSD
+      // added (curated profitable crypto trend-breakout subset).
       const approved = [
         'XAUUSD',
-        'BTCUSD',
         'SOLUSD',
         'GBPNZD',
         'CADJPY',
@@ -598,7 +600,8 @@ async function startServer() {
         'LTCUSD',
         'ETHUSD',
         'GBPAUD',
-        'BNBUSD',
+        'ADAUSD',
+        'DOGEUSD',
         'AUDUSD',
       ];
       const results: any[] = [];
