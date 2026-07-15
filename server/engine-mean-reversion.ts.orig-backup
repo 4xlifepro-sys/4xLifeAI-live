@@ -1,0 +1,663 @@
+import type { Candle } from '../src/types.js';
+import { getPipMultiplier } from './engine2.js';
+
+export interface TradeSignal {
+  symbol: string;
+  direction: 'LONG' | 'SHORT';
+  entry: number;
+  sl: number;
+  tp1: number;
+  tp2: number;
+  tp3: number;
+  confidence: number;
+  reason: string;
+  candleIndex: number;
+}
+
+function sma(closes: number[], period: number): number[] {
+  const result: number[] = [];
+  let sum = 0;
+  for (let i = 0; i < closes.length; i++) {
+    sum += closes[i];
+    if (i >= period) sum -= closes[i - period];
+    if (i >= period - 1) result.push(sum / period);
+  }
+  return result; // result[0] aligns with candle index (period-1)
+}
+
+function stddev(closes: number[], smaArr: number[], period: number): number[] {
+  const result: number[] = [];
+  for (let i = period - 1; i < closes.length; i++) {
+    const mean = smaArr[i - (period - 1)];
+    let sumSq = 0;
+    for (let j = i - period + 1; j <= i; j++) sumSq += (closes[j] - mean) ** 2;
+    result.push(Math.sqrt(sumSq / period));
+  }
+  return result; // result[0] aligns with candle index (period-1)
+}
+
+function rsi(closes: number[], period: number = 14): number[] {
+  const result: number[] = [];
+  if (closes.length < period + 1) return result;
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = closes[i] - closes[i - 1];
+    if (change > 0) avgGain += change;
+    else avgLoss += Math.abs(change);
+  }
+  avgGain /= period;
+  avgLoss /= period;
+  for (let i = period; i < closes.length; i++) {
+    if (i > period) {
+      const change = closes[i] - closes[i - 1];
+      const gain = change > 0 ? change : 0;
+      const loss = change < 0 ? Math.abs(change) : 0;
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+    }
+    if (avgLoss === 0) result.push(100);
+    else {
+      const rs = avgGain / avgLoss;
+      result.push(100 - (100 / (1 + rs)));
+    }
+  }
+  return result; // result[0] aligns with candle index `period`
+}
+
+function atr(candles: Candle[], period: number = 14): number[] {
+  const result: number[] = [];
+  if (candles.length < period) return result;
+  const trueRanges: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const tr = Math.max(
+      candles[i].high - candles[i].low,
+      Math.abs(candles[i].high - candles[i - 1].close),
+      Math.abs(candles[i].low - candles[i - 1].close)
+    );
+    trueRanges.push(tr);
+  }
+  let avg = 0;
+  for (let i = 0; i < period; i++) avg += trueRanges[i];
+  avg /= period;
+  result.push(avg);
+  for (let i = period; i < trueRanges.length; i++) {
+    avg = (avg * (period - 1) + trueRanges[i]) / period;
+    result.push(avg);
+  }
+  return result; // result[0] aligns with candle index `period`
+}
+
+function ema(values: number[], period: number): number[] {
+  const result: number[] = [];
+  if (values.length < period) return result;
+  const k = 2 / (period + 1);
+  let prev = 0;
+  for (let i = 0; i < period; i++) prev += values[i];
+  prev /= period;
+  result.push(prev);
+  for (let i = period; i < values.length; i++) {
+    prev = values[i] * k + prev * (1 - k);
+    result.push(prev);
+  }
+  return result; // result[0] aligns with index (period-1)
+}
+
+// ---------------------------------------------------------------------------
+// Floor/max risk (SL distance) bounds per pair.
+//
+// BUG FIX: pairs NOT in the explicit map used to fall back to a fixed
+// forex-style formula (6-8x / 20-25x pipMultiplier, with pipMultiplier=1 for
+// crypto). For low-priced coins like XRPUSD (~$1), ADAUSD (~$0.5) and
+// DOGEUSD (~$0.08), that produced a floor/max risk of several DOLLARS -
+// multiples of the entire price - so trades' stops were effectively
+// unreachable and positions never closed within the backtest window.
+//
+// Fix: when a pair isn't explicitly mapped, size the floor/max risk off the
+// asset's OWN current volatility (ATR) instead of a fixed forex-scale
+// number, so it scales correctly whether the asset trades at $0.08 or
+// $60,000. Explicitly-mapped pairs (already hand-tuned) are unchanged.
+// ---------------------------------------------------------------------------
+function getFloorRisk(pair: string, pipMultiplier: number, currentAtr?: number): number {
+  const minimumStopByPair: Record<string, number> = {
+    AUDUSD: 6 * 0.0001, USDCAD: 6 * 0.0001, EURNZD: 8 * 0.0001,
+    GBPAUD: 8 * 0.0001, GBPNZD: 10 * 0.0001, CADJPY: 8 * 0.01,
+    NZDJPY: 8 * 0.01, XAUUSD: 12, XAGUSD: 0.50, BTCUSD: 250,
+    ETHUSD: 15, SOLUSD: 1.5, LTCUSD: 0.8, BNBUSD: 2.5,
+  };
+  if (minimumStopByPair[pair] !== undefined) return minimumStopByPair[pair];
+  if (currentAtr !== undefined && currentAtr > 0) return currentAtr * 0.5; // ATR-based, price-relative
+  return pair.includes('JPY') ? 8 * pipMultiplier : 6 * pipMultiplier; // legacy fallback if ATR unavailable
+}
+
+function getMaxRisk(pair: string, pipMultiplier: number, currentAtr?: number): number {
+  const maximumStopByPair: Record<string, number> = {
+    AUDUSD: 20 * 0.0001, USDCAD: 20 * 0.0001, EURNZD: 25 * 0.0001,
+    GBPAUD: 25 * 0.0001, GBPNZD: 100 * 0.0001, CADJPY: 25 * 0.01,
+    NZDJPY: 25 * 0.01, XAUUSD: 30, XAGUSD: 1.50, BTCUSD: 2500,
+    ETHUSD: 50, SOLUSD: 5, LTCUSD: 3, BNBUSD: 8,
+  };
+  if (maximumStopByPair[pair] !== undefined) return maximumStopByPair[pair];
+  if (currentAtr !== undefined && currentAtr > 0) return currentAtr * 3; // ATR-based, price-relative
+  return pair.includes('JPY') ? 25 * pipMultiplier : 20 * pipMultiplier; // legacy fallback if ATR unavailable
+}
+
+const MIN_STOP_PCT_OF_PRICE = 0.003; // 0.3% of entry price - absolute rounding-floor safety net
+
+// BUG FIX (rounding step only): risk used to be rounded to whole "pips" with
+// a hardcoded floor of Math.max(2, ...) pips. For low-priced coins where
+// pipMultiplier=1 (DOGEUSD ~$0.08 etc.), that forced a minimum $2 stop -
+// bigger than the entire price - making the SL unreachable so trades never
+// closed. This picks whichever is SMALLER: the legacy 2-pip floor (kept
+// as-is for normal-priced pairs, where 2 pips is tiny relative to price) or
+// a small percentage of the entry price expressed in pips (scales correctly
+// for low-priced assets). Does not touch the floor/max-risk helper above,
+// which was already fixed separately.
+function minRiskFloorPips(entry: number, pipMultiplier: number): number {
+  const priceRelativePips = (entry * MIN_STOP_PCT_OF_PRICE) / pipMultiplier;
+  return Math.min(2, priceRelativePips);
+}
+
+function getHour(timestamp: string): number {
+  return new Date(timestamp).getUTCHours();
+}
+
+function isGoodSession(timestamp: string): boolean {
+  const hour = getHour(timestamp);
+  return hour >= 7 && hour <= 21;
+}
+
+// ---------------------------------------------------------------------------
+// Asset classification - routes each pair to its own dedicated logic path.
+// FOREX path below is byte-for-byte identical to the original single
+// implementation; it must never be touched by crypto/metals changes.
+// ---------------------------------------------------------------------------
+const CRYPTO_PAIRS = new Set(['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOGEUSD']);
+const METALS_PAIRS = new Set(['XAUUSD', 'XAGUSD']);
+
+function getAssetClass(pair: string): 'CRYPTO' | 'METALS' | 'FOREX' {
+  if (CRYPTO_PAIRS.has(pair)) return 'CRYPTO';
+  if (METALS_PAIRS.has(pair)) return 'METALS';
+  return 'FOREX';
+}
+
+/**
+ * MEAN REVERSION SCALP (Bollinger Band extremes + RSI extreme + rejection candle)
+ *
+ * Rationale: trend-following strategies on M5 forex/crypto naturally cap out
+ * around 18-21% win rate here because most TP1 targets (1.5R+) require a
+ * genuine trend continuation, which is a minority outcome. Mean reversion
+ * targets a much smaller move (back to the mean) which is statistically far
+ * more common intraday - trading win-rate for smaller reward per trade.
+ *
+ * Entry: price closes outside a 20-period, 2-stddev Bollinger Band AND RSI14
+ * is in an extreme zone (>70 sell / <30 buy) AND the current candle shows a
+ * rejection (closes back toward the mean vs the extreme). Target = the mean
+ * (SMA20), which is usually a much shorter distance than a trend TP1.
+ *
+ * Router: dispatches to a dedicated implementation per asset class. Only the
+ * FOREX path is the original, unmodified logic (verified 67.2% WR / +0.031
+ * avgR on closed trades) - it is not touched by the crypto/metals fixes below.
+ */
+export function scanMeanReversionSignals(pair: string, m5Candles: Candle[]): TradeSignal[] {
+  const cls = getAssetClass(pair);
+  if (cls === 'CRYPTO') return scanCryptoMeanReversion(pair, m5Candles);
+  if (cls === 'METALS') return scanMetalsMeanReversion(pair, m5Candles);
+  return scanForexMeanReversion(pair, m5Candles);
+}
+
+// ---------------------------------------------------------------------------
+// FOREX - unchanged original logic. Do not modify.
+// ---------------------------------------------------------------------------
+function scanForexMeanReversion(pair: string, m5Candles: Candle[]): TradeSignal[] {
+  const signals: TradeSignal[] = [];
+  if (m5Candles.length < 60) return signals;
+
+  const closes = m5Candles.map(c => c.close);
+  const BB_PERIOD = 20;
+  const smaArr = sma(closes, BB_PERIOD);       // smaArr[0] -> candle index 19
+  const stdArr = stddev(closes, smaArr, BB_PERIOD); // aligned with smaArr
+  const rsiArr = rsi(closes, 14);              // rsiArr[0] -> candle index 14
+  const atrArr = atr(m5Candles, 14);           // atrArr[0] -> candle index 14
+
+  const smaAt = (i: number) => (i - 19 >= 0 && i - 19 < smaArr.length) ? smaArr[i - 19] : undefined;
+  const stdAt = (i: number) => (i - 19 >= 0 && i - 19 < stdArr.length) ? stdArr[i - 19] : undefined;
+  const rsiAt = (i: number) => (i - 14 >= 0 && i - 14 < rsiArr.length) ? rsiArr[i - 14] : undefined;
+  const atrAt = (i: number) => (i - 14 >= 0 && i - 14 < atrArr.length) ? atrArr[i - 14] : undefined;
+
+  const pipMultiplier = getPipMultiplier(pair);
+  const floorRisk = getFloorRisk(pair, pipMultiplier);
+  const maxRisk = getMaxRisk(pair, pipMultiplier);
+
+  let lastTs = 0;
+
+  for (let i = 60; i < m5Candles.length; i++) {
+    const current = m5Candles[i];
+    if (!isGoodSession(current.timestamp)) continue;
+
+    const ts = new Date(current.timestamp).getTime();
+    if (ts - lastTs < 1800000) continue; // min 30min gap between signals (scalp)
+
+    const mean = smaAt(i);
+    const std = stdAt(i);
+    const currentRsi = rsiAt(i);
+    const currentAtr = atrAt(i);
+    if (mean === undefined || std === undefined || currentRsi === undefined || !currentAtr || std === 0) continue;
+
+    const upperBand = mean + 2 * std;
+    const lowerBand = mean - 2 * std;
+
+    let signal: TradeSignal | null = null;
+
+    // SELL: price extended above upper band, RSI overbought, rejection candle
+    if (current.close >= upperBand && currentRsi > 75 && current.close < current.high - (current.high - current.low) * 0.45) {
+      const entry = current.close;
+      const distToMean = entry - mean;
+      if (distToMean > 0) {
+        let risk = Math.min(Math.max((current.high + currentAtr * 0.15) - entry, floorRisk), maxRisk);
+        const riskPips = risk / pipMultiplier;
+        const evenRiskPips = Math.max(2, Math.round(riskPips / 2) * 2);
+        risk = evenRiskPips * pipMultiplier;
+        if (risk > 0) {
+          const sl = entry + risk;
+          const tp1 = entry - risk * 0.35;
+          const tp2 = entry - risk * 0.9;
+          const tp3 = entry - risk * 1.8;
+          let confidence = 68;
+          if (currentRsi > 82) confidence += 10;
+          if (distToMean > currentAtr * 2) confidence += 5;
+          signal = {
+            symbol: pair, direction: 'SHORT',
+            entry: Math.round(entry / pipMultiplier) * pipMultiplier,
+            sl: Math.round(sl / pipMultiplier) * pipMultiplier,
+            tp1: Math.round(tp1 / pipMultiplier) * pipMultiplier,
+            tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
+            tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
+            confidence: Math.min(confidence, 85),
+            reason: `Mean reversion SHORT | price above upper BB, RSI ${currentRsi.toFixed(1)} overbought, rejection candle`,
+            candleIndex: i
+          };
+        }
+      }
+    }
+
+    // BUY: price extended below lower band, RSI oversold, rejection candle
+    if (!signal && current.close <= lowerBand && currentRsi < 25 && current.close > current.low + (current.high - current.low) * 0.45) {
+      const entry = current.close;
+      const distToMean = mean - entry;
+      if (distToMean > 0) {
+        let risk = Math.min(Math.max(entry - (current.low - currentAtr * 0.15), floorRisk), maxRisk);
+        const riskPips = risk / pipMultiplier;
+        const evenRiskPips = Math.max(2, Math.round(riskPips / 2) * 2);
+        risk = evenRiskPips * pipMultiplier;
+        if (risk > 0) {
+          const sl = entry - risk;
+          const tp1 = entry + risk * 0.35;
+          const tp2 = entry + risk * 0.9;
+          const tp3 = entry + risk * 1.8;
+          let confidence = 68;
+          if (currentRsi < 18) confidence += 10;
+          if (distToMean > currentAtr * 2) confidence += 5;
+          signal = {
+            symbol: pair, direction: 'LONG',
+            entry: Math.round(entry / pipMultiplier) * pipMultiplier,
+            sl: Math.round(sl / pipMultiplier) * pipMultiplier,
+            tp1: Math.round(tp1 / pipMultiplier) * pipMultiplier,
+            tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
+            tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
+            confidence: Math.min(confidence, 85),
+            reason: `Mean reversion LONG | price below lower BB, RSI ${currentRsi.toFixed(1)} oversold, rejection candle`,
+            candleIndex: i
+          };
+        }
+      }
+    }
+
+    if (signal) {
+      signals.push(signal);
+      lastTs = ts;
+    }
+  }
+
+  return signals;
+}
+
+// ---------------------------------------------------------------------------
+// CRYPTO - dedicated path.
+// Fixes applied vs forex baseline:
+//  1. No fixed clock session filter (crypto is 24/7) - replaced with a
+//     volatility filter (current ATR14 must be above its own 20-period
+//     rolling average, i.e. skip dead/quiet periods instead of skipping by
+//     UTC hour).
+//  2. Stricter RSI extremes (85/15 instead of 75/25) so we only fade true
+//     blow-off extremes, not normal crypto noise.
+//  3. H1 EMA200 trend filter (H1 candles derived by resampling the M5 series
+//     - no extra API calls needed): if H1 is in a clear, strongly sloped
+//     trend in the SAME direction as the extreme being faded, skip the trade
+//     (likely a real breakout continuing, not a reversion). Only fade when
+//     H1 is flat/sideways or trending against the extreme.
+//  4. Wider ATR-based SL buffer (1.75x the forex buffer factor) since crypto
+//     wicks run much bigger than forex wicks.
+// ---------------------------------------------------------------------------
+const CRYPTO_ATR_SL_MULT = 1.75; // 1.5x-2x wider than forex's 0.15 buffer factor
+const CRYPTO_H1_EMA_PERIOD = 200;
+const CRYPTO_H1_SLOPE_LOOKBACK = 10; // ~10 H1 candles (~10h) lookback for slope
+const CRYPTO_H1_TREND_THRESHOLD = 0.015; // 1.5% move over lookback = "strong trend"
+
+interface HourBucket {
+  bucketStartMs: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+function resampleToH1(m5Candles: Candle[]): HourBucket[] {
+  const buckets: HourBucket[] = [];
+  let current: HourBucket | null = null;
+  let currentKey = '';
+  for (const c of m5Candles) {
+    const d = new Date(c.timestamp);
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}-${d.getUTCHours()}`;
+    if (key !== currentKey) {
+      if (current) buckets.push(current);
+      const bucketStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours());
+      current = { bucketStartMs: bucketStart, open: c.open, high: c.high, low: c.low, close: c.close };
+      currentKey = key;
+    } else if (current) {
+      current.high = Math.max(current.high, c.high);
+      current.low = Math.min(current.low, c.low);
+      current.close = c.close;
+    }
+  }
+  if (current) buckets.push(current);
+  return buckets;
+}
+
+function scanCryptoMeanReversion(pair: string, m5Candles: Candle[]): TradeSignal[] {
+  const signals: TradeSignal[] = [];
+  if (m5Candles.length < 60) return signals;
+
+  const closes = m5Candles.map(c => c.close);
+  const BB_PERIOD = 20;
+  const smaArr = sma(closes, BB_PERIOD);
+  const stdArr = stddev(closes, smaArr, BB_PERIOD);
+  const rsiArr = rsi(closes, 14);
+  const atrArr = atr(m5Candles, 14);
+  const atrAvgArr = sma(atrArr, 20); // rolling 20-period average of ATR14, for volatility filter
+
+  const smaAt = (i: number) => (i - 19 >= 0 && i - 19 < smaArr.length) ? smaArr[i - 19] : undefined;
+  const stdAt = (i: number) => (i - 19 >= 0 && i - 19 < stdArr.length) ? stdArr[i - 19] : undefined;
+  const rsiAt = (i: number) => (i - 14 >= 0 && i - 14 < rsiArr.length) ? rsiArr[i - 14] : undefined;
+  const atrAt = (i: number) => (i - 14 >= 0 && i - 14 < atrArr.length) ? atrArr[i - 14] : undefined;
+  // atrArr index (i-14) maps to atrAvgArr index ((i-14)-19) = i-33
+  const atrAvgAt = (i: number) => (i - 33 >= 0 && i - 33 < atrAvgArr.length) ? atrAvgArr[i - 33] : undefined;
+
+  // --- H1 trend filter (resampled from M5, no extra data fetch needed) ---
+  const h1 = resampleToH1(m5Candles);
+  const h1Closes = h1.map(b => b.close);
+  const h1Ema200 = ema(h1Closes, CRYPTO_H1_EMA_PERIOD); // h1Ema200[0] -> h1 index (CRYPTO_H1_EMA_PERIOD-1)
+  const h1EmaAt = (h1Idx: number) => {
+    const j = h1Idx - (CRYPTO_H1_EMA_PERIOD - 1);
+    return (j >= 0 && j < h1Ema200.length) ? h1Ema200[j] : undefined;
+  };
+  // slope/trend direction of H1 EMA200: >0 => bullish trend, <0 => bearish trend, ~0 => flat
+  function h1TrendDirection(h1Idx: number): number {
+    const cur = h1EmaAt(h1Idx);
+    const prev = h1EmaAt(h1Idx - CRYPTO_H1_SLOPE_LOOKBACK);
+    if (cur === undefined || prev === undefined || prev === 0) return 0;
+    return (cur - prev) / prev; // fractional change over lookback window
+  }
+
+  const pipMultiplier = getPipMultiplier(pair);
+
+  let lastTs = 0;
+  let hp = -1; // pointer into h1[]: last CLOSED h1 bucket strictly before current candle's bucket
+
+  for (let i = 60; i < m5Candles.length; i++) {
+    const current = m5Candles[i];
+    const ts = new Date(current.timestamp).getTime();
+
+    // advance H1 pointer to the last bucket that fully closed before this candle
+    const d = new Date(current.timestamp);
+    const currentBucketStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours());
+    while (hp + 1 < h1.length && h1[hp + 1].bucketStartMs < currentBucketStart) hp++;
+
+    if (ts - lastTs < 1800000) continue; // min 30min gap between signals (scalp)
+
+    const mean = smaAt(i);
+    const std = stdAt(i);
+    const currentRsi = rsiAt(i);
+    const currentAtr = atrAt(i);
+    const atrAvg = atrAvgAt(i);
+    if (mean === undefined || std === undefined || currentRsi === undefined || !currentAtr || std === 0) continue;
+
+    // Volatility filter replaces the forex fixed-hours session filter: only
+    // trade when volatility is elevated vs its own recent average (skip dead
+    // low-volatility grind periods instead of skipping by clock hour).
+    if (atrAvg === undefined || currentAtr <= atrAvg) continue;
+
+    // Floor/max risk computed per-candle from this asset's OWN current ATR
+    // (bug fix - see getFloorRisk/getMaxRisk comment above). Unmapped
+    // low-priced coins (XRP/ADA/DOGE) now get a price-relative SL instead of
+    // a fixed forex-scale one; already-tuned pairs (BTC/ETH/SOL/LTC/BNB) are
+    // unaffected since they still resolve via the explicit map first.
+    const floorRisk = getFloorRisk(pair, pipMultiplier, currentAtr);
+    const maxRisk = getMaxRisk(pair, pipMultiplier, currentAtr);
+
+    const upperBand = mean + 2 * std;
+    const lowerBand = mean - 2 * std;
+    const trendDir = h1TrendDirection(hp);
+
+    let signal: TradeSignal | null = null;
+
+    // SELL: price extended above upper band, RSI extreme overbought, rejection candle
+    if (current.close >= upperBand && currentRsi > 85 && current.close < current.high - (current.high - current.low) * 0.45) {
+      // Skip if H1 is in a strong bullish trend (same direction as the upside extreme) - likely real breakout, not reversion
+      if (trendDir <= CRYPTO_H1_TREND_THRESHOLD) {
+        const entry = current.close;
+        const distToMean = entry - mean;
+        if (distToMean > 0) {
+          let risk = Math.min(Math.max((current.high + currentAtr * 0.15 * CRYPTO_ATR_SL_MULT) - entry, floorRisk), maxRisk);
+          const riskPips = risk / pipMultiplier;
+          const evenRiskPips = Math.max(minRiskFloorPips(entry, pipMultiplier), Math.round(riskPips / 2) * 2);
+          risk = evenRiskPips * pipMultiplier;
+          if (risk > 0) {
+            const sl = entry + risk;
+            const tp1 = entry - risk * 0.35;
+            const tp2 = entry - risk * 0.9;
+            const tp3 = entry - risk * 1.8;
+            let confidence = 68;
+            if (currentRsi > 90) confidence += 10;
+            if (distToMean > currentAtr * 2) confidence += 5;
+            if (Math.abs(trendDir) < CRYPTO_H1_TREND_THRESHOLD / 2) confidence += 2; // truly flat H1 bonus
+            signal = {
+              symbol: pair, direction: 'SHORT',
+              entry: Math.round(entry / pipMultiplier) * pipMultiplier,
+              sl: Math.round(sl / pipMultiplier) * pipMultiplier,
+              tp1: Math.round(tp1 / pipMultiplier) * pipMultiplier,
+              tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
+              tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
+              confidence: Math.min(confidence, 85),
+              reason: `Mean reversion SHORT (CRYPTO) | price above upper BB, RSI ${currentRsi.toFixed(1)} extreme, H1 trend ${(trendDir * 100).toFixed(2)}% (not breaking out), elevated ATR`,
+              candleIndex: i
+            };
+          }
+        }
+      }
+    }
+
+    // BUY: price extended below lower band, RSI extreme oversold, rejection candle
+    if (!signal && current.close <= lowerBand && currentRsi < 15 && current.close > current.low + (current.high - current.low) * 0.45) {
+      // Skip if H1 is in a strong bearish trend (same direction as the downside extreme) - likely real breakdown, not reversion
+      if (trendDir >= -CRYPTO_H1_TREND_THRESHOLD) {
+        const entry = current.close;
+        const distToMean = mean - entry;
+        if (distToMean > 0) {
+          let risk = Math.min(Math.max(entry - (current.low - currentAtr * 0.15 * CRYPTO_ATR_SL_MULT), floorRisk), maxRisk);
+          const riskPips = risk / pipMultiplier;
+          const evenRiskPips = Math.max(minRiskFloorPips(entry, pipMultiplier), Math.round(riskPips / 2) * 2);
+          risk = evenRiskPips * pipMultiplier;
+          if (risk > 0) {
+            const sl = entry - risk;
+            const tp1 = entry + risk * 0.35;
+            const tp2 = entry + risk * 0.9;
+            const tp3 = entry + risk * 1.8;
+            let confidence = 68;
+            if (currentRsi < 10) confidence += 10;
+            if (distToMean > currentAtr * 2) confidence += 5;
+            if (Math.abs(trendDir) < CRYPTO_H1_TREND_THRESHOLD / 2) confidence += 2;
+            signal = {
+              symbol: pair, direction: 'LONG',
+              entry: Math.round(entry / pipMultiplier) * pipMultiplier,
+              sl: Math.round(sl / pipMultiplier) * pipMultiplier,
+              tp1: Math.round(tp1 / pipMultiplier) * pipMultiplier,
+              tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
+              tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
+              confidence: Math.min(confidence, 85),
+              reason: `Mean reversion LONG (CRYPTO) | price below lower BB, RSI ${currentRsi.toFixed(1)} extreme, H1 trend ${(trendDir * 100).toFixed(2)}% (not breaking down), elevated ATR`,
+              candleIndex: i
+            };
+          }
+        }
+      }
+    }
+
+    if (signal) {
+      signals.push(signal);
+      lastTs = ts;
+    }
+  }
+
+  return signals;
+}
+
+// ---------------------------------------------------------------------------
+// METALS - dedicated path (XAUUSD, XAGUSD).
+// Same BB/RSI/rejection/ATR-SL core as forex (not asked to change), plus:
+//  1. A news-event blackout hook (isNewsBlackout) - currently a no-op
+//     placeholder since no economic calendar data source is wired up yet.
+//     TODO: wire this up to a real CPI/NFP/FOMC calendar feed and return
+//     true for entries within 15-30 min of a major USD release.
+//  2. Session filter kept as-is (forex hours) for now; see
+//     server/analyze-metals-hours.ts for the data-driven hourly
+//     trade-count/volatility table used to sanity-check this assumption.
+// ---------------------------------------------------------------------------
+function isNewsBlackout(_timestamp: string): boolean {
+  // TODO: no economic calendar data source wired up yet. Once available,
+  // return true when _timestamp falls within 15-30 min of a major USD
+  // release (CPI, NFP, FOMC/Fed rate decision) so entries are skipped.
+  return false;
+}
+
+function scanMetalsMeanReversion(pair: string, m5Candles: Candle[]): TradeSignal[] {
+  const signals: TradeSignal[] = [];
+  if (m5Candles.length < 60) return signals;
+
+  const closes = m5Candles.map(c => c.close);
+  const BB_PERIOD = 20;
+  const smaArr = sma(closes, BB_PERIOD);
+  const stdArr = stddev(closes, smaArr, BB_PERIOD);
+  const rsiArr = rsi(closes, 14);
+  const atrArr = atr(m5Candles, 14);
+
+  const smaAt = (i: number) => (i - 19 >= 0 && i - 19 < smaArr.length) ? smaArr[i - 19] : undefined;
+  const stdAt = (i: number) => (i - 19 >= 0 && i - 19 < stdArr.length) ? stdArr[i - 19] : undefined;
+  const rsiAt = (i: number) => (i - 14 >= 0 && i - 14 < rsiArr.length) ? rsiArr[i - 14] : undefined;
+  const atrAt = (i: number) => (i - 14 >= 0 && i - 14 < atrArr.length) ? atrArr[i - 14] : undefined;
+
+  const pipMultiplier = getPipMultiplier(pair);
+  const floorRisk = getFloorRisk(pair, pipMultiplier);
+  const maxRisk = getMaxRisk(pair, pipMultiplier);
+
+  let lastTs = 0;
+
+  for (let i = 60; i < m5Candles.length; i++) {
+    const current = m5Candles[i];
+    if (!isGoodSession(current.timestamp)) continue;
+    if (isNewsBlackout(current.timestamp)) continue;
+
+    const ts = new Date(current.timestamp).getTime();
+    if (ts - lastTs < 1800000) continue;
+
+    const mean = smaAt(i);
+    const std = stdAt(i);
+    const currentRsi = rsiAt(i);
+    const currentAtr = atrAt(i);
+    if (mean === undefined || std === undefined || currentRsi === undefined || !currentAtr || std === 0) continue;
+
+    const upperBand = mean + 2 * std;
+    const lowerBand = mean - 2 * std;
+
+    let signal: TradeSignal | null = null;
+
+    if (current.close >= upperBand && currentRsi > 75 && current.close < current.high - (current.high - current.low) * 0.45) {
+      const entry = current.close;
+      const distToMean = entry - mean;
+      if (distToMean > 0) {
+        let risk = Math.min(Math.max((current.high + currentAtr * 0.15) - entry, floorRisk), maxRisk);
+        const riskPips = risk / pipMultiplier;
+        const evenRiskPips = Math.max(2, Math.round(riskPips / 2) * 2);
+        risk = evenRiskPips * pipMultiplier;
+        if (risk > 0) {
+          const sl = entry + risk;
+          const tp1 = entry - risk * 0.35;
+          const tp2 = entry - risk * 0.9;
+          const tp3 = entry - risk * 1.8;
+          let confidence = 68;
+          if (currentRsi > 82) confidence += 10;
+          if (distToMean > currentAtr * 2) confidence += 5;
+          signal = {
+            symbol: pair, direction: 'SHORT',
+            entry: Math.round(entry / pipMultiplier) * pipMultiplier,
+            sl: Math.round(sl / pipMultiplier) * pipMultiplier,
+            tp1: Math.round(tp1 / pipMultiplier) * pipMultiplier,
+            tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
+            tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
+            confidence: Math.min(confidence, 85),
+            reason: `Mean reversion SHORT (METALS) | price above upper BB, RSI ${currentRsi.toFixed(1)} overbought, rejection candle`,
+            candleIndex: i
+          };
+        }
+      }
+    }
+
+    if (!signal && current.close <= lowerBand && currentRsi < 25 && current.close > current.low + (current.high - current.low) * 0.45) {
+      const entry = current.close;
+      const distToMean = mean - entry;
+      if (distToMean > 0) {
+        let risk = Math.min(Math.max(entry - (current.low - currentAtr * 0.15), floorRisk), maxRisk);
+        const riskPips = risk / pipMultiplier;
+        const evenRiskPips = Math.max(2, Math.round(riskPips / 2) * 2);
+        risk = evenRiskPips * pipMultiplier;
+        if (risk > 0) {
+          const sl = entry - risk;
+          const tp1 = entry + risk * 0.35;
+          const tp2 = entry + risk * 0.9;
+          const tp3 = entry + risk * 1.8;
+          let confidence = 68;
+          if (currentRsi < 18) confidence += 10;
+          if (distToMean > currentAtr * 2) confidence += 5;
+          signal = {
+            symbol: pair, direction: 'LONG',
+            entry: Math.round(entry / pipMultiplier) * pipMultiplier,
+            sl: Math.round(sl / pipMultiplier) * pipMultiplier,
+            tp1: Math.round(tp1 / pipMultiplier) * pipMultiplier,
+            tp2: Math.round(tp2 / pipMultiplier) * pipMultiplier,
+            tp3: Math.round(tp3 / pipMultiplier) * pipMultiplier,
+            confidence: Math.min(confidence, 85),
+            reason: `Mean reversion LONG (METALS) | price below lower BB, RSI ${currentRsi.toFixed(1)} oversold, rejection candle`,
+            candleIndex: i
+          };
+        }
+      }
+    }
+
+    if (signal) {
+      signals.push(signal);
+      lastTs = ts;
+    }
+  }
+
+  return signals;
+}

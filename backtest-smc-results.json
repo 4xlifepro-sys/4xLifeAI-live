@@ -1,0 +1,14 @@
+{
+  "summary": {
+    "totalSignals": 0,
+    "closedTrades": 0,
+    "winRate": "0.00%",
+    "avgWinPips": "0.00",
+    "avgLossPips": "0.00",
+    "rrRatio": "N/A",
+    "totalPips": "0.00",
+    "maxDrawdown": "0.00",
+    "maxConsecutiveLosses": 0
+  },
+  "trades": []
+}

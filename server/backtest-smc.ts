@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { fetchHistoricalCandles } from './live-market-feed.js';
 import { detectSMCSetup } from './smc-engine.js';
 import { getPipMultiplier } from './engine.js';
@@ -13,6 +14,8 @@ const PAIRS = [
 ];
 
 const TP_RATIOS = [1.5, 2.0];
+const USE_IDM = process.env.USE_IDM === 'true';
+const OUTPUT_FILE = USE_IDM ? 'backtest-smc-idm-results.json' : 'backtest-smc-results.json';
 
 interface Trade {
   pair: string;
@@ -146,7 +149,7 @@ function simulateTrade(trade: Trade, futureCandles: Candle[], pair: string): Tra
 
 async function runBacktest() {
   console.log('\n====================================');
-  console.log('[BACKTEST-SMC] Starting SMC Backtest');
+  console.log(`[BACKTEST-SMC] Starting SMC Backtest ${USE_IDM ? '(WITH IDM)' : '(BASELINE, no IDM)'}`);
   console.log('====================================\n');
 
   const allTrades: Trade[] = [];
@@ -181,7 +184,7 @@ async function runBacktest() {
       const m5Slice = m5.slice(0, i + 1);
 
       // Try first TP ratio
-      const signal = detectSMCSetup(pair, h4, m5Slice, TP_RATIOS[0]);
+      const signal = detectSMCSetup(pair, h4, m5Slice, TP_RATIOS[0], USE_IDM);
 
       if (signal) {
         // Create trades for each TP ratio using the SAME signal entry/SL
@@ -344,7 +347,7 @@ async function runBacktest() {
   console.log('====================================\n');
 
   const fs = await import('fs');
-  const outputPath = 'backtest-smc-results.json';
+  const outputPath = OUTPUT_FILE;
   fs.writeFileSync(outputPath, JSON.stringify({
     summary: {
       totalSignals: allTrades.length,

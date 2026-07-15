@@ -13,6 +13,7 @@ export interface SMCSignal {
   reason: string;
   h4CandleIndex: number;
   sweepCandleIndex: number;
+  idmCandleIndex?: number;
   bosCandleIndex: number;
   obCandleIndex: number;
   entryCandleIndex: number;
@@ -40,6 +41,11 @@ interface BreakOfStructure {
   bosCandle: Candle;
   bosIndex: number;
   swingLevel: number;
+}
+
+interface Inducement {
+  level: number;
+  swingIndex: number;
 }
 
 interface OrderBlock {
@@ -161,6 +167,36 @@ function detectLiquiditySweep(
           }
         }
         i += 2;
+      }
+    }
+  }
+  return null;
+}
+
+// Step 2.5: Find inducement (minor swing high/low between the major sweep
+// and the eventual BOS). This is the "trap" level smart money takes out
+// before the real move (BOS) happens.
+function findMinorSwing(
+  m5Candles: Candle[],
+  startIndex: number,
+  endIndex: number,
+  direction: 'bullish' | 'bearish'
+): Inducement | null {
+  const limit = Math.min(endIndex, m5Candles.length - 1);
+  for (let i = startIndex + 1; i < limit; i++) {
+    if (i < 1) continue;
+    const c = m5Candles[i];
+    if (direction === 'bullish') {
+      // Looking for a minor swing LOW (the induced support) before the real move up
+      const isMinorSwingLow = c.low < m5Candles[i - 1].low && c.low < m5Candles[i + 1].low;
+      if (isMinorSwingLow) {
+        return { level: c.low, swingIndex: i };
+      }
+    } else {
+      // Looking for a minor swing HIGH (the induced resistance) before the real move down
+      const isMinorSwingHigh = c.high > m5Candles[i - 1].high && c.high > m5Candles[i + 1].high;
+      if (isMinorSwingHigh) {
+        return { level: c.high, swingIndex: i };
       }
     }
   }
@@ -314,7 +350,8 @@ export function detectSMCSetup(
   pair: string,
   h4Candles: Candle[],
   m5Candles: Candle[],
-  tpRatio: number = 2.0
+  tpRatio: number = 2.0,
+  useIDM: boolean = false
 ): SMCSignal | null {
   // Step 1: Find strong H4 candle
   const h4Candle = findStrongH4Candle(h4Candles);
@@ -331,13 +368,29 @@ export function detectSMCSetup(
   }
   if (startM5Index === 0) return null;
 
-  // Step 2: Detect liquidity sweep
+  // Step 2: Detect liquidity sweep (major/H4 level)
   const h4Level = h4Candle.direction === 'bullish' ? h4Candle.low : h4Candle.high;
   const sweep = detectLiquiditySweep(m5Candles, startM5Index, h4Level, h4Candle.direction);
   if (!sweep) return null;
 
-  // Step 3: Detect BOS after sweep
-  const bos = detectBOS(m5Candles, sweep.closeBackIndex + 1, h4Candle.direction);
+  // Step 2.5: Inducement (IDM) - optional, off by default for backward compatibility
+  let structureStartIndex = sweep.closeBackIndex + 1;
+  let idmCandleIndex: number | undefined;
+
+  if (useIDM) {
+    const idmSearchEnd = Math.min(sweep.closeBackIndex + 40, m5Candles.length);
+    const minorSwing = findMinorSwing(m5Candles, sweep.closeBackIndex + 1, idmSearchEnd, h4Candle.direction);
+    if (!minorSwing) return null;
+
+    const idmSweep = detectLiquiditySweep(m5Candles, minorSwing.swingIndex + 1, minorSwing.level, h4Candle.direction);
+    if (!idmSweep) return null;
+
+    structureStartIndex = idmSweep.closeBackIndex + 1;
+    idmCandleIndex = idmSweep.sweepIndex;
+  }
+
+  // Step 3: Detect BOS after sweep (or after IDM sweep if enabled)
+  const bos = detectBOS(m5Candles, structureStartIndex, h4Candle.direction);
   if (!bos) return null;
 
   // Step 4: Identify Order Block before BOS
@@ -352,7 +405,9 @@ export function detectSMCSetup(
   const direction = h4Candle.direction === 'bullish' ? 'LONG' : 'SHORT';
   const risk = calculateRiskManagement(sweep.mostExtremeWick, retracement.entryPrice, direction, pair, tpRatio);
 
-  const reason = `H4 ${h4Candle.direction} candle -> M5 liquidity sweep -> BOS -> retracement to OB`;
+  const reason = useIDM
+    ? `H4 ${h4Candle.direction} candle -> M5 sweep -> IDM sweep -> BOS -> retracement to OB`
+    : `H4 ${h4Candle.direction} candle -> M5 liquidity sweep -> BOS -> retracement to OB`;
 
   return {
     symbol: pair,
@@ -361,11 +416,12 @@ export function detectSMCSetup(
     sl: risk.sl,
     tp1: risk.tp1,
     tp2: risk.tp2,
-    confidence: 80,
+    confidence: useIDM ? 85 : 80,
     timeframe: 'M5',
     reason,
     h4CandleIndex: h4Candle.index,
     sweepCandleIndex: sweep.sweepIndex,
+    idmCandleIndex,
     bosCandleIndex: bos.bosIndex,
     obCandleIndex: orderBlock.index,
     entryCandleIndex: retracement.entryIndex
