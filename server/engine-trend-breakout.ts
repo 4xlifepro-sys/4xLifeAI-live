@@ -528,18 +528,18 @@ function scanMetalsTrendBreakout(pair: string, m5Candles: Candle[], useSessionFi
 export { TRAIL_EMA_PERIOD, buildContext };
 
 // ---------------------------------------------------------------------------
-// LIVE adapter - curated crypto only (backtest-confirmed profitable subset:
-// ETHUSD, SOLUSD, LTCUSD, ADAUSD, DOGEUSD). BTCUSD/BNBUSD/XRPUSD are
-// deliberately excluded - confirmed losers in the isolated backtest even
-// after per-coin threshold tuning (Step 3). Do not add them back without a
-// new backtest showing a fix.
+// LIVE adapter - all 8 backtested crypto coins deployed per explicit request.
+// ETHUSD, SOLUSD, LTCUSD, ADAUSD, DOGEUSD were the confirmed-profitable
+// subset. BTCUSD/BNBUSD/XRPUSD showed weaker/negative avgR in the isolated
+// backtest but keep the stricter CRYPTO_MOMENTUM_OVERRIDES threshold above
+// (applied by default to these 3) to reduce weak-breakout entries live.
 //
 // Mirrors the { signal, scores, regime, regimeReason } shape returned by
 // engine2.ts's detectTrendMomentumScannerV5 so scanner.ts's downstream logic
 // (confidence gate, duplicate-trade check, DB writes, market state) works
 // unchanged regardless of which engine produced the signal.
 // ---------------------------------------------------------------------------
-export const CURATED_LIVE_CRYPTO_PAIRS = new Set(['ETHUSD', 'SOLUSD', 'LTCUSD', 'ADAUSD', 'DOGEUSD']);
+export const CURATED_LIVE_CRYPTO_PAIRS = new Set(['ETHUSD', 'SOLUSD', 'LTCUSD', 'ADAUSD', 'DOGEUSD', 'BTCUSD', 'BNBUSD', 'XRPUSD']);
 
 export function detectCryptoTrendBreakoutLive(pair: string, entryTf: Candle[]): {
   signal: Signal;

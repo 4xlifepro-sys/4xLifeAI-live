@@ -144,19 +144,24 @@ export const isWeekend = () => {
   return day === 0 || day === 6
 }
 
-export const WEEKEND_PAIRS = ['SOLUSD', 'LTCUSD', 'ETHUSD', 'ADAUSD', 'DOGEUSD', 'XAGUSD', 'XAUUSD'];
+export const WEEKEND_PAIRS = ['SOLUSD', 'LTCUSD', 'ETHUSD', 'ADAUSD', 'DOGEUSD', 'BTCUSD', 'XRPUSD', 'BNBUSD', 'XAGUSD', 'XAUUSD'];
 
-// CRYPTO NOTE: BTCUSD/BNBUSD removed - confirmed losing pairs in the
-// isolated crypto trend-breakout backtest (0% WR/-1.000R and 25% WR/-0.478R
-// respectively, still negative after per-coin threshold tuning). ADAUSD and
-// DOGEUSD added - part of the curated 5-coin profitable subset (73 closed
-// trades, 43.8% WR, +0.092 avgR in backtest). These 5 curated pairs
-// (ETHUSD, SOLUSD, LTCUSD, ADAUSD, DOGEUSD) are routed through
-// detectCryptoTrendBreakoutLive() below instead of detectTrendMomentumScannerV5.
+// Full 25-pair backtested roster deployed live, plus 3 previously-live pairs
+// (GBPNZD, EURNZD, GBPAUD) that were never formally isolated-backtested but
+// have been running live successfully. All 8 crypto coins (BTCUSD, ETHUSD,
+// SOLUSD, XRPUSD, BNBUSD, ADAUSD, LTCUSD, DOGEUSD) are routed through
+// detectCryptoTrendBreakoutLive() via CURATED_LIVE_CRYPTO_PAIRS below instead
+// of detectTrendMomentumScannerV5.
 export const APPROVED_PAIRS = [
-  'XAUUSD', 'SOLUSD', 'GBPNZD', 'CADJPY', 'NZDJPY',
-  'EURNZD', 'USDCAD', 'XAGUSD', 'LTCUSD', 'ETHUSD', 'GBPAUD',
-  'ADAUSD', 'DOGEUSD', 'AUDUSD'
+  // Metals
+  'XAUUSD', 'XAGUSD',
+  // Crypto (all 8 backtested)
+  'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOGEUSD',
+  // Forex majors + crosses (backtested 15)
+  'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD',
+  'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY', 'CHFJPY', 'NZDJPY', 'EURAUD',
+  // Previously-live extras (not in the 25-pair backtest, kept running)
+  'GBPNZD', 'EURNZD', 'GBPAUD'
 ];
 
 export const PAIRS = [...APPROVED_PAIRS]; // Initialized, mutable by mode switch
@@ -196,7 +201,7 @@ export const scannerState = {
 };
 
 function getCategory(pair: string) {
-  if (['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOTUSD'].includes(pair)) return 'Crypto';
+  if (['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOGEUSD'].includes(pair)) return 'Crypto';
   if (['XAUUSD', 'XAGUSD'].includes(pair)) return 'Metals';
   if (['EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF'].includes(pair)) return 'Majors';
   if (['USDJPY', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CHFJPY'].includes(pair)) return 'JPY Crosses';
@@ -303,7 +308,7 @@ export async function startScanner() {
     const pair = PAIRS[currentIndex];
 
     // On weekends, skip forex pairs to save API credits and reduce latency
-    const isCryptoOrMetal = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD', 'DOTUSD', 'XAUUSD', 'XAGUSD'].includes(pair);
+    const isCryptoOrMetal = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD', 'XAUUSD', 'XAGUSD'].includes(pair);
     if (isWeekend() && !isCryptoOrMetal) {
        currentIndex++;
        if (currentIndex >= PAIRS.length) {

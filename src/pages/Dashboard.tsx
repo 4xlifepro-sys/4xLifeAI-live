@@ -95,25 +95,15 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Kept in sync with server/scanner.ts APPROVED_PAIRS. BTCUSD/BNBUSD removed
-  // (confirmed losing pairs, no longer scanned) - ADAUSD/DOGEUSD added (curated
-  // profitable crypto trend-breakout subset). If this list is stale, Today
+  // Kept in sync with server/scanner.ts APPROVED_PAIRS (all 25 backtested
+  // pairs + 3 previously-live extras). If this list is stale, Today
   // Signal / Recent History silently drop the new pairs' signals.
   const PAIRS = [
-    'XAUUSD',
-    'SOLUSD',
-    'GBPNZD',
-    'CADJPY',
-    'NZDJPY',
-    'EURNZD',
-    'USDCAD',
-    'XAGUSD',
-    'LTCUSD',
-    'ETHUSD',
-    'GBPAUD',
-    'ADAUSD',
-    'DOGEUSD',
-    'AUDUSD',
+    'XAUUSD', 'XAGUSD',
+    'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOGEUSD',
+    'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD',
+    'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY', 'CHFJPY', 'NZDJPY', 'EURAUD',
+    'GBPNZD', 'EURNZD', 'GBPAUD',
   ];
 
   const dashboardData = useMemo(() => {
