@@ -256,7 +256,7 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
           </span>
           <span className="x4-trust__sep" />
           <span className="x4-trust__item">
-            <span className="x4-trust__icon">◆</span> Every signal risk-managed with ATR-based SL
+            <span className="x4-trust__icon">◆</span> Every signal risk-managed with volatility-based SL
           </span>
           <span className="x4-trust__sep" />
           <span className="x4-trust__item">
