@@ -508,7 +508,7 @@ export async function startScanner() {
                   const directionStr = (s.direction === 'LONG' || s.direction === 'BUY' || s.signal === 'BUY') ? 'BUY' : 'SELL';
 
                   const headerEmoji = isWin ? '🏁' : '🛑';
-                  const titleText = isWin ? '4xFiveAI — Closed via EMA20 Trail' : '4xFiveAI — STOP LOSS HIT';
+                  const titleText = isWin ? '4xFiveAI — Closed via Adaptive Trail' : '4xFiveAI — STOP LOSS HIT';
                   const resultEmoji = isWin ? '✅' : '❌';
                   const sign = isWin ? '+' : '-';
 
@@ -536,7 +536,7 @@ export async function startScanner() {
                   + `Direction: ${directionStr}\n`
                   + `Entry: ${sEntry}\n`
                   + `Exit: ${metalsExit.exitPrice}\n\n`
-                  + `Exit type: ${isWin ? 'Trailing EMA20 (no fixed TP)' : 'Stop Loss'}\n\n`
+                  + `Exit type: ${isWin ? 'Adaptive Trail Level (no fixed TP)' : 'Stop Loss'}\n\n`
                   + `Profit: ${sign}${rawPipsMetals.toFixed(1)} pips (${sign}${rMultiple}R)\n`
                   + `Duration: ${hours}h ${mins}m\n`
                   + `Outcome: ${isWin ? 'WIN 🟢' : 'LOSS 🔴'}\n\n`
@@ -566,7 +566,7 @@ export async function startScanner() {
                     + `Entry: ${sEntry}\n`
                     + `Opened: ${new Date(openedAtMsForAlert).toUTCString()}\n`
                     + `Days open: ${daysOpen.toFixed(1)}\n\n`
-                    + `Still tracking via EMA20 trail - no fixed time exit by design. This is a heads-up only, trade remains open.`;
+                    + `Still tracking via our adaptive trail system - no fixed time exit by design. This is a heads-up only, trade remains open.`;
                     console.log(`[OUTCOME TRACKER][METALS] ${s.pair} stale alert - open ${daysOpen.toFixed(1)}d`);
                     if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(staleMsg);
                   }
@@ -1111,7 +1111,7 @@ export async function startScanner() {
                        + `<b>TP2:</b> ${signal.tp2} (0.9R)\n`
                        + `<b>TP3:</b> ${signal.tp3} (1.8R)\n\n`;
              } else if (engineTag === 'METALS_TREND_BREAKOUT') {
-               tpBlock = `<b>Exit:</b> Trailing EMA${signal.diagnostics?.trailEmaPeriod ?? 20} (no fixed TP)\n`
+               tpBlock = `<b>Exit:</b> Adaptive Trail Level (no fixed TP)\n`
                        + `<b>Reference levels:</b> ${signal.tp1} / ${signal.tp2} / ${signal.tp3} (informational only, not the real exit)\n\n`;
              } else {
                // crypto / unrouted - keep existing fixed-R label as-is (unchanged behavior)
