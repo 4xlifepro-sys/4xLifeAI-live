@@ -248,10 +248,33 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
         </div>
       )}
 
+      {/* ---------------- Trust strip ---------------- */}
+      <div className="x4-trust">
+        <div className="x4-trust__inner">
+          <span className="x4-trust__item">
+            <span className="x4-trust__icon">◆</span> Real-time broker data
+          </span>
+          <span className="x4-trust__sep" />
+          <span className="x4-trust__item">
+            <span className="x4-trust__icon">◆</span> Every signal risk-managed with ATR-based SL
+          </span>
+          <span className="x4-trust__sep" />
+          <span className="x4-trust__item">
+            <span className="x4-trust__icon">◆</span> {totalWatchlist || d.pairCount} instruments scanned continuously
+          </span>
+          <span className="x4-trust__sep" />
+          <span className="x4-trust__item">
+            <span className="x4-trust__icon">◆</span> Full transparent trade history — wins and losses
+          </span>
+        </div>
+      </div>
+
       <main className="x4-main">
         {/* ---------------- Stat cards ---------------- */}
         <section className="x4-stats" aria-label="Performance summary">
           <StatCard
+            icon="◔"
+            accent="cyan"
             label="WIN RATE"
             value={`${d.stats.winRate30d.toFixed(1)}%`}
             sub="Last 30 days"
@@ -259,12 +282,16 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
             trend={d.stats.winRateTrend}
           />
           <StatCard
+            icon="⚡"
+            accent="amber"
             label="SIGNALS THIS MONTH"
             value={String(d.stats.signalsThisMonth)}
             sub={d.stats.signalsSince}
             foot={`${d.stats.wins} wins, ${d.stats.losses} losses`}
           />
           <StatCard
+            icon="●"
+            accent="green"
             label="ACTIVE NOW"
             value={String(d.stats.activeCount)}
             sub="Scanning markets"
@@ -272,9 +299,12 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
             pulse={d.stats.activeCount > 0}
           />
           <StatCard
+            icon="⚖"
+            accent="cyan"
             label="AVG RISK:REWARD"
             value={d.stats.avgRR != null ? `1:${d.stats.avgRR.toFixed(1)}` : "1:--"}
             sub="From closed trades"
+            foot="Target profit ratio"
           />
         </section>
 
@@ -392,6 +422,8 @@ function StatCard({
   foot,
   trend,
   pulse,
+  icon,
+  accent,
 }: {
   label: string;
   value: string;
@@ -399,10 +431,13 @@ function StatCard({
   foot: string;
   trend?: "up" | "down" | "flat";
   pulse?: boolean;
+  icon?: string;
+  accent?: "cyan" | "amber" | "green";
 }) {
   return (
-    <div className="x4-card">
+    <div className={`x4-card x4-card--${accent || "cyan"}`}>
       <div className="x4-card__label">
+        {icon && <span className="x4-card__icon">{icon}</span>}
         {label}
         {trend && trend !== "flat" && (
           <span className={`x4-card__trend ${trend}`}>{trend === "up" ? "▲" : "▼"}</span>
@@ -434,6 +469,11 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     setTimeout(() => setCopiedLevel(null), 1500);
   };
 
+  // Qualitative progress toward targets based on which TP has been secured
+  const progressPct =
+    s.tradeStatus === "TP2_HIT" ? 85 : s.tradeStatus === "TP1_HIT" ? 55 : s.status === "profit" ? 30 : s.status === "loss" ? 0 : 10;
+  const pipsMoved = s.statusPips ?? 0;
+
   return (
     <div className="x4-signal">
       <div className="x4-signal__top">
@@ -441,6 +481,17 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
         <span className={`x4-dir ${s.direction === "LONG" ? "long" : "short"}`}>{s.direction}</span>
         {s.tier && <span className={`x4-tier x4-tier--${s.tier.toLowerCase()}`}>{s.tier}</span>}
         <span className="x4-muted x4-signal__time">{s.openedAgo}</span>
+      </div>
+      <div className="x4-signal__progress">
+        <div className="x4-signal__progress-track">
+          <div
+            className={`x4-signal__progress-fill x4-signal__progress-fill--${s.status}`}
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <span className="x4-signal__progress-label">
+          {s.status === "profit" ? `+${pipsMoved} toward TP1` : s.status === "loss" ? "Near SL" : "Awaiting move"}
+        </span>
       </div>
       <div className="x4-signal__levels">
         <Level label="ENTRY" value={s.entry} copied={copiedLevel === "ENTRY"} onCopy={copyLevel} />
@@ -637,6 +688,40 @@ const CSS = `
 }
 .x4-banner__tag { font-weight: 700; letter-spacing: 0.5px; }
 
+/* Trust strip */
+.x4-trust {
+  background: linear-gradient(90deg, rgba(79,209,232,0.06), rgba(51,209,122,0.05), rgba(255,176,32,0.05));
+  border-bottom: 1px solid var(--x4-line);
+  padding: 9px 24px;
+  overflow-x: auto;
+}
+.x4-trust__inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 1400px;
+  margin: 0 auto;
+  white-space: nowrap;
+}
+.x4-trust__item {
+  font-size: 11.5px;
+  color: var(--x4-text-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--x4-font-mono);
+}
+.x4-trust__icon { color: var(--x4-cyan); font-size: 8px; }
+.x4-trust__sep {
+  width: 1px;
+  height: 12px;
+  background: var(--x4-line);
+  flex: 0 0 auto;
+}
+@media (max-width: 900px) {
+  .x4-trust__sep:nth-of-type(n+2) { display: none; }
+}
+
 .x4-main {
   padding: 24px;
   max-width: 1400px;
@@ -658,8 +743,30 @@ const CSS = `
 .x4-card {
   background: var(--x4-panel);
   border: 1px solid var(--x4-line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.x4-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--x4-accent-color, var(--x4-cyan));
+  opacity: 0.7;
+}
+.x4-card:hover {
+  border-color: rgba(120, 140, 165, 0.5);
+  transform: translateY(-1px);
+}
+.x4-card--cyan { --x4-accent-color: var(--x4-cyan); }
+.x4-card--amber { --x4-accent-color: var(--x4-amber); }
+.x4-card--green { --x4-accent-color: var(--x4-green); }
+.x4-card__icon {
+  color: var(--x4-accent-color, var(--x4-cyan));
+  font-size: 12px;
 }
 .x4-card__label {
   font-family: var(--x4-font-mono);
@@ -779,6 +886,33 @@ const CSS = `
 }
 .x4-tier--strong { color: var(--x4-amber); border-color: rgba(255,176,32,0.4); }
 .x4-signal__time { margin-left: auto; font-size: 11px; }
+.x4-signal__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.x4-signal__progress-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(50,63,84,0.4);
+  overflow: hidden;
+}
+.x4-signal__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.x4-signal__progress-fill--profit { background: linear-gradient(90deg, var(--x4-cyan), var(--x4-green)); }
+.x4-signal__progress-fill--loss { background: var(--x4-red); }
+.x4-signal__progress-fill--pending { background: var(--x4-text-dim); }
+.x4-signal__progress-label {
+  font-family: var(--x4-font-mono);
+  font-size: 10px;
+  color: var(--x4-text-dim);
+  white-space: nowrap;
+}
 .x4-signal__levels {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
