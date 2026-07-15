@@ -208,9 +208,12 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   else if (isLoss) closedLevel = "Closed at SL";
                   else if (isBreakeven) closedLevel = "Closed at Entry";
                   else if (signal.result === 'PARTIAL WIN') {
+                    // A PARTIAL WIN always means at least TP1 was secured before the
+                    // trade closed at breakeven/SL - never show the bare "Closed at
+                    // SL" here, since paired with a WIN badge that reads as a
+                    // contradiction (looks like a loss to customers).
                     if (signal.tp2_hit_at) closedLevel = "Closed at SL after TP2";
-                    else if (signal.tp1_hit_at) closedLevel = "Closed at SL after TP1";
-                    else closedLevel = "Closed at SL";
+                    else closedLevel = "Closed at SL after TP1";
                   } else if (isWin) {
                     if (signal.tp3_hit_at) closedLevel = "Closed at TP3";
                     else if (signal.tp2_hit_at) closedLevel = "Closed at TP2";

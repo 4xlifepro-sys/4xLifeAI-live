@@ -1,5 +1,6 @@
-import type { Candle } from '../src/types.js';
+import type { Candle, Signal } from '../src/types.js';
 import { getPipMultiplier } from './engine2.js';
+import crypto from 'crypto';
 
 export interface TradeSignal {
   symbol: string;
@@ -699,4 +700,94 @@ function scanMetalsMeanReversion(pair: string, m5Candles: Candle[]): TradeSignal
   }
 
   return signals;
+}
+
+// ---------------------------------------------------------------------------
+// LIVE adapter - FOREX mean-reversion only (walk-forward validated: 71.1% WR,
+// +0.134 avgR out-of-sample on 90 closed trades). Mirrors the same
+// { signal, scores, regime, regimeReason } shape returned by
+// engine2.ts's detectTrendMomentumScannerV5 / engine-trend-breakout.ts's
+// detectCryptoTrendBreakoutLive so scanner.ts's downstream logic (confidence
+// gate, duplicate-trade check, DB writes, market state) works unchanged
+// regardless of which engine produced the signal.
+//
+// NOT yet wired into scanner.ts routing - defined here for review, per the
+// approved plan (forex + metals live, crypto stays on existing routing).
+// ---------------------------------------------------------------------------
+export function detectForexMeanReversionLive(pair: string, entryTf: Candle[]): {
+  signal: Signal;
+  scores: { strengthScore: number; momentumScore: number; atrScore: number; trendScore: number };
+  regime: string;
+  regimeReason: string;
+} {
+  const noSignal = (reason: string): Signal => ({
+    id: crypto.randomUUID(),
+    pair,
+    direction: 'LONG',
+    bias: 'NEUTRAL',
+    score: 0,
+    entry: 0,
+    sl: 0,
+    tp1: 0,
+    tp2: 0,
+    tp3: 0,
+    aiConfidence: 0,
+    tier: 'Reject',
+    status: 'REJECTED',
+    timestamp: new Date().toISOString(),
+    aiReason: reason,
+    rejection_reason: reason,
+  });
+
+  if (!entryTf || entryTf.length < 60) {
+    return { signal: noSignal('INSUFFICIENT_M5_HISTORY'), scores: { strengthScore: 0, momentumScore: 0, atrScore: 0, trendScore: 0 }, regime: 'FOREX_MEAN_REVERSION', regimeReason: 'INSUFFICIENT_M5_HISTORY' };
+  }
+
+  const signals = scanForexMeanReversion(pair, entryTf);
+  const last = signals[signals.length - 1];
+  const isFresh = last && last.candleIndex === entryTf.length - 1;
+
+  if (!isFresh) {
+    const reason = last ? 'NO_FRESH_SIGNAL_ON_LATEST_CANDLE' : 'NO_MEAN_REVERSION_SETUP';
+    return { signal: noSignal(reason), scores: { strengthScore: 0, momentumScore: 0, atrScore: 0, trendScore: 0 }, regime: 'FOREX_MEAN_REVERSION', regimeReason: reason };
+  }
+
+  let tier: 'Strong' | 'Good' | 'Valid' | 'Reject' = 'Valid';
+  if (last.confidence >= 75) tier = 'Strong';
+  else if (last.confidence >= 65) tier = 'Good';
+
+  const lastCandle = entryTf[entryTf.length - 1];
+
+  const signal: Signal = {
+    id: crypto.randomUUID(),
+    pair,
+    direction: last.direction,
+    bias: last.direction === 'LONG' ? 'BULLISH' : 'BEARISH',
+    score: last.confidence,
+    entry: last.entry,
+    sl: last.sl,
+    tp1: last.tp1,
+    tp2: last.tp2,
+    tp3: last.tp3,
+    aiConfidence: last.confidence,
+    tier,
+    status: 'ACTIVE',
+    timestamp: lastCandle?.timestamp || new Date().toISOString(),
+    aiReason: last.reason,
+    diagnostics: {
+      regimeState: last.direction === 'LONG' ? 'MEAN_REVERSION_BUY' : 'MEAN_REVERSION_SELL',
+      engine: 'FOREX_MEAN_REVERSION',
+      // Walk-forward validated risk sizing guidance (maxDD 12.42R in-sample,
+      // targeting <=15-20% max account drawdown). Surfaced downstream by
+      // scanner.ts in the Telegram message and/or DB record.
+      recommendedRiskPercent: 1.0,
+    },
+  };
+
+  return {
+    signal,
+    scores: { strengthScore: last.confidence, momentumScore: last.confidence, atrScore: last.confidence, trendScore: last.confidence },
+    regime: last.direction === 'LONG' ? 'MEAN_REVERSION_BUY' : 'MEAN_REVERSION_SELL',
+    regimeReason: last.reason,
+  };
 }

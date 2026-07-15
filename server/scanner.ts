@@ -1,6 +1,7 @@
 import { fetchCandles, fetchHistoricalCandles } from './live-market-feed.js';
 import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
-import { CURATED_LIVE_CRYPTO_PAIRS, detectCryptoTrendBreakoutLive } from './engine-trend-breakout.js';
+import { CURATED_LIVE_CRYPTO_PAIRS, detectCryptoTrendBreakoutLive, detectMetalsTrendBreakoutLive, buildContext } from './engine-trend-breakout.js';
+import { detectForexMeanReversionLive } from './engine-mean-reversion.js';
 
 // Map internal status values to real DB check constraint values
 // DB allows: PENDING_APPROVAL, LIVE, TP1_HIT, TP2_HIT, TP3_HIT, STOP_LOSS_HIT, CLOSED, REJECTED_BY_ADMIN
@@ -219,6 +220,12 @@ function updatePairStatus(pair: string, status: 'scanning' | 'success' | 'error'
 
 const htfCache = new Map<string, { data: any, timestamp: number }>();
 
+// Alert-only tracking for metals trades that stay open unusually long
+// (EMA20 trail has no fixed time exit by design). Does NOT close trades,
+// just flags them once via Telegram so they don't sit forgotten.
+const staleMetalsAlerted = new Set<string>();
+const STALE_METALS_ALERT_DAYS = 5;
+
 async function getGlobalActiveTradeCount() {
   const memoryCount = scannerState.signals.filter((signal: any) => ['ACTIVE', ...OPEN_SIGNAL_STATUSES].includes(signal.status || 'LIVE')).length;
   let dbCount = 0;
@@ -238,6 +245,52 @@ async function getGlobalActiveTradeCount() {
   }
 
   return supabase ? dbCount : memoryCount;
+}
+
+// Metals (XAUUSD, XAGUSD) use the trend-breakout engine's trailing EMA20
+// exit - there is no fixed TP1/TP2/TP3 to check against live. This mirrors
+// the exact backtest-validated rule (server/backtest-walkforward.ts:
+// simulateTrailingExit): fixed SL checked first every candle; once the
+// trade is already >= 1R in favor, a close back through the EMA20 trail
+// closes the trade as a win. Forex/crypto tracking is untouched by this.
+function trackMetalsTrailingExit(
+  s: any,
+  candles: any[],
+  pipMult: number
+): { exit: boolean; exitPrice?: number; exitTime?: string; reason?: 'SL' | 'TRAIL_EMA' } {
+  const isLong = s.direction === 'LONG' || s.direction === 'BUY' || s.signal === 'BUY';
+  const sEntry = s.entry_price || s.entry || 0;
+  const sSL = s.sl || 0;
+  const initialRiskPips = Math.abs(sEntry - sSL) / pipMult;
+  if (!initialRiskPips || candles.length < 2) return { exit: false };
+
+  const ctx = buildContext(candles as any);
+  const openedAtMs = new Date(s.created_at || s.timestamp || 0).getTime();
+
+  let entryIdx = -1;
+  for (let i = 0; i < candles.length; i++) {
+    if (new Date(candles[i].timestamp).getTime() <= openedAtMs) entryIdx = i;
+    else break;
+  }
+  if (entryIdx < 0) entryIdx = 0;
+
+  for (let i = entryIdx + 1; i < candles.length; i++) {
+    const c = candles[i];
+    if (isLong && c.low <= sSL) return { exit: true, exitPrice: sSL, exitTime: c.timestamp, reason: 'SL' };
+    if (!isLong && c.high >= sSL) return { exit: true, exitPrice: sSL, exitTime: c.timestamp, reason: 'SL' };
+
+    const trail = ctx.trailEmaAt(i);
+    if (trail !== undefined) {
+      const favorablePips = isLong ? (c.close - sEntry) / pipMult : (sEntry - c.close) / pipMult;
+      if (favorablePips >= initialRiskPips) {
+        const closedThroughTrail = isLong ? c.close < trail : c.close > trail;
+        if (closedThroughTrail) {
+          return { exit: true, exitPrice: c.close, exitTime: c.timestamp, reason: 'TRAIL_EMA' };
+        }
+      }
+    }
+  }
+  return { exit: false };
 }
 
 export async function startScanner() {
@@ -348,7 +401,11 @@ export async function startScanner() {
       // the standard fetchCandles() only pulls 100. Pull more history for these
       // pairs only; every other pair keeps the existing lightweight fetch.
       const isCuratedCrypto = CURATED_LIVE_CRYPTO_PAIRS.has(pair);
-      let setupPromise = isCuratedCrypto
+      // Metals now route through the trend-breakout engine (walk-forward
+      // validated), which needs 250+ M5 candles for EMA200 + slope lookback -
+      // same treatment as curated crypto pairs above.
+      const isMetals = pair === 'XAUUSD' || pair === 'XAGUSD';
+      let setupPromise = (isCuratedCrypto || isMetals)
         ? fetchHistoricalCandles(pair, '5min', 300)
         : fetchCandles(pair, '5min');
       let activeSignalsPromise: any = null;
@@ -385,9 +442,12 @@ export async function startScanner() {
             if (entryTf) candleCache.set(pair, entryTf as any[]);
 
             for (const s of activeSignals) {
+              const sIsMetals = s.pair === 'XAUUSD' || s.pair === 'XAGUSD';
               let signalCandles = candleCache.get(s.pair);
               if (!signalCandles) {
-                signalCandles = await fetchCandles(s.pair, '5min') as any[];
+                signalCandles = sIsMetals
+                  ? await fetchHistoricalCandles(s.pair, '5min', 300) as any[]
+                  : await fetchCandles(s.pair, '5min') as any[];
                 if (signalCandles && signalCandles.length > 0) {
                   candleCache.set(s.pair, signalCandles);
                 }
@@ -433,6 +493,85 @@ export async function startScanner() {
                     .eq('id', s.id);
                   continue;
                 }
+              }
+
+              if (sIsMetals) {
+                const metalsExit = trackMetalsTrailingExit(s, signalCandles, pipMult);
+                if (metalsExit.exit) {
+                  staleMetalsAlerted.delete(s.id);
+                  const dt = new Date(metalsExit.exitTime || Date.now());
+                  const closedAt = dt.toISOString();
+                  const rawPipsMetals = Math.abs(metalsExit.exitPrice! - sEntry) / pipMult;
+                  const riskPipsMetals = Math.abs(sEntry - sSL) / pipMult || 1;
+                  const rMultiple = (rawPipsMetals / riskPipsMetals).toFixed(2);
+                  const isWin = metalsExit.reason === 'TRAIL_EMA';
+                  const directionStr = (s.direction === 'LONG' || s.direction === 'BUY' || s.signal === 'BUY') ? 'BUY' : 'SELL';
+
+                  const headerEmoji = isWin ? '🏁' : '🛑';
+                  const titleText = isWin ? '4xFiveAI — Closed via EMA20 Trail' : '4xFiveAI — STOP LOSS HIT';
+                  const resultEmoji = isWin ? '✅' : '❌';
+                  const sign = isWin ? '+' : '-';
+
+                  const hitMsg = `${headerEmoji} <b>${titleText}</b>\n\n`
+                  + `Pair: ${s.pair}\n`
+                  + `Signal: ${directionStr}\n\n`
+                  + `Entry: ${sEntry}\n\n`
+                  + `Exit: ${metalsExit.exitPrice}\n\n`
+                  + `Result: ${sign}${rawPipsMetals.toFixed(1)} pips (${sign}${rMultiple}R) ${resultEmoji}\n\n`
+                  + `Status: TRADE CLOSED\n\n`
+                  + `Timestamp: ${dt.toUTCString()}`;
+
+                  console.log(`[OUTCOME TRACKER][METALS] ${s.pair} ${metalsExit.reason} @ ${closedAt} (${sign}${rMultiple}R)`);
+                  if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(hitMsg); else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
+
+                  scannerState.stats.lastTradeTimestamp = closedAt;
+
+                  const openedAtDt = new Date(s.created_at || s.timestamp || dt);
+                  const durationMs = dt.getTime() - openedAtDt.getTime();
+                  const hours = Math.floor(durationMs / (1000 * 60 * 60));
+                  const mins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+
+                  const summaryMsg = `📊 <b>4xFiveAI — TRADE SUMMARY</b>\n\n`
+                  + `Pair: ${s.pair}\n`
+                  + `Direction: ${directionStr}\n`
+                  + `Entry: ${sEntry}\n`
+                  + `Exit: ${metalsExit.exitPrice}\n\n`
+                  + `Exit type: ${isWin ? 'Trailing EMA20 (no fixed TP)' : 'Stop Loss'}\n\n`
+                  + `Profit: ${sign}${rawPipsMetals.toFixed(1)} pips (${sign}${rMultiple}R)\n`
+                  + `Duration: ${hours}h ${mins}m\n`
+                  + `Outcome: ${isWin ? 'WIN 🟢' : 'LOSS 🔴'}\n\n`
+                  + `Timestamp: ${dt.toUTCString()}`;
+
+                  if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(summaryMsg); else console.log('[KILL SWITCH] Telegram summary msg BLOCKED');
+
+                  const updatePayload: any = {
+                    status: mapStatus('CLOSED'),
+                    is_active: false,
+                    closed_at: closedAt,
+                    result: isWin ? 'WIN' : 'LOSS',
+                  };
+                  if (isWin) updatePayload.pips_won = rawPipsMetals;
+                  else updatePayload.pips_lost = rawPipsMetals;
+
+                  const { error } = await supabase.from('signals').update(updatePayload).eq('id', s.id);
+                  if (error) console.error("Failed to update signals table (metals trail exit):", error.message);
+                } else {
+                  // Alert-only: flag metals trades open unusually long. Does not close the trade.
+                  const openedAtMsForAlert = new Date(s.created_at || s.timestamp || 0).getTime();
+                  const daysOpen = (Date.now() - openedAtMsForAlert) / (1000 * 60 * 60 * 24);
+                  if (daysOpen >= STALE_METALS_ALERT_DAYS && !staleMetalsAlerted.has(s.id)) {
+                    staleMetalsAlerted.add(s.id);
+                    const staleMsg = `⚠️ <b>4xFiveAI — Long-Running Metals Trade</b>\n\n`
+                    + `Pair: ${s.pair}\n`
+                    + `Entry: ${sEntry}\n`
+                    + `Opened: ${new Date(openedAtMsForAlert).toUTCString()}\n`
+                    + `Days open: ${daysOpen.toFixed(1)}\n\n`
+                    + `Still tracking via EMA20 trail - no fixed time exit by design. This is a heads-up only, trade remains open.`;
+                    console.log(`[OUTCOME TRACKER][METALS] ${s.pair} stale alert - open ${daysOpen.toFixed(1)}d`);
+                    if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(staleMsg);
+                  }
+                }
+                continue; // metals only uses trailing-exit tracking - skip fixed TP1/TP2/TP3/SL block below
               }
 
               let isHit = false;
@@ -517,7 +656,18 @@ export async function startScanner() {
               }
           
               if (isHit) {
-                 const dt = new Date();
+                 // BUG FIX: previously used `new Date()` (wall-clock time the bot
+                 // happened to notice the event) instead of the real candle
+                 // timestamp where price actually crossed TP/SL. That made
+                 // tp1_hit_at/tp2_hit_at/tp3_hit_at/closed_at and the reported
+                 // "Duration" inaccurate whenever the scanner processed a batch
+                 // of already-elapsed candles (e.g. TP1-then-reversal both
+                 // already present in the fetched candle window) - Telegram
+                 // would show "TP1 HIT" and "TRADE SUMMARY" seconds apart even
+                 // though the real market events were minutes/hours apart.
+                 // Use the actual event candle's timestamp so live timing
+                 // matches the same methodology the backtest engines use.
+                 const dt = new Date(currentPrice.timestamp || Date.now());
                  const closedAt = dt.toISOString();
                  
                  let finalResult = 'LOSS';
@@ -699,8 +849,10 @@ export async function startScanner() {
       // ===========================================
 
       const { signal, scores, regime, regimeReason } = isCuratedCrypto
-        ? detectCryptoTrendBreakoutLive(pair, entryTf)
-        : detectTrendMomentumScannerV5(pair, htf, setup, entryTf);
+        ? detectCryptoTrendBreakoutLive(pair, entryTf)      // UNCHANGED - crypto stays on existing routing
+        : isMetals
+        ? detectMetalsTrendBreakoutLive(pair, entryTf)       // walk-forward validated: 38.3% WR / +0.184R
+        : detectForexMeanReversionLive(pair, entryTf);       // walk-forward validated: 71.1% WR / +0.134R OOS
       
       let finalSignal = signal;
 
@@ -949,6 +1101,24 @@ export async function startScanner() {
              
              const signalDirectionStr = dbDirection === 'BUY' ? 'BUY' : 'SELL';
              const modeStr = scannerState.stats.mode === 'crypto' ? ' (CRYPTO MODE)' : '';
+             const riskPct = signal.diagnostics?.recommendedRiskPercent;
+             const riskLine = riskPct ? `\n<b>Recommended risk:</b> ${riskPct}% of account\n` : '';
+             const engineTag = signal.diagnostics?.engine;
+
+             let tpBlock: string;
+             if (engineTag === 'FOREX_MEAN_REVERSION') {
+               tpBlock = `<b>TP1:</b> ${signal.tp1} (0.35R)\n`
+                       + `<b>TP2:</b> ${signal.tp2} (0.9R)\n`
+                       + `<b>TP3:</b> ${signal.tp3} (1.8R)\n\n`;
+             } else if (engineTag === 'METALS_TREND_BREAKOUT') {
+               tpBlock = `<b>Exit:</b> Trailing EMA${signal.diagnostics?.trailEmaPeriod ?? 20} (no fixed TP)\n`
+                       + `<b>Reference levels:</b> ${signal.tp1} / ${signal.tp2} / ${signal.tp3} (informational only, not the real exit)\n\n`;
+             } else {
+               // crypto / unrouted - keep existing fixed-R label as-is (unchanged behavior)
+               tpBlock = `<b>TP1:</b> ${signal.tp1} (1:1.5)\n`
+                       + `<b>TP2:</b> ${signal.tp2} (1:3)\n`
+                       + `<b>TP3:</b> ${signal.tp3} (1:5)\n\n`;
+             }
              
              const msgOut = `🚨 <b>4xFiveAI SIGNAL${modeStr}</b>\n\n`
              + `<b>Pair:</b> ${signal.pair}\n`
@@ -956,10 +1126,9 @@ export async function startScanner() {
              + `<b>Setup:</b> Premium signal\n\n`
              + `<b>Entry:</b> ${signal.entry}\n`
              + `<b>SL:</b> ${signal.sl} (${risk} pips)\n`
-            + `<b>TP1:</b> ${signal.tp1} (1:1.5)\n`
-            + `<b>TP2:</b> ${signal.tp2} (1:3)\n`
-            + `<b>TP3:</b> ${signal.tp3} (1:5)\n\n`
+            + tpBlock
              + `<b>Confidence:</b> ${signal.aiConfidence}% (${signal.tier})\n`
+            + riskLine
             + `<b>Timestamp:</b> ${dt}\n\n`
             + `🛡️ <b>Risk Management:</b> Every signal includes an SL calculated using real-time market volatility with pair-specific safety ranges — never too tight, never too wide. This is a signal service only — you place and manage your own trades based on our levels.`;
              
