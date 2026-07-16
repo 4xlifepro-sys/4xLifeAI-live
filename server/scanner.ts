@@ -28,6 +28,10 @@ const OPEN_SIGNAL_STATUSES = ['LIVE', 'TP1_HIT', 'TP2_HIT'];
 // EMERGENCY KILL SWITCH - set to true to pause ALL Telegram signals immediately
 const TELEGRAM_SIGNALS_DISABLED = process.env.DISABLE_TELEGRAM_SIGNALS === 'true';
 
+// FOREX KILL SWITCH - pause forex signals only (metals/crypto continue)
+// Set DISABLE_FOREX_SIGNALS=true in Railway Variables tab to disable
+const FOREX_SIGNALS_DISABLED = process.env.DISABLE_FOREX_SIGNALS === 'true';
+
 export const rejectionStats = {
    ATR_LOW: 0,
    EMA_FLAT: 0,
@@ -852,6 +856,8 @@ export async function startScanner() {
         ? detectCryptoTrendBreakoutLive(pair, entryTf)      // UNCHANGED - crypto stays on existing routing
         : isMetals
         ? detectMetalsTrendBreakoutLive(pair, entryTf)       // walk-forward validated: 38.3% WR / +0.184R
+        : FOREX_SIGNALS_DISABLED
+        ? { signal: null, scores: {}, regime: 'UNKNOWN', regimeReason: 'FOREX_DISABLED' }  // Skip forex
         : detectForexMeanReversionLive(pair, entryTf);       // walk-forward validated: 71.1% WR / +0.134R OOS
       
       let finalSignal = signal;
