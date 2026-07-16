@@ -1,7 +1,6 @@
 import { fetchCandles, fetchHistoricalCandles } from './live-market-feed.js';
 import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
 import { CURATED_LIVE_CRYPTO_PAIRS, detectCryptoTrendBreakoutLive, detectMetalsTrendBreakoutLive, buildContext } from './engine-trend-breakout.js';
-import { detectForexMeanReversionLive } from './engine-mean-reversion.js';
 
 // Map internal status values to real DB check constraint values
 // DB allows: PENDING_APPROVAL, LIVE, TP1_HIT, TP2_HIT, TP3_HIT, STOP_LOSS_HIT, CLOSED, REJECTED_BY_ADMIN
@@ -27,10 +26,6 @@ const OPEN_SIGNAL_STATUSES = ['LIVE', 'TP1_HIT', 'TP2_HIT'];
 
 // EMERGENCY KILL SWITCH - set to true to pause ALL Telegram signals immediately
 const TELEGRAM_SIGNALS_DISABLED = process.env.DISABLE_TELEGRAM_SIGNALS === 'true';
-
-// FOREX KILL SWITCH - pause forex signals only (metals/crypto continue)
-// Set DISABLE_FOREX_SIGNALS=true in Railway Variables tab to disable
-const FOREX_SIGNALS_DISABLED = process.env.DISABLE_FOREX_SIGNALS === 'true';
 
 export const rejectionStats = {
    ATR_LOW: 0,
@@ -157,16 +152,16 @@ export const WEEKEND_PAIRS = ['SOLUSD', 'LTCUSD', 'ETHUSD', 'ADAUSD', 'DOGEUSD',
 // SOLUSD, XRPUSD, BNBUSD, ADAUSD, LTCUSD, DOGEUSD) are routed through
 // detectCryptoTrendBreakoutLive() via CURATED_LIVE_CRYPTO_PAIRS below instead
 // of detectTrendMomentumScannerV5.
+// FINAL 6-PAIR ROSTER (user-selected, backtest-ranked)
+//   Tier 1 (real edge):   XAUUSD (+0.169 avgR), ETHUSD (+0.195 avgR)
+//   Daily volume:         XAGUSD (+0.046 avgR)
+//   Coverage:             BNBUSD (+0.053), SOLUSD (~0), BTCUSD (~0)
+//   Forex removed: no proven edge after real costs (all M5/H1 forex failed).
 export const APPROVED_PAIRS = [
   // Metals
   'XAUUSD', 'XAGUSD',
-  // Crypto (all 8 backtested)
-  'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'LTCUSD', 'DOGEUSD',
-  // Forex majors + crosses (backtested 15)
-  'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD',
-  'EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY', 'CHFJPY', 'NZDJPY', 'EURAUD',
-  // Previously-live extras (not in the 25-pair backtest, kept running)
-  'GBPNZD', 'EURNZD', 'GBPAUD'
+  // Crypto
+  'ETHUSD', 'BNBUSD', 'SOLUSD', 'BTCUSD',
 ];
 
 export const PAIRS = [...APPROVED_PAIRS]; // Initialized, mutable by mode switch
@@ -853,12 +848,10 @@ export async function startScanner() {
       // ===========================================
 
       const { signal, scores, regime, regimeReason } = isCuratedCrypto
-        ? detectCryptoTrendBreakoutLive(pair, entryTf)      // UNCHANGED - crypto stays on existing routing
+        ? detectCryptoTrendBreakoutLive(pair, entryTf)      // crypto trend-breakout routing
         : isMetals
         ? detectMetalsTrendBreakoutLive(pair, entryTf)       // walk-forward validated: 38.3% WR / +0.184R
-        : FOREX_SIGNALS_DISABLED
-        ? { signal: null, scores: {}, regime: 'UNKNOWN', regimeReason: 'FOREX_DISABLED' }  // Skip forex
-        : detectForexMeanReversionLive(pair, entryTf);       // walk-forward validated: 71.1% WR / +0.134R OOS
+        : { signal: null, scores: {}, regime: 'UNKNOWN', regimeReason: 'PAIR_NOT_SUPPORTED' };  // 6-pair roster: metals + crypto only
       
       let finalSignal = signal;
 

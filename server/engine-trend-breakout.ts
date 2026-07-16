@@ -525,7 +525,7 @@ function scanMetalsTrendBreakout(pair: string, m5Candles: Candle[], useSessionFi
 
 // Exported for the backtest script's trailing-stop simulation - build once
 // per pair and reuse trailEmaAt(i), do not rebuild per-index (O(n) each call).
-export { TRAIL_EMA_PERIOD, buildContext };
+export { TRAIL_EMA_PERIOD, buildContext, evaluateBreakout, METALS_ATR_SL_BUFFER, MIN_SIGNAL_GAP_MS };
 
 // ---------------------------------------------------------------------------
 // LIVE adapter - all 8 backtested crypto coins deployed per explicit request.
