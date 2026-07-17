@@ -231,7 +231,7 @@ async function startServer() {
   // Start the background scanner
   await startScanner();
 
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
   app.use((req, res, next) => {
     res.on('finish', () => {
       if (req.path.startsWith('/api/') && res.statusCode >= 500) {
