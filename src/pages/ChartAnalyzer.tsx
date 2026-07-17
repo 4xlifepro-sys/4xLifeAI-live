@@ -185,6 +185,23 @@ export default function ChartAnalyzer() {
 
         {error && (<div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3"><AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" /><p className="text-sm text-red-400">{error}</p></div>)}
 
+        {usage >= 3 && !error && !result && (
+          <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-6 text-center space-y-4">
+            <div className="flex items-center justify-center gap-2">
+              <Shield className="w-6 h-6 text-amber-400" />
+              <h3 className="text-lg font-bold text-amber-400">Daily Analysis Limit Reached</h3>
+            </div>
+            <p className="text-sm text-[#C0C8D4]">You've used all 3 free analyses for today. Upgrade to Pro for unlimited institutional-grade chart analysis.</p>
+            <div className="flex items-center justify-center gap-3">
+              <Link to="/plans" className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold px-6 py-2.5 rounded-xl text-sm transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+                <Zap className="w-4 h-4" />
+                Upgrade to Pro — $20/month
+              </Link>
+            </div>
+            <p className="text-xs text-[#5D6B80]">Unlimited analyses • Priority processing • No daily limits</p>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <button onClick={handleAnalyze} disabled={!selectedImage || isAnalyzing || usage >= 3} className={cn("flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all", !selectedImage || isAnalyzing || usage >= 3 ? "bg-[#202735] text-[#5D6B80] cursor-not-allowed" : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.3)]")}>
             {isAnalyzing ? (<><Scan className="w-5 h-5 animate-spin" /> Analyzing...</>) : (<><Zap className="w-5 h-5" /> Analyze Chart</>)}

@@ -1255,7 +1255,7 @@ Return the analysis in this exact JSON format:
   "confidence": number,
   "reasoning": "explanation",
   "warnings": "risks"
-}`;
+}
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
