@@ -1234,6 +1234,8 @@ IMPORTANT RULES:
 - Avoid trades directly into strong support/resistance.
 - The best trade is often no trade.
 - Accuracy is more important than trade frequency.
+- ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades — show the hypothetical levels based on the nearest swing points.
+- For WAIT trades, Entry = current price or nearest trigger level, SL = nearest swing, TPs = logical targets.
 
 Return the analysis in this exact JSON format:
 {
