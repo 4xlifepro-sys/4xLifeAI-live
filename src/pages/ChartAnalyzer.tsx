@@ -95,14 +95,29 @@ export default function ChartAnalyzer() {
     if (usage >= 3) { setError('Daily limit reached (3/3). Upgrade to Pro for unlimited chart analyses.'); return; }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError('');
     try {
-      const res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
+      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
+      
+      // Auto-retry once on 503 (Gemini high demand — temporary)
+      if (res.status === 503) {
+        setAnalysisStep(analysisStep); // keep spinner going
+        await new Promise(r => setTimeout(r, 3000)); // wait 3 seconds
+        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
+      }
+      
       const data = await res.json();
       if (data.success) {
         setResult(data.analysis);
         const newUsage = usage + 1; setUsage(newUsage);
         localStorage.setItem('4xlifeai_chart_usage', newUsage.toString());
         setTimeout(() => { resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300);
-      } else { setError(data.error || 'Failed to analyze chart'); }
+      } else {
+        const errMsg = data.error || '';
+        if (errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429')) {
+          setError('The AI is temporarily busy. Please wait 30 seconds and try again.');
+        } else {
+          setError(errMsg || 'Failed to analyze chart. Please try again.');
+        }
+      }
     } catch (e: any) { setError('Network error. Please check your connection and try again.'); }
     finally { setIsAnalyzing(false); }
   };
