@@ -1194,6 +1194,135 @@ async function startServer() {
     }
   });
 
+  // AI Chart Analyzer Endpoint
+  app.post("/api/chart-analyzer", async (req, res) => {
+    try {
+      const { imageBase64, chartType } = req.body;
+      
+      if (!imageBase64) {
+        return res.status(400).json({ error: "No image provided" });
+      }
+
+      // Strip data URL prefix if present
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      
+      const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst.
+
+Analyze this trading chart screenshot using professional price action methodology.
+
+Determine:
+1. Trend (Bullish/Bearish/Range)
+2. Market Structure (HH/HL/LH/LL or Neutral)
+3. Support & Resistance levels
+4. Momentum (Strong/Weak/Exhausted)
+5. Setup Quality (Breakout/Pullback/Rejection/Continuation)
+6. Trade Decision (BUY/SELL/WAIT)
+7. Entry Price
+8. Stop Loss (beyond nearest swing)
+9. TP1, TP2, TP3 (logical levels, min 1:2 RR)
+10. Risk:Reward ratio
+11. Confidence Score (0-100%)
+12. Reasoning (why this trade exists)
+13. Warnings (any risks to be aware of)
+
+IMPORTANT RULES:
+- Never invent prices. Only use what is visible in the chart.
+- If setup is weak or unclear, return WAIT with confidence below 70%.
+- Stop Loss must be beyond the nearest valid swing high/low.
+- Never place SL inside market noise.
+- Prefer pullback entries over chasing breakouts.
+- Avoid trades directly into strong support/resistance.
+- The best trade is often no trade.
+- Accuracy is more important than trade frequency.
+
+Return the analysis in this exact JSON format:
+{
+  "instrument": "detected pair",
+  "timeframe": "detected TF",
+  "trend": "Bullish/Bearish/Range",
+  "marketStructure": "description",
+  "support": "price level",
+  "resistance": "price level",
+  "trade": "BUY/SELL/WAIT",
+  "entry": "price",
+  "stopLoss": "price",
+  "tp1": "price",
+  "tp2": "price",
+  "tp3": "price",
+  "riskReward": "ratio",
+  "confidence": number,
+  "reasoning": "explanation",
+  "warnings": "risks"
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: chartAnalyzerPrompt },
+            {
+              inlineData: {
+                mimeType: 'image/png',
+                data: base64Data
+              }
+            }
+          ]
+        }],
+        config: {
+          temperature: 0.3,
+          responseMimeType: 'application/json'
+        }
+      });
+      
+      const analysisText = response.text;
+      let analysis;
+      
+      try {
+        analysis = JSON.parse(analysisText);
+      } catch (e) {
+        // If Gemini didn't return pure JSON, extract it
+        const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysis = JSON.parse(jsonMatch[0]);
+        } else {
+          analysis = {
+            instrument: "Unknown",
+            timeframe: "Unknown",
+            trend: "Unable to determine",
+            marketStructure: "Analysis failed to parse",
+            support: "N/A",
+            resistance: "N/A",
+            trade: "WAIT",
+            entry: "N/A",
+            stopLoss: "N/A",
+            tp1: "N/A",
+            tp2: "N/A",
+            tp3: "N/A",
+            riskReward: "N/A",
+            confidence: 0,
+            reasoning: analysisText,
+            warnings: "Could not parse structured response"
+          };
+        }
+      }
+      
+      res.json({ success: true, analysis });
+    } catch (e: any) {
+      let errorMessage = 'Failed to analyze chart';
+      
+      if (e.message && e.message.includes('429')) {
+        errorMessage = 'Chart Analyzer is currently experiencing high demand. Please try again in 1 minute.';
+      } else if (e.status === 429) {
+        errorMessage = 'Chart Analyzer is currently experiencing high demand. Please try again in 1 minute.';
+      } else if (e.message) {
+        errorMessage = e.message;
+      }
+
+      res.status(500).json({ error: errorMessage });
+    }
+  });
+
   // Test-only route to trigger notifications
   app.post("/api/test/trigger-notification", async (req, res) => {
     if (process.env.NODE_ENV === "production") {
