@@ -935,22 +935,44 @@ async function startServer() {
     const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'CONFIRMED' }).eq('id', paymentId);
     if (paymentUpdateError) return res.status(500).json({ error: paymentUpdateError.message });
 
-    // Check if user exists
-    const { data: existingUser, error: userSelectError } = await supabase.from('users').select('credits').eq('email', payment.email).single();
-    
-    if (!existingUser) {
-      return res.status(400).json({ error: `User with email ${payment.email} not found in system. Please ensure the user has signed up before approving payment.` });
-    }
+    // Check if user exists in users table
+    const { data: existingUser } = await supabase.from('users').select('credits').eq('email', payment.email).single();
+    let nextCredits = 0;
 
-    const nextCredits = Number(existingUser?.credits || 0) + Number(payment.credits || 0);
-    
-    // User exists - update
-    const { error: userUpdateError } = await supabase
-      .from('users')
-      .update({ plan: userPlan, credits: nextCredits })
-      .eq('email', payment.email);
-    
-    if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
+    if (existingUser) {
+      // User row already exists - just update plan/credits
+      nextCredits = Number(existingUser?.credits || 0) + Number(payment.credits || 0);
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update({ plan: userPlan, credits: nextCredits })
+        .eq('email', payment.email);
+
+      if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
+    } else {
+      // No users row yet - find their Supabase Auth account so we can create one
+      const { data: authUsers, error: authListError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (authListError) return res.status(500).json({ error: `Could not look up auth account: ${authListError.message}` });
+
+      const authUser = ((authUsers as any)?.users || []).find(
+        (u: any) => (u.email || '').toLowerCase() === String(payment.email).toLowerCase()
+      );
+
+      if (!authUser) {
+        return res.status(400).json({ error: `No account found for ${payment.email}. Ask the customer to sign up with this exact email first, then approve again.` });
+      }
+
+      nextCredits = Number(payment.credits || 0);
+      const { error: userInsertError } = await supabase.from('users').insert([{
+        id: authUser.id,
+        email: payment.email,
+        password_hash: 'SUPABASE_AUTH_MANAGED',
+        role: 'USER',
+        plan: userPlan,
+        credits: nextCredits,
+      }]);
+
+      if (userInsertError) return res.status(500).json({ error: `Failed to create user record: ${userInsertError.message}` });
+    }
 
     await sendNotification(payment.email, 'Payment Approved', `Congratulations! Your subscription is now active. You have full access to all trading signals and premium features. Welcome to 4xLifeAI!`, 'success');
     await notifyAdmin(
