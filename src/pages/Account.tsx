@@ -31,10 +31,10 @@ export default function Account() {
   useEffect(() => {
     if (!user) return;
     
-    // Check if user has an elite plan
+    // Check if user has a premium plan
     const checkStatus = async () => {
-       const { data: userRecord } = await supabase.from('users').select('plan_status, credits').eq('email', user.email).single();
-       if (userRecord?.plan_status === 'PREMIUM' || userRecord?.plan_status === 'ELITE' || (userRecord?.credits || 0) > 0) {
+       const { data: userRecord } = await supabase.from('users').select('plan, credits').eq('email', user.email).single();
+       if (userRecord?.plan === 'PREMIUM' || userRecord?.plan === 'ELITE' || (userRecord?.credits || 0) > 0) {
           setIsPremium(true);
        }
        

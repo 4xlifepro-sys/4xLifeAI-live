@@ -947,7 +947,7 @@ async function startServer() {
       // User exists - update
       const { error: userUpdateError } = await supabase
         .from('users')
-        .update({ plan_status: payment.plan, credits: nextCredits })
+        .update({ plan: payment.plan, credits: nextCredits })
         .eq('email', payment.email);
       if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
     } else {
@@ -956,9 +956,8 @@ async function startServer() {
         .from('users')
         .insert([{ 
           email: payment.email, 
-          plan_status: payment.plan, 
-          credits: Number(payment.credits || 0),
-          created_at: new Date().toISOString()
+          plan: payment.plan, 
+          credits: Number(payment.credits || 0)
         }]);
       if (userCreateError) return res.status(500).json({ error: `Failed to create user: ${userCreateError.message}` });
     }
