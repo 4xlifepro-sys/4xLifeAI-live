@@ -335,7 +335,7 @@ export default function ChartAnalyzer() {
 
         {!result && !isAnalyzing && (
           <div className="bg-[#11141A] border border-[#202735] rounded-2xl p-10 text-center space-y-4">
-            <Eye className="w-12 h-12 text-[#202735] mx-auto" />
+            <Scan className="w-12 h-12 text-[#202735] mx-auto" />
             <p className="text-[#5D6B80] text-sm">Upload a chart to get a full institutional-grade analysis</p>
           </div>
         )}
