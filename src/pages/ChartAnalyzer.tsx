@@ -51,36 +51,40 @@ export default function ChartAnalyzer() {
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Check user's plan status
-    const checkUserPlan = async () => {
+    // Check user's plan status and reset usage per user
+    const checkUserStatus = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user?.email) {
+          // 1. Plan Check
           const { data: userData } = await supabase.from('users').select('plan').eq('email', user.email).single();
-          
           if (userData?.plan === 'PRO') {
             setIsPro(true);
           }
+
+          // 2. Usage Check (unique per email)
+          const usageKey = `4xlifeai_usage_${user.email}`;
+          const dateKey = `4xlifeai_date_${user.email}`;
+          
+          const savedUsage = localStorage.getItem(usageKey);
+          const savedDate = localStorage.getItem(dateKey);
+          const today = new Date().toDateString();
+
+          if (savedDate !== today) {
+            localStorage.setItem(dateKey, today);
+            localStorage.setItem(usageKey, '0');
+            setUsage(0);
+          } else if (savedUsage) {
+            setUsage(parseInt(savedUsage, 10));
+          }
         }
       } catch (e) {
-        console.error('Failed to check plan:', e);
+        console.error('Failed to check status:', e);
       }
     };
     
-    checkUserPlan();
-
-    // Daily usage reset
-    const savedUsage = localStorage.getItem('4xlifeai_chart_usage');
-    const savedDate = localStorage.getItem('4xlifeai_chart_date');
-    const today = new Date().toDateString();
-    if (savedDate !== today) {
-      localStorage.setItem('4xlifeai_chart_date', today);
-      localStorage.setItem('4xlifeai_chart_usage', '0');
-      setUsage(0);
-    } else if (savedUsage) {
-      setUsage(parseInt(savedUsage, 10));
-    }
+    checkUserStatus();
   }, []);
 
   useEffect(() => {
@@ -134,8 +138,15 @@ export default function ChartAnalyzer() {
       const data = await res.json();
       if (data.success) {
         setResult(data.analysis);
-        const newUsage = usage + 1; setUsage(newUsage);
-        localStorage.setItem('4xlifeai_chart_usage', newUsage.toString());
+        const newUsage = usage + 1; 
+        setUsage(newUsage);
+        
+        // Save to unique user key
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email) {
+          localStorage.setItem(`4xlifeai_usage_${user.email}`, newUsage.toString());
+        }
+        
         setTimeout(() => { resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300);
       } else {
         const errMsg = data.error || '';
