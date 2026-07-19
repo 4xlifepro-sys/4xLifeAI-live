@@ -155,7 +155,7 @@ function GlobalLayout() {
       <nav className="border-b border-[#202735] bg-[#11141A]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <Link to={user ? "/dashboard" : "/"} className="flex items-center shrink-0">
+            <Link to={user ? "/dashboard" : "/"} className="flex items-center shrink-0 min-w-fit">
               <Logo size={32} showText={true} />
             </Link>
             

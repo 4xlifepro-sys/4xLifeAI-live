@@ -8,7 +8,7 @@ interface LogoProps {
 
 export const Logo: React.FC<LogoProps> = ({ size = 32, className, showText = false }) => {
   return (
-    <div className={`flex items-center gap-2 ${className || ''}`}>
+    <div className={`flex items-center gap-3 ${className || ''}`}>
       <svg
         width={size}
         height={size}
