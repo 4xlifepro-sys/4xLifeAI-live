@@ -155,12 +155,12 @@ function GlobalLayout() {
       <nav className="border-b border-[#202735] bg-[#11141A]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <Link to={user ? "/dashboard" : "/"} className="flex items-center">
+            <Link to={user ? "/dashboard" : "/"} className="flex items-center shrink-0">
               <Logo size={32} showText={true} />
             </Link>
             
             {/* Desktop Navigation */}
-            <div className="hidden md:flex flex-1 justify-end min-w-0">
+            <div className="hidden md:flex flex-1 justify-end min-w-0 ml-8">
               <div className="flex items-center pr-4 space-x-1 sm:space-x-4">
                 {primaryNavItems.map((item) => (
                   <Link
