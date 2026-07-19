@@ -3,6 +3,7 @@ import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Link } from 'react-router-dom';
+import { createClient } from '@supabase/supabase-js';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -45,10 +46,37 @@ export default function ChartAnalyzer() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string>('');
   const [usage, setUsage] = useState(0);
+  const [isPro, setIsPro] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Check user's plan status
+    const checkUserPlan = async () => {
+      try {
+        const { data: { user } } = await createClient(
+          import.meta.env.VITE_SUPABASE_URL || '',
+          import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+        ).auth.getUser();
+        
+        if (user?.email) {
+          const { data: userData } = await createClient(
+            import.meta.env.VITE_SUPABASE_URL || '',
+            import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+          ).from('users').select('plan').eq('email', user.email).single();
+          
+          if (userData?.plan === 'PREMIUM' || userData?.plan === 'ELITE') {
+            setIsPro(true);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to check plan:', e);
+      }
+    };
+    
+    checkUserPlan();
+
+    // Daily usage reset
     const savedUsage = localStorage.getItem('4xlifeai_chart_usage');
     const savedDate = localStorage.getItem('4xlifeai_chart_date');
     const today = new Date().toDateString();
@@ -92,7 +120,8 @@ export default function ChartAnalyzer() {
 
   const handleAnalyze = async () => {
     if (!selectedImage) return;
-    if (usage >= 3) { setError('Daily limit reached (3/3). Upgrade to Pro for unlimited chart analyses.'); return; }
+    // Only enforce limit for FREE users
+    if (!isPro && usage >= 3) { setError('Daily limit reached (3/3). Upgrade to Pro for unlimited chart analyses.'); return; }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError('');
     try {
       let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
@@ -155,9 +184,9 @@ export default function ChartAnalyzer() {
           <div className="flex items-center gap-4 text-xs mt-4">
             <span className="flex items-center gap-1.5 text-teal-400 font-medium bg-teal-400/10 px-2 py-0.5 rounded border border-teal-400/20"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span> Gemini 2.5 Flash Active</span>
             <span className="text-[#5D6B80]">•</span>
-            <span className="text-[#8A95A5]">Usage: {usage}/3 Free</span>
+            <span className="text-[#8A95A5]">{isPro ? 'Usage: Unlimited Pro' : `Usage: ${usage}/3 Free`}</span>
             <span className="text-[#5D6B80]">•</span>
-            <Link to="/plans" className="text-amber-400 hover:text-amber-300 font-medium">Upgrade to Pro → Unlimited</Link>
+            {!isPro && <Link to="/plans" className="text-amber-400 hover:text-amber-300 font-medium">Upgrade to Pro → Unlimited</Link>}
           </div>
         </div>
       </div>
@@ -190,7 +219,7 @@ export default function ChartAnalyzer() {
           </div>
         )}
 
-        {usage >= 3 && !error && !result && (
+        {usage >= 3 && !isPro && !error && !result && (
           <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-6 text-center">
             <Shield className="w-6 h-6 text-amber-400 mx-auto mb-2" />
             <h3 className="text-lg font-bold text-amber-400 mb-2">Daily Analysis Limit Reached</h3>
@@ -203,7 +232,7 @@ export default function ChartAnalyzer() {
         )}
 
         <div className="flex items-center gap-3">
-          <button onClick={handleAnalyze} disabled={!selectedImage || isAnalyzing || usage >= 3} className={cn("flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all", !selectedImage || isAnalyzing || usage >= 3 ? "bg-[#202735] text-[#5D6B80] cursor-not-allowed" : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.3)]")}>
+          <button onClick={handleAnalyze} disabled={!selectedImage || isAnalyzing || (!isPro && usage >= 3)} className={cn("flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all", !selectedImage || isAnalyzing || (!isPro && usage >= 3) ? "bg-[#202735] text-[#5D6B80] cursor-not-allowed" : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.3)]")}>
             {isAnalyzing ? (<><Scan className="w-5 h-5 animate-spin" /> Analyzing...</>) : (<><Zap className="w-5 h-5" /> Analyze Chart</>)}
           </button>
           <button onClick={handleReset} className="px-5 py-3.5 bg-[#202735] hover:bg-[#202735]/80 text-[#8A95A5] hover:text-white rounded-xl transition-all" title="Reset"><RotateCcw className="w-5 h-5" /></button>
