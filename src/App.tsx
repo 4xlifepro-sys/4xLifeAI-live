@@ -154,14 +154,14 @@ function GlobalLayout() {
 
       <nav className="border-b border-[#202735] bg-[#11141A]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <Link to={user ? "/dashboard" : "/"} className="flex items-center shrink-0 min-w-fit">
-              <Logo size={32} showText={true} />
+          <div className="flex h-16 items-center justify-between">
+            <Link to={user ? "/dashboard" : "/"} className="flex items-center shrink-0">
+              <Logo size={36} showText={true} />
             </Link>
             
             {/* Desktop Navigation */}
-            <div className="hidden md:flex flex-1 justify-end min-w-0 ml-8">
-              <div className="flex items-center pr-4 space-x-1 sm:space-x-4">
+            <div className="hidden md:flex flex-1 items-center justify-center px-8">
+              <div className="flex items-center space-x-1 lg:space-x-2">
                 {primaryNavItems.map((item) => (
                   <Link
                     key={item.path}
@@ -213,42 +213,43 @@ function GlobalLayout() {
                   </div>
                 )}
               </div>
-              
-              <div className="flex items-center shrink-0 border-l border-[#202735] pl-4">
-                {!user && !isAuthPage && (
-                  <div className="hidden sm:flex items-center space-x-3">
-                    <Link
-                      to="/login"
-                      className="px-4 py-1.5 text-sm font-bold text-white hover:text-blue-400 transition-colors uppercase"
-                    >
-                      Login
-                    </Link>
-                    <Link
-                      to="/signup"
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold tracking-wide rounded shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all uppercase"
-                    >
-                      Sign Up
-                    </Link>
-                  </div>
-                )}
+            </div>
 
-                {user && (
-                   <div className="flex items-center gap-4">
-                     <div className="hidden sm:block text-right">
-                        <div className="text-sm font-bold text-white">{user.user_metadata?.full_name || 'Trader'}</div>
-                        <div className="text-xs text-[#5D6B80]">{user.email}</div>
-                     </div>
-                     <NotificationDropdown />
-                     <button 
-                       onClick={signOut}
-                       className="p-2 text-[#8A95A5] hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-                       title="Logout"
-                     >
-                       <LogOut className="w-4 h-4" />
-                     </button>
-                   </div>
-                )}
-              </div>
+            {/* Right Side Actions */}
+            <div className="hidden md:flex items-center shrink-0">
+              {!user && !isAuthPage && (
+                <div className="hidden sm:flex items-center space-x-3">
+                  <Link
+                    to="/login"
+                    className="px-4 py-1.5 text-sm font-bold text-white hover:text-blue-400 transition-colors uppercase"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold tracking-wide rounded shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all uppercase"
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              )}
+
+              {user && (
+                <div className="flex items-center gap-4">
+                  <div className="hidden sm:block text-right">
+                    <div className="text-sm font-bold text-white">{user.user_metadata?.full_name || 'Trader'}</div>
+                    <div className="text-xs text-[#5D6B80]">{user.email}</div>
+                  </div>
+                  <NotificationDropdown />
+                  <button 
+                    onClick={signOut}
+                    className="p-2 text-[#8A95A5] hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                    title="Logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Mobile Navigation controls */}
