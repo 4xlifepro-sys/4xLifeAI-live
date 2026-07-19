@@ -926,21 +926,47 @@ async function startServer() {
     const { data: payment, error: paymentError } = await supabase.from('payment_intents').select('*').eq('id', paymentId).single();
     if (paymentError || !payment) return res.status(404).json({ error: 'Payment not found' });
 
+    // Validate payment has required fields
+    if (!payment.email) return res.status(400).json({ error: 'Payment missing email address' });
+    if (!payment.plan) return res.status(400).json({ error: 'Payment missing plan information' });
+
     const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'CONFIRMED' }).eq('id', paymentId);
     if (paymentUpdateError) return res.status(500).json({ error: paymentUpdateError.message });
 
-    const { data: existingUser } = await supabase.from('users').select('credits').eq('email', payment.email).single();
+    // Check if user exists, create if not
+    const { data: existingUser, error: userSelectError } = await supabase.from('users').select('credits').eq('email', payment.email).single();
+    
+    if (userSelectError && userSelectError.code !== 'PGRST116') {
+      // Real error (not "no rows")
+      return res.status(500).json({ error: `User lookup failed: ${userSelectError.message}` });
+    }
+
     const nextCredits = Number(existingUser?.credits || 0) + Number(payment.credits || 0);
-    const { error: userUpdateError } = await supabase
-      .from('users')
-      .update({ plan_status: payment.plan || 'PREMIUM', credits: nextCredits })
-      .eq('email', payment.email);
-    if (userUpdateError) return res.status(500).json({ error: userUpdateError.message });
+    
+    if (existingUser) {
+      // User exists - update
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .update({ plan_status: payment.plan, credits: nextCredits })
+        .eq('email', payment.email);
+      if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
+    } else {
+      // User doesn't exist - create
+      const { error: userCreateError } = await supabase
+        .from('users')
+        .insert([{ 
+          email: payment.email, 
+          plan_status: payment.plan, 
+          credits: Number(payment.credits || 0),
+          created_at: new Date().toISOString()
+        }]);
+      if (userCreateError) return res.status(500).json({ error: `Failed to create user: ${userCreateError.message}` });
+    }
 
     await sendNotification(payment.email, 'Payment Approved', `Congratulations! Your subscription is now active. You have full access to all trading signals and premium features. Welcome to 4xLifeAI!`, 'success');
     await notifyAdmin(
       'Payment Confirmed',
-      `${payment.email} was approved.\nPlan: ${payment.plan || 'PREMIUM'}\nCredits added: ${payment.credits || 0}\nNew credits: ${nextCredits}`,
+      `${payment.email} was approved.\nPlan: ${payment.plan}\nCredits added: ${payment.credits || 0}\nNew credits: ${nextCredits}`,
       'payment_confirmed',
       `payment-confirmed:${paymentId}`
     );
@@ -954,6 +980,9 @@ async function startServer() {
     const paymentId = req.params.id;
     const { data: payment, error: paymentError } = await supabase.from('payment_intents').select('*').eq('id', paymentId).single();
     if (paymentError || !payment) return res.status(404).json({ error: 'Payment not found' });
+
+    // Validate payment has email
+    if (!payment.email) return res.status(400).json({ error: 'Payment missing email address - cannot send rejection notice' });
 
     const { error: updateError } = await supabase.from('payment_intents').update({ status: 'REJECTED' }).eq('id', paymentId);
     if (updateError) return res.status(500).json({ error: updateError.message });
