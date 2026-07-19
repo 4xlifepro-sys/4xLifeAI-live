@@ -936,31 +936,19 @@ async function startServer() {
     // Check if user exists, create if not
     const { data: existingUser, error: userSelectError } = await supabase.from('users').select('credits').eq('email', payment.email).single();
     
-    if (userSelectError && userSelectError.code !== 'PGRST116') {
-      // Real error (not "no rows")
-      return res.status(500).json({ error: `User lookup failed: ${userSelectError.message}` });
+    if (!existingUser) {
+      return res.status(400).json({ error: `User with email ${payment.email} not found in system. Please ensure the user has signed up before approving payment.` });
     }
 
     const nextCredits = Number(existingUser?.credits || 0) + Number(payment.credits || 0);
     
-    if (existingUser) {
-      // User exists - update
-      const { error: userUpdateError } = await supabase
-        .from('users')
-        .update({ plan: payment.plan, credits: nextCredits })
-        .eq('email', payment.email);
-      if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
-    } else {
-      // User doesn't exist - create
-      const { error: userCreateError } = await supabase
-        .from('users')
-        .insert([{ 
-          email: payment.email, 
-          plan: payment.plan, 
-          credits: Number(payment.credits || 0)
-        }]);
-      if (userCreateError) return res.status(500).json({ error: `Failed to create user: ${userCreateError.message}` });
-    }
+    // User exists - update
+    const { error: userUpdateError } = await supabase
+      .from('users')
+      .update({ plan: payment.plan, credits: nextCredits })
+      .eq('email', payment.email);
+    
+    if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
 
     await sendNotification(payment.email, 'Payment Approved', `Congratulations! Your subscription is now active. You have full access to all trading signals and premium features. Welcome to 4xLifeAI!`, 'success');
     await notifyAdmin(
