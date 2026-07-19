@@ -34,7 +34,7 @@ export default function Account() {
     // Check if user has a premium plan
     const checkStatus = async () => {
        const { data: userRecord } = await supabase.from('users').select('plan, credits').eq('email', user.email).single();
-       if (userRecord?.plan === 'PREMIUM' || userRecord?.plan === 'ELITE' || (userRecord?.credits || 0) > 0) {
+       if (userRecord?.plan === 'PRO' || (userRecord?.credits || 0) > 0) {
           setIsPremium(true);
        }
        

@@ -65,7 +65,7 @@ export default function ChartAnalyzer() {
             import.meta.env.VITE_SUPABASE_ANON_KEY || ''
           ).from('users').select('plan').eq('email', user.email).single();
           
-          if (userData?.plan === 'PREMIUM' || userData?.plan === 'ELITE') {
+          if (userData?.plan === 'PRO') {
             setIsPro(true);
           }
         }
