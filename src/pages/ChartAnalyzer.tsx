@@ -3,7 +3,7 @@ import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Link } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -54,16 +54,10 @@ export default function ChartAnalyzer() {
     // Check user's plan status
     const checkUserPlan = async () => {
       try {
-        const { data: { user } } = await createClient(
-          import.meta.env.VITE_SUPABASE_URL || '',
-          import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-        ).auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
         
         if (user?.email) {
-          const { data: userData } = await createClient(
-            import.meta.env.VITE_SUPABASE_URL || '',
-            import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-          ).from('users').select('plan').eq('email', user.email).single();
+          const { data: userData } = await supabase.from('users').select('plan').eq('email', user.email).single();
           
           if (userData?.plan === 'PRO') {
             setIsPro(true);
