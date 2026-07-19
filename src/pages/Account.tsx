@@ -33,8 +33,8 @@ export default function Account() {
     
     // Check if user has an elite plan
     const checkStatus = async () => {
-       const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
-       if (profile?.plan === 'ELITE') {
+       const { data: userRecord } = await supabase.from('users').select('plan_status, credits').eq('email', user.email).single();
+       if (userRecord?.plan_status === 'PREMIUM' || userRecord?.plan_status === 'ELITE' || (userRecord?.credits || 0) > 0) {
           setIsPremium(true);
        }
        
