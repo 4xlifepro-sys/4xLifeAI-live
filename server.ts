@@ -856,14 +856,14 @@ async function startServer() {
     const cleanTxid = String(txid || '').trim();
     if (!cleanTxid) return res.status(400).json({ error: "Transaction hash is required" });
 
-    const selectedPlan = String(plan || 'PREMIUM').toUpperCase();
+    const selectedPlan = String(plan || 'PRO').toUpperCase();
     const amount = Number(amount_usd || (selectedPlan === 'ELITE' ? 50 : 20));
     const planCredits = Number(credits || (selectedPlan === 'ELITE' ? 100 : 25));
     const methodValue = (network || 'TRC20').toUpperCase();
     const payload = {
       email: user.email,
       method: methodValue === 'BEP20' ? 'USDT_BEP20' : 'USDT_TRC20',
-      plan: selectedPlan,
+      plan: selectedPlan === 'PREMIUM' ? 'PRO' : selectedPlan,
       amount_usd: amount,
       credits: planCredits,
       destination: cleanTxid,
@@ -928,12 +928,14 @@ async function startServer() {
 
     // Validate payment has required fields
     if (!payment.email) return res.status(400).json({ error: 'Payment missing email address' });
-    if (!payment.plan) return res.status(400).json({ error: 'Payment missing plan information' });
+    
+    // Normalize plan name to PRO if missing
+    const userPlan = (payment.plan === 'PREMIUM' || !payment.plan) ? 'PRO' : payment.plan;
 
     const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'CONFIRMED' }).eq('id', paymentId);
     if (paymentUpdateError) return res.status(500).json({ error: paymentUpdateError.message });
 
-    // Check if user exists, create if not
+    // Check if user exists
     const { data: existingUser, error: userSelectError } = await supabase.from('users').select('credits').eq('email', payment.email).single();
     
     if (!existingUser) {
@@ -945,7 +947,7 @@ async function startServer() {
     // User exists - update
     const { error: userUpdateError } = await supabase
       .from('users')
-      .update({ plan: payment.plan, credits: nextCredits })
+      .update({ plan: userPlan, credits: nextCredits })
       .eq('email', payment.email);
     
     if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
