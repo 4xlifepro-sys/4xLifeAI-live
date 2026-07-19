@@ -120,8 +120,12 @@ export default function ChartAnalyzer() {
 
   const handleAnalyze = async () => {
     if (!selectedImage) return;
-    // Only enforce limit for FREE users
-    if (!isPro && usage >= 3) { setError('Daily limit reached (3/3). Upgrade to Pro for unlimited chart analyses.'); return; }
+    // Enforce Pro limit (30) and Free limit (4)
+    if (isPro) {
+      if (usage >= 30) { setError('Daily Pro limit reached (30/30). Reset at UTC 00:00.'); return; }
+    } else {
+      if (usage >= 4) { setError('Daily free limit reached (4/4). Upgrade to Pro for 30 daily analyses!'); return; }
+    }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError('');
     try {
       let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
@@ -184,9 +188,9 @@ export default function ChartAnalyzer() {
           <div className="flex items-center gap-4 text-xs mt-4">
             <span className="flex items-center gap-1.5 text-teal-400 font-medium bg-teal-400/10 px-2 py-0.5 rounded border border-teal-400/20"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span> Gemini 2.5 Flash Active</span>
             <span className="text-[#5D6B80]">•</span>
-            <span className="text-[#8A95A5]">{isPro ? 'Usage: Unlimited Pro' : `Usage: ${usage}/3 Free`}</span>
+            <span className="text-[#8A95A5]">{isPro ? `Usage: ${usage}/30 Pro` : `Usage: ${usage}/4 Free`}</span>
             <span className="text-[#5D6B80]">•</span>
-            {!isPro && <Link to="/plans" className="text-amber-400 hover:text-amber-300 font-medium">Upgrade to Pro → Unlimited</Link>}
+            {!isPro && <Link to="/plans" className="text-amber-400 hover:text-amber-300 font-medium">Upgrade to Pro → 30 Daily</Link>}
           </div>
         </div>
       </div>
@@ -219,11 +223,11 @@ export default function ChartAnalyzer() {
           </div>
         )}
 
-        {usage >= 3 && !isPro && !error && !result && (
+        {usage >= 4 && !isPro && !error && !result && (
           <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-6 text-center">
             <Shield className="w-6 h-6 text-amber-400 mx-auto mb-2" />
             <h3 className="text-lg font-bold text-amber-400 mb-2">Daily Analysis Limit Reached</h3>
-            <p className="text-sm text-gray-400 mb-4">You've used all 3 free analyses for today. Upgrade to Pro for unlimited chart analysis.</p>
+            <p className="text-sm text-gray-400 mb-4">You've used all 4 free analyses for today. Upgrade to Pro for 30 daily chart analyses.</p>
             <Link to="/plans" className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold px-6 py-2.5 rounded-xl text-sm transition-all">
               <Zap className="w-4 h-4" />
               Upgrade to Pro
@@ -232,7 +236,7 @@ export default function ChartAnalyzer() {
         )}
 
         <div className="flex items-center gap-3">
-          <button onClick={handleAnalyze} disabled={!selectedImage || isAnalyzing || (!isPro && usage >= 3)} className={cn("flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all", !selectedImage || isAnalyzing || (!isPro && usage >= 3) ? "bg-[#202735] text-[#5D6B80] cursor-not-allowed" : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.3)]")}>
+          <button onClick={handleAnalyze} disabled={!selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4)} className={cn("flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all", !selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4) ? "bg-[#202735] text-[#5D6B80] cursor-not-allowed" : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.3)]")}>
             {isAnalyzing ? (<><Scan className="w-5 h-5 animate-spin" /> Analyzing...</>) : (<><Zap className="w-5 h-5" /> Analyze Chart</>)}
           </button>
           <button onClick={handleReset} className="px-5 py-3.5 bg-[#202735] hover:bg-[#202735]/80 text-[#8A95A5] hover:text-white rounded-xl transition-all" title="Reset"><RotateCcw className="w-5 h-5" /></button>
