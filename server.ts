@@ -287,6 +287,40 @@ async function startServer() {
     }
   });
 
+  // DIAGNOSTIC ENDPOINT: Show why engine is/isn't firing signals
+  app.get("/api/debug/signal-engine", async (req, res) => {
+    const state = {
+      timestamp: new Date().toISOString(),
+      scanner: {
+        isRunning: scannerState.stats.lastScanTime ? Date.now() - scannerState.stats.lastScanTime < 30000 : false,
+        lastScanTime: scannerState.stats.lastScanTime ? new Date(scannerState.stats.lastScanTime).toISOString() : null,
+        scanCycles: scannerState.stats.scanCycles,
+      },
+      signals: {
+        active: scannerState.signals.filter(s => s.tier !== 'Reject').length,
+        rejected: scannerState.signals.filter(s => s.tier === 'Reject').length,
+        total: scannerState.signals.length,
+      },
+      pairs: {
+        configured: scannerState.pairStatuses.map(p => ({
+          pair: p.pair,
+          lastUpdate: p.lastUpdate ? new Date(p.lastUpdate).toISOString() : null,
+          status: p.status,
+        })),
+      },
+      recentSignals: scannerState.signals.slice(0, 5).map(s => ({
+        pair: s.pair,
+        direction: s.direction,
+        tier: s.tier,
+        status: s.status,
+        timestamp: s.timestamp,
+        confidence: s.aiConfidence,
+      })),
+    };
+
+    res.json(state);
+  });
+
   app.post("/api/admin/notify-signup", async (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const fullName = String(req.body?.fullName || 'New user').trim();

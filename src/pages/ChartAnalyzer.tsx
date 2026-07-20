@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield } from 'lucide-react';
+import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield, Sparkles } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Link } from 'react-router-dom';
@@ -29,13 +29,13 @@ interface AnalysisResult {
 }
 
 const ANALYSIS_STEPS = [
-  'Detecting instrument & timeframe...',
-  'Analyzing market structure...',
-  'Identifying support & resistance...',
-  'Evaluating momentum...',
-  'Calculating risk levels...',
-  'Generating trade setup...',
-  'Finalizing analysis...'
+  'Scanning chart for patterns...',
+  'Analyzing price action & structure...',
+  'Identifying support & resistance zones...',
+  'Evaluating momentum indicators...',
+  'Calculating optimal risk levels...',
+  'Generating professional trade setup...',
+  'Finalizing institutional-grade analysis...'
 ];
 
 export default function ChartAnalyzer() {
@@ -51,19 +51,16 @@ export default function ChartAnalyzer() {
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Check user's plan status and reset usage per user
     const checkUserStatus = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user?.email) {
-          // 1. Plan Check
           const { data: userData } = await supabase.from('users').select('plan').eq('email', user.email).single();
           if (userData?.plan === 'PRO') {
             setIsPro(true);
           }
 
-          // 2. Usage Check (unique per email)
           const usageKey = `4xlifeai_usage_${user.email}`;
           const dateKey = `4xlifeai_date_${user.email}`;
           
@@ -118,7 +115,6 @@ export default function ChartAnalyzer() {
 
   const handleAnalyze = async () => {
     if (!selectedImage) return;
-    // Enforce Pro limit (30) and Free limit (4)
     if (isPro) {
       if (usage >= 30) { setError('Daily Pro limit reached (30/30). Reset at UTC 00:00.'); return; }
     } else {
@@ -128,10 +124,9 @@ export default function ChartAnalyzer() {
     try {
       let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
       
-      // Auto-retry once on 503 (Gemini high demand — temporary)
       if (res.status === 503) {
-        setAnalysisStep(analysisStep); // keep spinner going
-        await new Promise(r => setTimeout(r, 3000)); // wait 3 seconds
+        setAnalysisStep(analysisStep);
+        await new Promise(r => setTimeout(r, 3000));
         res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
       }
       
@@ -141,7 +136,6 @@ export default function ChartAnalyzer() {
         const newUsage = usage + 1; 
         setUsage(newUsage);
         
-        // Save to unique user key
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.email) {
           localStorage.setItem(`4xlifeai_usage_${user.email}`, newUsage.toString());
@@ -166,215 +160,302 @@ export default function ChartAnalyzer() {
     switch (trade.toUpperCase()) {
       case 'BUY': return { label: 'BUY', bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30', icon: TrendingUp };
       case 'SELL': return { label: 'SELL', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30', icon: TrendingDown };
-      default: return { label: 'WAIT', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30', icon: Minus };
+      default: return { label: 'WAIT', bg: 'bg-cyan-500/20', text: 'text-cyan-300', border: 'border-cyan-500/30', icon: Minus };
     }
   };
 
-  const getConfidenceColor = (c: number) => c >= 85 ? 'text-emerald-400' : c >= 70 ? 'text-teal-400' : c >= 50 ? 'text-amber-400' : 'text-red-400';
-  const getConfidenceBg = (c: number) => c >= 85 ? 'bg-emerald-500' : c >= 70 ? 'bg-teal-500' : c >= 50 ? 'bg-amber-500' : 'bg-red-500';
+  const getConfidenceColor = (c: number) => c >= 85 ? 'text-emerald-400' : c >= 70 ? 'text-cyan-400' : c >= 50 ? 'text-blue-400' : 'text-red-400';
+  const getConfidenceBg = (c: number) => c >= 85 ? 'bg-emerald-500' : c >= 70 ? 'bg-cyan-500' : c >= 50 ? 'bg-blue-500' : 'bg-red-500';
   const getConfidenceLabel = (c: number) => c >= 95 ? 'Exceptional' : c >= 85 ? 'Very Strong' : c >= 70 ? 'Strong' : c >= 50 ? 'Moderate' : 'Weak';
-  const getTrendIcon = (trend: string) => {
-    switch (trend.toLowerCase()) { case 'bullish': return { icon: TrendingUp, color: 'text-emerald-400' }; case 'bearish': return { icon: TrendingDown, color: 'text-red-400' }; default: return { icon: Minus, color: 'text-amber-400' }; }
-  };
 
   return (
-    <div className="flex-1 w-full bg-[#0A0D12] min-h-screen">
-      <div className="bg-gradient-to-b from-[#11141A] to-[#0A0D12] border-b border-[#202735] py-8 px-4">
-        <div className="max-w-5xl mx-auto">
+    <div className="flex-1 w-full bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">
+      {/* Premium Gradient Background */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/3 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl opacity-20"></div>
+        <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl opacity-20"></div>
+      </div>
+
+      {/* Header */}
+      <div className="relative bg-gradient-to-b from-slate-800/80 to-slate-900/40 border-b border-cyan-500/20 backdrop-blur-md py-8 px-4 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4 mb-3">
-            <div className="w-14 h-14 bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-2xl flex items-center justify-center shadow-[0_0_25px_rgba(245,158,11,0.2)]">
-              <Scan className="w-7 h-7 text-amber-400" />
+            <div className="w-14 h-14 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 border border-cyan-400/50 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(34,211,238,0.3)]">
+              <Sparkles className="w-7 h-7 text-cyan-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-white flex items-center gap-2">Golden Scanning System <span className="text-amber-400 text-lg"></span></h1>
-              <p className="text-sm text-[#8A95A5] mt-0.5">AI-powered institutional chart analysis</p>
+              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
+                Professional Chart Scanner
+              </h1>
+              <p className="text-sm text-slate-400 mt-0.5">Real-time institutional-grade analysis powered by Gemini AI</p>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs mt-4">
-            <span className="flex items-center gap-1.5 text-teal-400 font-medium bg-teal-400/10 px-2 py-0.5 rounded border border-teal-400/20"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"></span> Gemini 2.5 Flash Active</span>
-            <span className="text-[#5D6B80]">•</span>
-            <span className="text-[#8A95A5]">{isPro ? `Usage: ${usage}/30 Pro` : `Usage: ${usage}/4 Free`}</span>
-            <span className="text-[#5D6B80]">•</span>
-            {!isPro && <Link to="/plans" className="text-amber-400 hover:text-amber-300 font-medium">Upgrade to Pro → 30 Daily</Link>}
+          <div className="flex items-center gap-4 text-xs mt-4 flex-wrap">
+            <span className="flex items-center gap-1.5 text-cyan-400 font-semibold bg-cyan-500/10 px-3 py-1 rounded-lg border border-cyan-400/30">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Gemini 2.5 Flash
+            </span>
+            <span className="text-slate-600">•</span>
+            <span className="text-slate-400 font-medium">{isPro ? `${usage}/30 Pro Daily` : `${usage}/4 Free Daily`}</span>
+            {!isPro && (
+              <>
+                <span className="text-slate-600">•</span>
+                <Link to="/plans" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
+                  Upgrade Pro → 30 Daily ✨
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-        <div ref={null as any} onDrop={handleDrop} onDragOver={handleDragOver} className={cn("border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer", selectedImage ? "border-teal-500/30 bg-teal-500/5" : "border-[#202735] bg-[#11141A]/50 hover:border-amber-500/30 hover:bg-amber-500/5")} onClick={() => fileInputRef.current?.click()}>
+      {/* Main Content */}
+      <div className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
+        {/* Upload Area */}
+        <div 
+          onDrop={handleDrop} 
+          onDragOver={handleDragOver} 
+          className={cn(
+            "border-2 border-dashed rounded-3xl p-12 text-center transition-all cursor-pointer backdrop-blur-sm",
+            selectedImage 
+              ? "border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_30px_rgba(34,211,238,0.2)]" 
+              : "border-blue-500/30 bg-blue-500/5 hover:border-cyan-400/40 hover:bg-cyan-500/8 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)]"
+          )} 
+          onClick={() => fileInputRef.current?.click()}
+        >
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
           {selectedImage ? (
             <div className="space-y-4">
-              <img src={selectedImage} alt="Selected chart" className="max-h-72 mx-auto rounded-xl border border-[#202735] shadow-2xl" />
-              <p className="text-sm text-[#8A95A5]">{selectedFileName}</p>
-              <p className="text-xs text-[#5D6B80]">Click or drop to replace</p>
+              <img src={selectedImage} alt="Selected chart" className="max-h-96 mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
+              <p className="text-sm text-slate-400 font-medium">{selectedFileName}</p>
+              <p className="text-xs text-slate-600">Click or drop to replace</p>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="w-20 h-20 mx-auto bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-center"><Upload className="w-10 h-10 text-amber-400" /></div>
+              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/40 rounded-2xl flex items-center justify-center">
+                <Upload className="w-10 h-10 text-cyan-400" />
+              </div>
               <div>
-                <p className="text-lg font-bold text-white">Drop your chart screenshot here</p>
-                <p className="text-sm text-[#8A95A5] mt-1">or click to browse files</p>
-                <p className="text-xs text-[#5D6B80] mt-3">Supports PNG, JPG, JPEG • Max 10MB</p>
+                <p className="text-lg font-bold text-white">Drop your trading chart here</p>
+                <p className="text-sm text-slate-400 mt-1">or click to select a file</p>
+                <p className="text-xs text-slate-600 mt-3">PNG, JPG, JPEG • Max 10MB • TradingView, MT4, MT5 supported</p>
               </div>
             </div>
           )}
         </div>
 
+        {/* Error Alert */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-start gap-3 backdrop-blur-sm">
             <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-red-300">{error}</p>
           </div>
         )}
 
+        {/* Daily Limit Warning */}
         {usage >= 4 && !isPro && !error && !result && (
-          <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-6 text-center">
-            <Shield className="w-6 h-6 text-amber-400 mx-auto mb-2" />
-            <h3 className="text-lg font-bold text-amber-400 mb-2">Daily Analysis Limit Reached</h3>
-            <p className="text-sm text-gray-400 mb-4">You've used all 4 free analyses for today. Upgrade to Pro for 30 daily chart analyses.</p>
-            <Link to="/plans" className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold px-6 py-2.5 rounded-xl text-sm transition-all">
+          <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30 rounded-2xl p-6 text-center backdrop-blur-sm">
+            <Shield className="w-6 h-6 text-cyan-400 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-cyan-300 mb-2">Daily Analysis Limit Reached</h3>
+            <p className="text-sm text-slate-400 mb-4">Upgrade to Pro for unlimited daily analyses and priority support.</p>
+            <Link to="/plans" className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all shadow-lg hover:shadow-xl">
               <Zap className="w-4 h-4" />
               Upgrade to Pro
             </Link>
           </div>
         )}
 
+        {/* Action Buttons */}
         <div className="flex items-center gap-3">
-          <button onClick={handleAnalyze} disabled={!selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4)} className={cn("flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all", !selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4) ? "bg-[#202735] text-[#5D6B80] cursor-not-allowed" : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.3)]")}>
-            {isAnalyzing ? (<><Scan className="w-5 h-5 animate-spin" /> Analyzing...</>) : (<><Zap className="w-5 h-5" /> Analyze Chart</>)}
+          <button 
+            onClick={handleAnalyze} 
+            disabled={!selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4)} 
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-sm tracking-wide transition-all",
+              !selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4) 
+                ? "bg-slate-700 text-slate-500 cursor-not-allowed" 
+                : "bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white shadow-[0_0_30px_rgba(34,211,238,0.4)] hover:shadow-[0_0_40px_rgba(34,211,238,0.5)]"
+            )}
+          >
+            {isAnalyzing ? (
+              <><Scan className="w-5 h-5 animate-spin" /> Analyzing Chart...</>
+            ) : (
+              <><Sparkles className="w-5 h-5" /> Analyze Now</>
+            )}
           </button>
-          <button onClick={handleReset} className="px-5 py-3.5 bg-[#202735] hover:bg-[#202735]/80 text-[#8A95A5] hover:text-white rounded-xl transition-all" title="Reset"><RotateCcw className="w-5 h-5" /></button>
+          <button 
+            onClick={handleReset} 
+            className="px-6 py-4 bg-slate-700/60 hover:bg-slate-600 text-slate-300 hover:text-white rounded-xl transition-all border border-slate-600/50" 
+            title="Reset"
+          >
+            <RotateCcw className="w-5 h-5" />
+          </button>
         </div>
 
+        {/* Analyzing State */}
         {isAnalyzing && (
-          <div className="bg-[#11141A] border border-[#202735] rounded-2xl p-8 text-center space-y-6">
-            <div className="relative w-20 h-20 mx-auto">
-              <div className="absolute inset-0 rounded-full border-4 border-[#202735]"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
-              <div className="absolute inset-2 rounded-full border-4 border-orange-500 border-b-transparent animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-              <Scan className="absolute inset-0 m-auto w-7 h-7 text-amber-400" />
+          <div className="bg-slate-800/60 border border-cyan-500/20 rounded-3xl p-12 text-center space-y-8 backdrop-blur-sm">
+            <div className="relative w-24 h-24 mx-auto">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-cyan-400 border-t-transparent animate-spin shadow-[0_0_20px_rgba(34,211,238,0.5)]"></div>
+              <div className="absolute inset-2 rounded-full border-4 border-blue-500 border-b-transparent animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+              <Scan className="absolute inset-0 m-auto w-8 h-8 text-cyan-400" />
             </div>
             <div>
-              <p className="text-white font-bold text-lg">Golden Scanning in Progress</p>
-              <p className="text-amber-400 text-sm mt-2 font-medium">{ANALYSIS_STEPS[analysisStep]}</p>
+              <p className="text-white font-bold text-xl">Professional Analysis in Progress</p>
+              <p className="text-cyan-300 text-sm mt-2 font-medium">{ANALYSIS_STEPS[analysisStep]}</p>
             </div>
-            <div className="w-full bg-[#202735] rounded-full h-1.5 max-w-md mx-auto overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-1000" style={{ width: `${((analysisStep + 1) / ANALYSIS_STEPS.length) * 100}%` }}></div>
+            <div className="w-full bg-slate-700/50 rounded-full h-2 max-w-md mx-auto overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-1000 shadow-lg" style={{ width: `${((analysisStep + 1) / ANALYSIS_STEPS.length) * 100}%` }}></div>
             </div>
           </div>
         )}
 
+        {/* Results */}
         {result && !isAnalyzing && (
           <div ref={resultRef} className="space-y-6">
-            <div className={cn("rounded-2xl p-6 border-2 flex items-center justify-between flex-wrap gap-4", getTradeBadge(result.trade).bg, getTradeBadge(result.trade).border)}>
+            {/* Trade Decision Card */}
+            <div className={cn(
+              "rounded-2xl p-8 border-2 flex items-center justify-between flex-wrap gap-6 backdrop-blur-sm",
+              getTradeBadge(result.trade).bg, 
+              getTradeBadge(result.trade).border
+            )}>
               <div className="flex items-center gap-4">
-                {(() => { const BadgeIcon = getTradeBadge(result.trade).icon; return <BadgeIcon className={cn("w-10 h-10", getTradeBadge(result.trade).text)} />; })()}
+                {(() => { 
+                  const BadgeIcon = getTradeBadge(result.trade).icon; 
+                  return <BadgeIcon className={cn("w-12 h-12", getTradeBadge(result.trade).text)} />; 
+                })()}
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-widest opacity-70">Trade Decision</p>
-                  <p className={cn("text-3xl font-black", getTradeBadge(result.trade).text)}>{getTradeBadge(result.trade).label}</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Trade Decision</p>
+                  <p className={cn("text-4xl font-black", getTradeBadge(result.trade).text)}>
+                    {getTradeBadge(result.trade).label}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-medium uppercase tracking-widest opacity-70">Confidence</p>
-                <p className={cn("text-3xl font-black", getConfidenceColor(result.confidence))}>{result.confidence}%</p>
-                <p className={cn("text-xs font-medium", getConfidenceColor(result.confidence))}>{getConfidenceLabel(result.confidence)}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Confidence Score</p>
+                <p className={cn("text-4xl font-black", getConfidenceColor(result.confidence))}>
+                  {result.confidence}%
+                </p>
+                <p className={cn("text-xs font-semibold mt-1", getConfidenceColor(result.confidence))}>
+                  {getConfidenceLabel(result.confidence)}
+                </p>
               </div>
             </div>
 
-            <div className="w-full bg-[#202735] rounded-full h-2 overflow-hidden">
-              <div className={cn("h-full rounded-full transition-all duration-1000", getConfidenceBg(result.confidence))} style={{ width: `${result.confidence}%` }}></div>
+            {/* Confidence Bar */}
+            <div className="w-full bg-slate-700/50 rounded-full h-2.5 overflow-hidden border border-slate-600/50">
+              <div className={cn("h-full rounded-full transition-all duration-1000 shadow-lg", getConfidenceBg(result.confidence))} style={{ width: `${result.confidence}%` }}></div>
             </div>
 
+            {/* Quick Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { label: 'Instrument', value: result.instrument },
-                { label: 'Timeframe', value: result.timeframe },
-                { label: 'Trend', value: result.trend },
+                { label: 'Instrument', value: result.instrument, icon: '📊' },
+                { label: 'Timeframe', value: result.timeframe, icon: '⏱️' },
+                { label: 'Trend Direction', value: result.trend, icon: '📈' },
               ].map((item) => (
-                <div key={item.label} className="bg-[#11141A] border border-[#202735] rounded-xl p-4">
-                  <p className="text-xs font-medium uppercase tracking-widest text-[#5D6B80] mb-1">{item.label}</p>
-                  <p className="text-lg font-bold text-white">{item.value}</p>
+                <div key={item.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 backdrop-blur-sm hover:border-cyan-400/30 transition-colors">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
+                  <p className="text-lg font-bold text-cyan-300">{item.value}</p>
                 </div>
               ))}
             </div>
 
+            {/* Market Structure & Support/Resistance */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#11141A] border border-[#202735] rounded-xl p-4">
-                <p className="text-xs font-medium uppercase tracking-widest text-[#5D6B80] mb-1">Market Structure</p>
-                <p className="text-sm text-[#E0E4EA]">{result.marketStructure}</p>
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Market Structure</p>
+                <p className="text-sm text-slate-200 leading-relaxed">{result.marketStructure}</p>
               </div>
-              <div className="bg-[#11141A] border border-[#202735] rounded-xl p-4">
-                <p className="text-xs font-medium uppercase tracking-widest text-[#5D6B80] mb-1">Support / Resistance</p>
-                <p className="text-sm text-[#E0E4EA]">{result.support} / {result.resistance}</p>
-              </div>
-            </div>
-
-            <div className="bg-[#11141A] border border-[#202735] rounded-2xl p-6 space-y-5">
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-amber-400" />
-                <h2 className="text-lg font-bold text-white">Trade Levels</h2>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {[
-                  { label: 'Entry', value: result.entry, color: 'text-white' },
-                  { label: 'Stop Loss', value: result.stopLoss, color: 'text-red-400' },
-                  { label: 'TP1', value: result.tp1, color: 'text-emerald-400' },
-                  { label: 'TP2', value: result.tp2, color: 'text-emerald-400' },
-                  { label: 'TP3', value: result.tp3, color: 'text-emerald-400' },
-                ].map((level) => (
-                  <div key={level.label} className="bg-[#0A0D12] border border-[#202735] rounded-xl p-3 text-center">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#5D6B80] mb-1">{level.label}</p>
-                    <p className={cn("text-sm font-bold", level.color)}>{level.value}</p>
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Support / Resistance Levels</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-500">Support</p>
+                    <p className="text-lg font-bold text-emerald-400">{result.support}</p>
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center justify-between pt-3 border-t border-[#202735]">
-                <div>
-                  <p className="text-xs text-[#5D6B80]">Risk : Reward</p>
-                  <p className="text-lg font-bold text-teal-400">{result.riskReward}</p>
+                  <div className="text-center">
+                    <p className="text-2xl text-slate-600">—</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500">Resistance</p>
+                    <p className="text-lg font-bold text-red-400">{result.resistance}</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-[#11141A] border border-[#202735] rounded-2xl p-6 space-y-4">
-              <h2 className="text-lg font-bold text-white">Reasoning</h2>
-              <p className="text-sm text-[#C0C8D4] leading-relaxed">{result.reasoning}</p>
+            {/* Trade Levels */}
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <Shield className="w-5 h-5 text-cyan-400" />
+                <h2 className="text-lg font-bold text-white">Trade Levels</h2>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {[
+                  { label: 'Entry', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
+                  { label: 'Stop Loss', value: result.stopLoss, color: 'text-red-400', bg: 'bg-red-500/10' },
+                  { label: 'TP1', value: result.tp1, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP2', value: result.tp2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP3', value: result.tp3, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                ].map((level) => (
+                  <div key={level.label} className={cn("border border-slate-600/50 rounded-xl p-3 text-center transition-colors hover:border-cyan-400/30", level.bg)}>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{level.label}</p>
+                    <p className={cn("text-sm font-bold", level.color)}>{level.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Risk : Reward Ratio</p>
+                  <p className="text-2xl font-bold text-cyan-400 mt-1">{result.riskReward}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Reasoning & Warnings */}
+            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
+              <h2 className="text-lg font-bold text-white">Analysis Reasoning</h2>
+              <p className="text-sm text-slate-300 leading-relaxed">{result.reasoning}</p>
               {result.warnings && result.warnings !== 'None' && result.warnings !== '' && (
-                <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-4 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mt-4">
+                  <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-bold text-amber-400">Warnings</p>
-                    <p className="text-sm text-amber-300/80">{result.warnings}</p>
+                    <p className="text-sm font-bold text-blue-300">⚠️ Important Warnings</p>
+                    <p className="text-sm text-blue-200/80 mt-1">{result.warnings}</p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="bg-gradient-to-br from-amber-500/5 to-orange-500/5 border border-amber-500/20 rounded-2xl p-6 space-y-5">
+            {/* Position Size Calculator */}
+            <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
               <div className="flex items-center gap-3">
-                <Zap className="w-5 h-5 text-amber-400" />
+                <Zap className="w-5 h-5 text-cyan-400" />
                 <h2 className="text-lg font-bold text-white">Position Size Calculator</h2>
               </div>
-              <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-4 text-center">
-                <p className="text-xs text-[#5D6B80]">Risk Amount = 1% of $1,000</p>
-                <p className="text-2xl font-black text-amber-400">$20.00</p>
+              <div className="bg-slate-800/60 border border-cyan-500/20 rounded-xl p-6 text-center">
+                <p className="text-xs text-slate-500 font-medium">Risk Amount = 1% of $1,000</p>
+                <p className="text-3xl font-black text-cyan-400 mt-2">$20.00</p>
+                <p className="text-xs text-slate-500 mt-2">Maximum loss if Stop Loss is hit</p>
               </div>
-              <p className="text-xs text-[#5D6B80] text-center">This is the maximum you should lose on this single trade if your Stop Loss is hit.</p>
             </div>
 
-            <div className="bg-[#11141A] border border-[#202735] rounded-xl p-4 text-center">
-              <p className="text-[10px] text-[#5D6B80] font-mono uppercase tracking-widest">
-                4xLifeAI Chart Analyzer is for educational and informational purposes only. All trading involves risk. Past performance does not guarantee future results. Always use proper risk management.
+            {/* Disclaimer */}
+            <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 text-center">
+              <p className="text-[11px] text-slate-500 font-mono uppercase tracking-wider">
+                ⚠️ Educational & Informational Use Only • Trading Involves Risk • Past Performance ≠ Future Results
               </p>
             </div>
           </div>
         )}
 
+        {/* Empty State */}
         {!result && !isAnalyzing && (
-          <div className="bg-[#11141A] border border-[#202735] rounded-2xl p-10 text-center space-y-4">
-            <Scan className="w-12 h-12 text-[#202735] mx-auto" />
-            <p className="text-[#5D6B80] text-sm">Upload a chart to get a full institutional-grade analysis</p>
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-12 text-center space-y-4 backdrop-blur-sm">
+            <Scan className="w-16 h-16 text-slate-600 mx-auto opacity-50" />
+            <p className="text-slate-400 text-sm font-medium">Upload a chart to receive professional, institutional-grade trading analysis</p>
+            <p className="text-slate-600 text-xs">Supported: TradingView • MT4 • MT5 • CTrader • Any broker platform</p>
           </div>
         )}
       </div>
