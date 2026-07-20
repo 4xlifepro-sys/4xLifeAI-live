@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { startScanner, scannerState, latestMarketState, rejectionStats } from "./server/scanner.js";
-import { startSessionMessaging } from "./server/sessionMessaging.js";
+import { startSessionMessaging, sendSessionUpdate } from "./server/sessionMessaging.js";
 import { supabase } from './server/supabase.js';
 import { sendTelegramMessage } from './server/telegram.js';
 
@@ -267,6 +267,24 @@ async function startServer() {
         isDegraded: scannerState.stats.isDegraded
       }
     });
+  });
+
+  // TEST ENDPOINT: Send a session message immediately (for testing)
+  app.get("/api/test-session-message", async (req, res) => {
+    try {
+      console.log("🧪 [TEST] Manual session message trigger");
+      await sendSessionUpdate();
+      res.json({ 
+        success: true, 
+        message: "Session update sent to Telegram. Check your channel!" 
+      });
+    } catch (error: any) {
+      console.error("Test session message failed:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: error?.message || "Failed to send test message" 
+      });
+    }
   });
 
   app.post("/api/admin/notify-signup", async (req, res) => {

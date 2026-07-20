@@ -225,4 +225,5 @@ export function startSessionMessaging(): void {
   scheduleNextMessage();
 }
 
-export { getCurrentSession, generateMarketStatus };
+// Export for manual testing
+export { getCurrentSession, generateMarketStatus, sendSessionUpdate };
