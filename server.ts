@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { startScanner, scannerState, latestMarketState, rejectionStats } from "./server/scanner.js";
+import { startSessionMessaging } from "./server/sessionMessaging.js";
 import { supabase } from './server/supabase.js';
 import { sendTelegramMessage } from './server/telegram.js';
 
@@ -230,6 +231,9 @@ async function startServer() {
 
   // Start the background scanner
   await startScanner();
+
+  // Start session-based motivational messaging (every 4-6 hours during trading sessions)
+  startSessionMessaging();
 
   app.use(express.json({ limit: '10mb' }));
   app.use((req, res, next) => {
