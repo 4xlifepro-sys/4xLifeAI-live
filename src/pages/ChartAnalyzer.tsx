@@ -202,12 +202,12 @@ export default function ChartAnalyzer() {
               <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
                 Professional Chart Scanner
               </h1>
-              <p className="text-sm text-slate-400 mt-0.5">Real-time institutional-grade analysis powered by Gemini AI</p>
+              <p className="text-sm text-slate-400 mt-0.5">Real-time institutional-grade price action analysis</p>
             </div>
           </div>
           <div className="flex items-center gap-4 text-xs mt-4 flex-wrap">
             <span className="flex items-center gap-1.5 text-cyan-400 font-semibold bg-cyan-500/10 px-3 py-1 rounded-lg border border-cyan-400/30">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Gemini 2.5 Flash
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> 4xLifeAI Engine
             </span>
             <span className="text-slate-600">•</span>
             <span className="text-slate-400 font-medium">{isPro ? `${usage}/30 Pro Daily` : `${usage}/4 Free Daily`}</span>
