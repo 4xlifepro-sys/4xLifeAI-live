@@ -402,10 +402,34 @@ export default function ChartAnalyzer() {
 
             {/* Trade Levels */}
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-cyan-400" />
-                <h2 className="text-lg font-bold text-white">Trade Levels</h2>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-5 h-5 text-cyan-400" />
+                  <h2 className="text-lg font-bold text-white">Trade Levels</h2>
+                </div>
+                
+                {/* ACTION BADGE - Shows BUY/SELL/WAIT prominently */}
+                <div className={cn(
+                  "px-6 py-3 rounded-xl font-bold text-lg flex items-center gap-2",
+                  result.trade.toUpperCase() === 'BUY' 
+                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
+                    : result.trade.toUpperCase() === 'SELL' 
+                      ? 'bg-red-500/20 border border-red-500/50 text-red-400'
+                      : 'bg-blue-500/20 border border-blue-500/50 text-blue-300'
+                )}>
+                  {result.trade.toUpperCase() === 'BUY' && '↗️ BUY'}
+                  {result.trade.toUpperCase() === 'SELL' && '↘️ SELL'}
+                  {result.trade.toUpperCase() === 'WAIT' && '⏸️ WAIT'}
+                </div>
               </div>
+
+              {/* Use these prices to [BUY/SELL] */}
+              <p className="text-xs text-slate-500 font-medium">
+                {result.trade.toUpperCase() === 'BUY' && '🔼 Use these prices to BUY'}
+                {result.trade.toUpperCase() === 'SELL' && '🔽 Use these prices to SELL'}
+                {result.trade.toUpperCase() === 'WAIT' && '⏸️ Wait for a better setup - do NOT trade now'}
+              </p>
+
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 {[
                   { label: 'Entry', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
