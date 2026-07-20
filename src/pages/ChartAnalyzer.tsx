@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield, Sparkles } from 'lucide-react';
+import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield, Sparkles, Copy, Check } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Link } from 'react-router-dom';
@@ -47,6 +47,7 @@ export default function ChartAnalyzer() {
   const [error, setError] = useState<string>('');
   const [usage, setUsage] = useState(0);
   const [isPro, setIsPro] = useState(false);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -160,13 +161,27 @@ export default function ChartAnalyzer() {
     switch (trade.toUpperCase()) {
       case 'BUY': return { label: 'BUY', bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30', icon: TrendingUp };
       case 'SELL': return { label: 'SELL', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30', icon: TrendingDown };
-      default: return { label: 'WAIT', bg: 'bg-cyan-500/20', text: 'text-cyan-300', border: 'border-cyan-500/30', icon: Minus };
+      default: return { label: 'WAIT', bg: 'bg-blue-500/20', text: 'text-blue-300', border: 'border-blue-500/30', icon: Minus };
     }
+  };
+
+  const getTrendColor = (trend: string) => {
+    const upper = trend.toUpperCase();
+    if (upper.includes('BULL')) return 'text-emerald-400';
+    if (upper.includes('BEAR')) return 'text-red-400';
+    return 'text-blue-400';
   };
 
   const getConfidenceColor = (c: number) => c >= 85 ? 'text-emerald-400' : c >= 70 ? 'text-cyan-400' : c >= 50 ? 'text-blue-400' : 'text-red-400';
   const getConfidenceBg = (c: number) => c >= 85 ? 'bg-emerald-500' : c >= 70 ? 'bg-cyan-500' : c >= 50 ? 'bg-blue-500' : 'bg-red-500';
   const getConfidenceLabel = (c: number) => c >= 95 ? 'Exceptional' : c >= 85 ? 'Very Strong' : c >= 70 ? 'Strong' : c >= 50 ? 'Moderate' : 'Weak';
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedValue(text);
+      setTimeout(() => setCopiedValue(null), 2000);
+    });
+  };
 
   return (
     <div className="flex-1 w-full bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">
@@ -224,7 +239,7 @@ export default function ChartAnalyzer() {
         >
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
           {selectedImage ? (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <img src={selectedImage} alt="Selected chart" className="max-h-96 mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
               <p className="text-sm text-slate-400 font-medium">{selectedFileName}</p>
               <p className="text-xs text-slate-600">Click or drop to replace</p>
@@ -350,13 +365,13 @@ export default function ChartAnalyzer() {
             {/* Quick Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { label: 'Instrument', value: result.instrument, icon: '📊' },
-                { label: 'Timeframe', value: result.timeframe, icon: '⏱️' },
-                { label: 'Trend Direction', value: result.trend, icon: '📈' },
+                { label: 'Instrument', value: result.instrument, icon: '📊', color: 'text-cyan-300' },
+                { label: 'Timeframe', value: result.timeframe, icon: '⏱️', color: 'text-cyan-300' },
+                { label: 'Trend Direction', value: result.trend, icon: '📈', color: getTrendColor(result.trend) },
               ].map((item) => (
                 <div key={item.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 backdrop-blur-sm hover:border-cyan-400/30 transition-colors">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
-                  <p className="text-lg font-bold text-cyan-300">{item.value}</p>
+                  <p className={cn("text-lg font-bold", item.color)}>{item.value}</p>
                 </div>
               ))}
             </div>
@@ -399,10 +414,18 @@ export default function ChartAnalyzer() {
                   { label: 'TP2', value: result.tp2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                   { label: 'TP3', value: result.tp3, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                 ].map((level) => (
-                  <div key={level.label} className={cn("border border-slate-600/50 rounded-xl p-3 text-center transition-colors hover:border-cyan-400/30", level.bg)}>
+                  <button
+                    key={level.label}
+                    onClick={() => copyToClipboard(level.value)}
+                    className={cn("border border-slate-600/50 rounded-xl p-3 text-center transition-all hover:border-cyan-400/50 hover:shadow-lg group relative", level.bg)}
+                    title={`Click to copy ${level.label}`}
+                  >
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{level.label}</p>
                     <p className={cn("text-sm font-bold", level.color)}>{level.value}</p>
-                  </div>
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-slate-700 text-cyan-300 px-2 py-1 rounded whitespace-nowrap pointer-events-none">
+                      {copiedValue === level.value ? '✓ Copied!' : 'Click to copy'}
+                    </div>
+                  </button>
                 ))}
               </div>
               <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
