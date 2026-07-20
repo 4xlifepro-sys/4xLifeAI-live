@@ -184,23 +184,14 @@ function getNextSessionMessageTime(): number {
   const currentSession = getCurrentSession();
 
   if (!currentSession) {
-    // No active session, find next one
-    return now + 60 * 60 * 1000; // Try again in 1 hour
+    // No active session, try again in 1 hour
+    return now + 60 * 60 * 1000;
   }
 
-  // Calculate next message time: 4-6 hours from now, but only during active session
-  const nextTime = now + (4 * 60 * 60 * 1000 + Math.random() * 2 * 60 * 60 * 1000);
-
-  // Check if next time is still in active session
-  const nextDate = new Date(nextTime);
-  const nextHour = nextDate.getUTCHours();
-
-  const isInSession =
-    currentSession.startUTC <= currentSession.endUTC
-      ? nextHour >= currentSession.startUTC && nextHour < currentSession.endUTC
-      : nextHour >= currentSession.startUTC || nextHour < currentSession.endUTC;
-
-  return isInSession ? nextTime : getNextSessionMessageTime(); // Recurse if out of session
+  // Simple approach: fire 4-6 hours from now
+  // Don't try to verify it's in the same session (sessions overlap anyway)
+  const randomDelay = 4 * 60 * 60 * 1000 + Math.random() * 2 * 60 * 60 * 1000;
+  return now + randomDelay;
 }
 
 export function startSessionMessaging(): void {
