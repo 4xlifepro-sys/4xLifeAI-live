@@ -81,12 +81,12 @@ function generateMarketStatus(): MarketStatus {
   };
 }
 
-async function generateMarketImageBase64(status: MarketStatus): Promise<string> {
-  // Create emoji-based visual representation instead of SVG
+function generateMarketVisualization(status: MarketStatus): string {
+  // Create emoji-based visual representation as plain text
   const volatilityEmoji = status.volatility === "HIGH" ? "🔴🔴🔴" : status.volatility === "MEDIUM" ? "🟡🟡⚪" : "🟢⚪⚪";
   const confidenceBar = "█".repeat(Math.ceil(status.confidence / 10)) + "░".repeat(10 - Math.ceil(status.confidence / 10));
   
-  const visualization = `
+  return `
 ╔════════════════════════════════════════════════╗
 ║  ${status.session.emoji}  ${status.session.name.toUpperCase()} SESSION UPDATE
 ║  ${status.session.timezone}
@@ -110,8 +110,6 @@ async function generateMarketImageBase64(status: MarketStatus): Promise<string> 
 ⏰ ${new Date(status.time).toUTCString().slice(0, 16)} UTC
 ✨ 4xFiveAI Signal Engine
 `;
-
-  return Buffer.from(visualization).toString("base64");
 }
 
 async function generateSessionMessage(status: MarketStatus): Promise<string> {
@@ -159,7 +157,7 @@ async function sendSessionUpdate(): Promise<void> {
     console.log(`📢 [SESSION] Sending ${status.session.name} session update...`);
 
     // Generate formatted market visualization + text message
-    const visualization = await generateMarketImageBase64(status);
+    const visualization = generateMarketVisualization(status);
     const messageText = await generateSessionMessage(status);
 
     // Combine into one comprehensive message
