@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Home as HomeIcon, User, Share2, Sparkles, Cpu, LifeBuoy, Activity, LogOut, Shield, MoreVertical, Menu, X, Scan } from 'lucide-react';
+import { LayoutDashboard, Home as HomeIcon, User, Share2, Sparkles, Cpu, LifeBuoy, Activity, LogOut, Shield, MoreVertical, Menu, X, Scan, Calculator } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -23,6 +23,7 @@ import ChartAnalyzer from './pages/ChartAnalyzer';
 import Support from './pages/Support';
 import Signals from './pages/Signals';
 import TodaySignals from './pages/TodaySignals';
+import Calculators from './pages/Calculators';
 import LoadingScreen from './components/LoadingScreen';
 import { Logo } from './components/Logo';
 
@@ -103,8 +104,9 @@ function GlobalLayout() {
 
   const primaryNavItems = user ? [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/today-signals', label: 'TODAY\'S SIGNALS', icon: Activity },
+    { path: '/today-signals', label: "TODAY'S SIGNALS", icon: Activity },
     { path: '/chart-analyzer', label: 'Chart Analyzer', icon: Scan },
+    { path: '/calculators', label: 'Calculators', icon: Calculator },
     { path: '/plans', label: 'Plans', icon: Sparkles },
     { path: '/ai-coach', label: 'AI Coach', icon: Cpu },
     { path: '/account', label: 'Account', icon: User },
@@ -119,6 +121,7 @@ function GlobalLayout() {
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/today-signals', label: "Today's Signals", icon: Activity },
     { path: '/chart-analyzer', label: 'Chart Analyzer', icon: Scan },
+    { path: '/calculators', label: 'Calculators', icon: Calculator },
     { path: '/plans', label: 'Plans', icon: Sparkles },
     { path: '/ai-coach', label: 'AI Coach', icon: Cpu },
     { path: '/account', label: 'Account', icon: User },
@@ -378,6 +381,7 @@ function GlobalLayout() {
           <Route path="/validation" element={<ProtectedRoute><ValidationAnalytics /></ProtectedRoute>} />
           <Route path="/ai-coach" element={<ProtectedRoute><AICoach /></ProtectedRoute>} />
           <Route path="/chart-analyzer" element={<ProtectedRoute><ChartAnalyzer /></ProtectedRoute>} />
+          <Route path="/calculators" element={<ProtectedRoute><Calculators /></ProtectedRoute>} />
           <Route path="/signals" element={<ProtectedRoute><Signals /></ProtectedRoute>} />
         </Routes>
       </main>
