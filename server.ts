@@ -1302,7 +1302,7 @@ async function startServer() {
       // Strip data URL prefix if present
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
       
-      const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst.
+      const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst specialized in generating actionable trading signals.
 
 Analyze this trading chart screenshot using professional price action methodology.
 
@@ -1315,23 +1315,24 @@ Determine:
 6. Trade Decision (BUY/SELL/WAIT)
 7. Entry Price
 8. Stop Loss (beyond nearest swing)
-9. TP1, TP2, TP3 (logical levels, min 1:2 RR)
+9. TP1, TP2, TP3 (logical levels, TP1 min 1:1.5 RR)
 10. Risk:Reward ratio
 11. Confidence Score (0-100%)
 12. Reasoning (why this trade exists)
 13. Warnings (any risks to be aware of)
 
-IMPORTANT RULES:
-- Never invent prices. Only use what is visible in the chart.
-- If setup is weak or unclear, return WAIT with confidence below 70%.
-- Stop Loss must be beyond the nearest valid swing high/low.
-- Never place SL inside market noise.
-- Prefer pullback entries over chasing breakouts.
-- Avoid trades directly into strong support/resistance.
-- The best trade is often no trade.
-- Accuracy is more important than trade frequency.
-- ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades — show the hypothetical levels based on the nearest swing points.
-- For WAIT trades, Entry = current price or nearest trigger level, SL = nearest swing, TPs = logical targets.
+CRITICAL RULES FOR SIGNAL GENERATION:
+- GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, higher timeframe structure, and confluence of price action
+- Only return WAIT if: (1) setup is genuinely unclear, (2) momentum is exhausted/reversal imminent, (3) price is in a true ranging market
+- For strong trends with higher highs/lows: Return BUY if trend is bullish and structure is clear (breakout or pullback both valid)
+- For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
+- Stop Loss must be beyond the nearest valid swing high/low
+- Never place SL inside market noise
+- Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
+- ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades
+- For WAIT trades, still show hypothetical levels based on nearest swing points
+- Never invent prices; only use what is clearly visible
+- Confidence should reflect: Strong clear setups = 75-95%, Decent setups = 60-75%, Ambiguous = 40-60%, Unclear = <40%
 
 Return the analysis in this exact JSON format:
 {
