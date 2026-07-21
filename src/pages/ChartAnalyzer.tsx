@@ -488,11 +488,47 @@ export default function ChartAnalyzer() {
               </div>
             </div>
 
-            {/* Disclaimer */}
-            <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 text-center">
-              <p className="text-[11px] text-slate-500 font-mono uppercase tracking-wider">
-                ⚠️ Educational & Informational Use Only • Trading Involves Risk • Past Performance ≠ Future Results
-              </p>
+            {/* Comprehensive Disclaimer & Market Warning */}
+            <div className="space-y-4">
+              {/* Kill Zone Warning */}
+              <div className="bg-orange-500/15 border border-orange-500/40 rounded-xl p-5 space-y-3">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-orange-300">⚡ High Volatility Kill Zone</p>
+                    <p className="text-sm text-orange-200/80 mt-1">
+                      🔴 <strong>London Session (08:00-17:00 UTC)</strong> & <strong>New York Session (13:00-22:00 UTC)</strong> experience extreme volatility and rapid price movements. 
+                      Use TIGHTER stops and smaller positions during these windows. Many traders get stopped out in the kill zone — trade with caution.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Legal Disclaimer */}
+              <div className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-5 space-y-3">
+                <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">📋 Important Disclaimers</p>
+                <div className="space-y-2 text-xs text-slate-400 leading-relaxed">
+                  <p>
+                    <strong>🚫 Not Financial Advice:</strong> 4xLifeAI Chart Analyzer is an educational tool only. Nothing here constitutes financial advice, investment advice, or a recommendation to buy/sell. Always consult a licensed financial advisor before trading.
+                  </p>
+                  <p>
+                    <strong>📊 Probability, Not Certainty:</strong> All trading is based on <strong>probabilities, not predictions</strong>. No analysis tool (manual or AI) can predict exact market movements. Past performance does not guarantee future results.
+                  </p>
+                  <p>
+                    <strong>⚠️ Full Risk Disclosure:</strong> Trading and investing involve substantial risk of loss, including potential loss of principal. You could lose your entire investment. Only trade what you can afford to lose.
+                  </p>
+                  <p>
+                    <strong>💡 Recommended:</strong> For the BEST results, use <strong>4xFiveAI Automated Signal Engine</strong> (Dashboard → Today's Signals) which generates institutional-grade signals 24/7. Auto-signals outperform manual analysis.
+                  </p>
+                </div>
+              </div>
+
+              {/* Simple Footer Disclaimer */}
+              <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 text-center">
+                <p className="text-[11px] text-slate-500 font-mono uppercase tracking-wider">
+                  ⚠️ Chart Analysis Tool • Educational Purpose • Not Financial Advice • Trade at Your Own Risk
+                </p>
+              </div>
             </div>
           </div>
         )}
