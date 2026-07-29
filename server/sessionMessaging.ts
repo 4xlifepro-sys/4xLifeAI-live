@@ -178,23 +178,15 @@ async function sendSessionUpdate(): Promise<void> {
 }
 
 function getNextSessionMessageTime(): number {
-  const now = Date.now();
-  const currentSession = getCurrentSession();
-
-  if (!currentSession) {
-    // No active session, try again in 1 hour
-    return now + 60 * 60 * 1000;
-  }
-
-  // Simple approach: fire 4-6 hours from now
-  // Don't try to verify it's in the same session (sessions overlap anyway)
-  const randomDelay = 4 * 60 * 60 * 1000 + Math.random() * 2 * 60 * 60 * 1000;
-  return now + randomDelay;
+  const now = new Date();
+  // Schedule for next UTC midnight (00:00) — one message per 24 hours
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+  return tomorrow.getTime();
 }
 
 export function startSessionMessaging(): void {
-  console.log("🎯 [SESSION] Session messaging system initialized");
-  console.log("📅 [SESSION] Sessions: Asian 22:00-08:00 UTC | BD/Indian 03:00-12:00 UTC | London 08:00-17:00 UTC | NY 13:00-22:00 UTC");
+  console.log("🎯 [SESSION] Daily session messaging system initialized");
+  console.log("📅 [SESSION] Sends ONE market update per UTC day at 00:00 UTC");
 
   let nextMessageTime = getNextSessionMessageTime();
 
@@ -202,7 +194,7 @@ export function startSessionMessaging(): void {
     const now = Date.now();
     const delay = Math.max(0, nextMessageTime - now);
 
-    console.log(`⏰ [SESSION] Next message in ${Math.round(delay / 1000 / 60)} minutes`);
+    console.log(`⏰ [SESSION] Next daily message in ${Math.round(delay / 1000 / 60)} minutes`);
 
     setTimeout(async () => {
       await sendSessionUpdate();
