@@ -1019,7 +1019,6 @@ async function startServer() {
 
       nextCredits = Number(payment.credits || 0);
       const { error: userInsertError } = await supabase.from('users').insert([{
-        id: authUser.id,
         email: payment.email,
         password_hash: 'SUPABASE_AUTH_MANAGED',
         role: 'USER',

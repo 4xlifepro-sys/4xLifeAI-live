@@ -49,7 +49,7 @@ async function recover() {
     const authUser = freshUserList.find(u => u.email === email);
     if (authUser) {
       const { error: insErr } = await supabase.from('users').insert([{
-        id: authUser.id, email, role: 'ADMIN', plan_status: 'PREMIUM', credits: 100
+        email, role: 'ADMIN', plan_status: 'PREMIUM', credits: 100
       }]);
       if (insErr) console.error('Insert error:', insErr.message);
       else console.log('✓ users row created with ADMIN role');
