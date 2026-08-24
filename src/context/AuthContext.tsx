@@ -50,7 +50,7 @@ const AuthContext = createContext<AuthContextType>({
           .from('users')
           .select('role')
           .eq('email', userEmail)
-          .single();
+          .maybeSingle();
         
         setIsAdmin(data?.role === 'ADMIN');
       } catch (err) {
