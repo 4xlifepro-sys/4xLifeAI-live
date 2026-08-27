@@ -204,12 +204,12 @@ export default function Plans() {
             </div>
           ) : visiblePlans.map((plan) => (
             <div key={plan.id} className={cn(
-              "rounded-3xl p-8 flex flex-col relative overflow-hidden",
+               "rounded-3xl p-5 sm:p-8 flex flex-col relative overflow-hidden",
               plan.is_popular 
                 ? "bg-[#0D101A] border-2 border-teal-500/30 shadow-[0_0_40px_rgba(20,184,166,0.1)]" 
                 : "bg-[#0D101A] border border-[#202735]"
             )}>
-              <div className="flex justify-between items-center mb-6">
+               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
                 <h2 className="text-2xl font-bold text-white uppercase tracking-wider flex items-center gap-2">
                   {plan.name} {plan.is_popular && <span className="text-amber-500">🔥</span>}
                 </h2>

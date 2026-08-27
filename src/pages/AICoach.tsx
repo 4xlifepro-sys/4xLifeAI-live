@@ -149,9 +149,9 @@ export default function AICoach() {
   };
 
   return (
-    <div className="flex-1 w-full bg-[#0A0D12] flex flex-col h-[calc(100vh-64px)]">
+    <div className="flex-1 w-full min-w-0 bg-[#0A0D12] flex flex-col h-[calc(100dvh-64px)] min-h-0">
       {/* Header */}
-      <div className="bg-[#11141A] border-b border-[#202735] p-3 flex items-center justify-between z-10 shrink-0">
+       <div className="bg-[#11141A] border-b border-[#202735] p-3 flex items-center justify-between gap-2 z-10 shrink-0">
          <div className="flex items-center gap-3">
              <div className="w-10 h-10 bg-teal-500/10 border border-teal-500/20 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.2)]">
                  <Cpu className="w-5 h-5 text-teal-400" />
@@ -185,7 +185,7 @@ export default function AICoach() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+       <div className="flex-1 min-w-0 overflow-y-auto p-4 md:p-6 space-y-6">
           {messages.map((msg, index) => (
              <div key={msg.id} className={cn(
                  "flex gap-4 max-w-3xl",

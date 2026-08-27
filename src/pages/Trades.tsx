@@ -48,7 +48,7 @@ export default function Trades() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 w-full">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
             <Activity className="w-6 h-6 text-blue-500" />
             V5 QUANT CONSOLE
@@ -69,7 +69,7 @@ export default function Trades() {
       </div>
 
       {/* TELEMETRY */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
          <MetricCard title="Telegram Pushes" value={telemetry.telegramPushes} />
          <MetricCard title="Duplicate Blocks" value={telemetry.duplicateEvents} />
          <MetricCard title="API Recoveries" value={telemetry.rateLimitRecoveries} />
@@ -82,7 +82,7 @@ export default function Trades() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* TP ANALYTICS */}
-        <div className="lg:col-span-1 bg-[#11141A] border border-[#202735] rounded-xl p-6 flex flex-col gap-4">
+        <div className="lg:col-span-1 bg-[#11141A] border border-[#202735] rounded-xl p-4 sm:p-6 flex flex-col gap-4">
            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-2">TP Analytics</h2>
            <div className="space-y-4">
              <TPBar label="TP1 HITS" value={tradeStats.tp1Hits} total={tradeStats.closedTradesCount} color="bg-blue-500" />
@@ -93,12 +93,12 @@ export default function Trades() {
         </div>
 
         {/* TRADE MONITOR (Open Trades) */}
-        <div className="lg:col-span-2 bg-[#11141A] border border-[#202735] rounded-xl p-6 flex flex-col">
+        <div className="lg:col-span-2 bg-[#11141A] border border-[#202735] rounded-xl p-4 sm:p-6 flex flex-col">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                <Shield className="w-4 h-4 text-blue-400" /> Open Trades ({openTrades.length})
             </h2>
             <div className="overflow-x-auto flex-1">
-               <table className="w-full text-sm text-left">
+                <table className="w-full min-w-[640px] text-sm text-left">
                   <thead>
                     <tr className="text-[#8A95A5] border-b border-[#202735]">
                       <th className="pb-3 font-medium">Pair</th>
@@ -141,12 +141,12 @@ export default function Trades() {
       </div>
 
       {/* TRADE HISTORY */}
-      <div className="bg-[#11141A] border border-[#202735] rounded-xl p-6 flex flex-col">
+      <div className="bg-[#11141A] border border-[#202735] rounded-xl p-4 sm:p-6 flex flex-col">
          <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-400" /> Trade History
          </h2>
          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+             <table className="w-full min-w-[900px] text-sm text-left">
                <thead>
                  <tr className="text-[#8A95A5] border-b border-[#202735]">
                    <th className="pb-3 font-medium">Pair</th>
@@ -214,7 +214,7 @@ export default function Trades() {
 function StatCard({ title, value, icon }: { title: string, value: string, icon: React.ReactNode }) {
   return (
     <div className="bg-[#11141A] border border-[#202735] rounded-xl p-5 flex flex-col gap-2">
-       <div className="flex items-center justify-between">
+       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <span className="text-[#8A95A5] text-xs font-bold uppercase tracking-wider">{title}</span>
           {icon}
        </div>

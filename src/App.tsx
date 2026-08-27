@@ -155,10 +155,10 @@ function GlobalLayout() {
         </p>
       </div>
 
-      <nav className="border-b border-[#202735] bg-[#11141A]/90 backdrop-blur-md sticky top-0 z-50">
+      <nav className="relative border-b border-[#202735] bg-[#11141A]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link to={user ? "/dashboard" : "/"} className="flex items-center shrink-0">
+              <div className="flex min-w-0 h-16 items-center justify-between gap-3">
+            <Link to={user ? "/dashboard" : "/"} className="flex min-w-0 items-center shrink-0">
               <Logo size={36} showText={true} />
             </Link>
             
@@ -256,7 +256,7 @@ function GlobalLayout() {
             </div>
 
             {/* Mobile Navigation controls */}
-            <div className="flex md:hidden items-center gap-3">
+            <div className="flex md:hidden items-center gap-1 shrink-0">
               {user && <NotificationDropdown />}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -275,7 +275,7 @@ function GlobalLayout() {
 
         {/* Mobile Menu Dropdown Overlay */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 h-[calc(100vh-4rem)] z-40 bg-[#0A0D12]/98 backdrop-blur-lg border-t border-[#202735] flex flex-col justify-between overflow-y-auto p-6 pb-24 animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="md:hidden absolute top-full left-0 right-0 h-[calc(100dvh-4rem)] z-40 bg-[#0A0D12]/98 backdrop-blur-lg border-t border-[#202735] flex flex-col justify-between overflow-y-auto p-4 sm:p-6 pb-24 animate-in fade-in slide-in-from-top-4 duration-200">
             <div className="space-y-4">
               {/* User Profile Info on mobile if logged in */}
               {user && (

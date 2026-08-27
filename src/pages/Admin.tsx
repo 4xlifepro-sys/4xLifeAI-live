@@ -454,11 +454,11 @@ export default function Admin() {
 
   const renderPaymentsTab = () => (
     <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl mb-8">
-      <div className="p-6 border-b border-[#202735] flex justify-between items-center">
+      <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
         <h2 className="text-xl font-semibold text-white">Payment Queue</h2>
         <span className="text-sm font-mono text-[#8A95A5]">{payments.length} total</span>
       </div>
-      <div className="p-6 overflow-x-auto">
+      <div className="p-3 sm:p-6 overflow-x-auto">
         {payments.length === 0 ? (
           <div className="text-[#8A95A5]">No pending payments</div>
         ) : (
@@ -526,16 +526,16 @@ export default function Admin() {
 
   const renderReferralsTab = () => (
     <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
-      <div className="p-6 border-b border-[#202735]">
+      <div className="p-4 sm:p-6 border-b border-[#202735]">
         <h2 className="text-xl font-semibold text-white">Payout Requests (Referral Commissions)</h2>
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {payouts.length === 0 ? (
           <div className="text-[#8A95A5]">No payout requests found.</div>
         ) : (
           <div className="space-y-4">
             {payouts.map(payout => (
-              <div key={payout.id} className="bg-[#0D1017] p-4 rounded-xl border border-[#202735] flex justify-between items-center">
+              <div key={payout.id} className="bg-[#0D1017] p-4 rounded-xl border border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
                   <div className="text-white font-medium mb-1">{payout.email}</div>
                   <div className="text-sm text-[#8A95A5] flex items-center gap-2">
@@ -544,7 +544,7 @@ export default function Admin() {
                      <span className="text-xs ml-2">Request date: {new Date(payout.created_at).toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   <div className={cn(
                     "px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase",
                     payout.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
@@ -568,12 +568,12 @@ export default function Admin() {
   const renderAnalyticsTab = () => (
     <div className="space-y-6">
       {/* Scanner Health Dashboard */}
-      <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-6 shadow-sm">
+          <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-4 sm:p-6 shadow-sm">
         <h3 className="text-white text-sm font-bold tracking-widest uppercase mb-6 flex items-center gap-2">
           <Activity className="w-4 h-4 text-emerald-400" />
           Scanner Health Dashboard
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <div className="bg-[#11141A] p-4 rounded-lg border border-[#202735]">
             <div className="text-[#8A95A5] text-[10px] tracking-widest uppercase font-mono mb-2">Scanner Status</div>
             <div className="text-emerald-400 text-sm font-bold tracking-wider">ONLINE</div>
@@ -610,7 +610,7 @@ export default function Admin() {
       </div>
 
       {/* Validation Metrics Panel */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-5 shadow-sm">
           <div className="text-[#8A95A5] text-xs font-bold tracking-widest uppercase mb-4 text-left">A+ Grade Win Rate</div>
           <div className="text-3xl font-bold text-white mb-2">{validationMetrics?.aPlusWinRate != null ? Number(validationMetrics.aPlusWinRate).toFixed(1) : '--'}%</div>
@@ -633,7 +633,7 @@ export default function Admin() {
         </div>
       </div>
       
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-5 shadow-sm">
           <div className="text-[#8A95A5] text-xs font-bold tracking-widest uppercase mb-4 text-left">Profit Factor</div>
           <div className="text-2xl font-bold text-white mb-2">{validationMetrics?.profitFactor != null ? Number(validationMetrics.profitFactor).toFixed(2) : '--'}</div>
@@ -653,7 +653,7 @@ export default function Admin() {
       </div>
 
       {/* Top 4 Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-5 shadow-sm">
           <div className="text-[#8A95A5] text-xs font-bold tracking-widest uppercase mb-4 text-left">Total Registered Users</div>
           {totalUsers === null ? (
@@ -724,8 +724,8 @@ export default function Admin() {
 
       {/* Middle Section: Chart and Leaderboard */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-[#0A0D12] border border-[#202735] rounded-xl p-6 min-h-[320px] flex flex-col shadow-sm">
-          <div className="flex justify-between items-center mb-8">
+         <div className="lg:col-span-2 bg-[#0A0D12] border border-[#202735] rounded-xl p-4 sm:p-6 min-h-[320px] flex flex-col shadow-sm">
+           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-8">
             <h3 className="text-white text-sm font-bold tracking-widest uppercase">Engine Market Scan History (Last 6 Months)</h3>
             <span className="text-[#5D6B80] text-xs font-medium tracking-widest uppercase">Signals vs Wins Tracking</span>
           </div>
@@ -747,7 +747,7 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-6 min-h-[320px] shadow-sm">
+         <div className="bg-[#0A0D12] border border-[#202735] rounded-xl p-4 sm:p-6 min-h-[320px] shadow-sm">
           <div className="flex items-center gap-2 mb-6 text-white">
             <Award className="w-4 h-4 text-amber-500" />
             <h3 className="text-sm font-bold tracking-widest uppercase">Top Performing Elements</h3>
@@ -775,19 +775,19 @@ export default function Admin() {
       </div>
 
       {/* Bottom Section: Connection Monitor */}
-      <div className="bg-[#0D1017] border border-[#202735] rounded-xl p-6 backdrop-blur flex items-center justify-between shadow-sm relative overflow-hidden">
-        <div className="flex items-center gap-4 z-10">
+       <div className="bg-[#0D1017] border border-[#202735] rounded-xl p-4 sm:p-6 backdrop-blur flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 shadow-sm relative overflow-hidden">
+         <div className="flex items-center gap-4 z-10 min-w-0">
           <div className="bg-cyan-500/10 p-3 rounded-xl border border-cyan-500/20">
              <Database className="w-6 h-6 text-cyan-400" />
           </div>
           <div>
-            <h3 className="text-white text-md font-bold tracking-widest uppercase mb-1">4x SecureDB Live Connection Monitor</h3>
+             <h3 className="text-white text-sm sm:text-md font-bold tracking-widest uppercase mb-1">4x SecureDB Live Connection Monitor</h3>
             <p className="text-[#8A95A5] text-sm leading-relaxed max-w-2xl">
               Inspect environment configurations, execute write/read testing and verify API reachability with the linked 4x SecureDB database.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-6 z-10">
+         <div className="flex items-center gap-6 z-10 self-end sm:self-auto">
            <div className="text-right">
              <div className="text-[#5D6B80] text-[10px] tracking-[0.2em] font-mono mb-1">STATE</div>
              <div className={cn(
@@ -817,17 +817,17 @@ export default function Admin() {
 
   const renderUsersTab = () => (
     <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl mb-8">
-      <div className="p-6 border-b border-[#202735] flex justify-between items-center">
+      <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
         <h2 className="text-xl font-semibold text-white">Registered Users</h2>
         <span className="text-[#8A95A5] text-xs font-mono">{usersList.length} total</span>
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {usersList.length === 0 ? (
           <div className="text-[#8A95A5]">No users found.</div>
         ) : (
           <div className="space-y-4">
             {usersList.map((user: any) => (
-              <div key={user.id} className="bg-[#0D1017] p-4 rounded-xl border border-[#202735] flex justify-between items-center">
+              <div key={user.id} className="bg-[#0D1017] p-4 rounded-xl border border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div className="flex items-center gap-4">
                    {user.avatar_url ? (
                      <img src={user.avatar_url} alt="Avatar" className="w-10 h-10 rounded-full border border-[#202735]" />
@@ -892,11 +892,11 @@ export default function Admin() {
 
   const renderTicketsTab = () => (
     <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl mb-8">
-      <div className="p-6 border-b border-[#202735] flex justify-between items-center">
+      <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
         <h2 className="text-xl font-semibold text-white">Support Tickets</h2>
         <span className="text-[#8A95A5] text-xs font-mono">{ticketsList.length} total</span>
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {ticketsList.length === 0 ? (
           <div className="text-[#8A95A5]">No tickets found.</div>
         ) : (
@@ -948,17 +948,17 @@ export default function Admin() {
 
   const renderHistoryTab = () => (
     <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl mb-8">
-      <div className="p-6 border-b border-[#202735] flex justify-between items-center">
+      <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
         <h2 className="text-xl font-semibold text-white">Admin Audit Log</h2>
         <span className="text-[#8A95A5] text-xs font-mono">Last 50 actions</span>
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {auditLogs.length === 0 ? (
           <div className="text-[#8A95A5]">No logs found.</div>
         ) : (
           <div className="space-y-4">
             {auditLogs.map((log: any) => (
-              <div key={log.id} className="bg-[#0D1017] p-4 rounded-xl border border-[#202735] flex justify-between items-center">
+              <div key={log.id} className="bg-[#0D1017] p-4 rounded-xl border border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
                   <div className="text-white font-mono text-sm tracking-widest uppercase mb-1">{log.action}</div>
                   <div className="text-xs text-[#8A95A5] line-clamp-1">{log.details ? JSON.stringify(log.details) : 'No details'}</div>
@@ -981,7 +981,7 @@ export default function Admin() {
 
     return (
       <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl mb-8">
-        <div className="p-6 border-b border-[#202735] flex justify-between items-center flex-wrap gap-4">
+       <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center flex-wrap gap-4">
           <h2 className="text-xl font-semibold text-white">Signal Performance</h2>
           <div className="flex gap-2">
             {['All', 'A+', 'A', 'B', 'C', 'REJECTED'].map(f => (
@@ -1068,7 +1068,7 @@ export default function Admin() {
   const renderPromptsTab = () => (
     <div className="space-y-6">
       <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
-        <div className="p-6 border-b border-[#202735] flex justify-between items-center">
+        <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div>
             <h2 className="text-xl font-semibold text-white">AI Prompts Configuration</h2>
             <p className="text-sm text-[#8A95A5] mt-1">Customize the core behavioral instructions of your platform's AI models.</p>
@@ -1082,7 +1082,7 @@ export default function Admin() {
           </button>
         </div>
         
-        <div className="p-6 space-y-6">
+       <div className="p-4 sm:p-6 space-y-6">
           {/* AI Coach System Prompt */}
           <div className="space-y-2">
             <label className="block text-sm font-bold text-white tracking-wider uppercase">

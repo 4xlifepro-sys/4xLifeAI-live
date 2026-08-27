@@ -159,7 +159,7 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
               animate={{ opacity: 1, y: 0 }}
               className="bg-[#0B101A] border border-[#1A2332] rounded-lg overflow-hidden flex flex-col"
             >
-              <div className="p-4 border-b border-[#1A2332] flex justify-between items-center bg-[#070B12]">
+              <div className="p-4 border-b border-[#1A2332] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-[#070B12]">
                 <div className="flex items-center gap-3">
                   <h3 className="text-lg font-bold text-white tracking-tight">{signal.pair}</h3>
                   <span className={cn(

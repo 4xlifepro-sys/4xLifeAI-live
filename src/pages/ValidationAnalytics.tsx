@@ -174,10 +174,10 @@ export default function ValidationAnalytics() {
   }, [signals]);
 
   return (
-    <div className="flex-1 p-6 overflow-y-auto">
+    <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-w-0">
       <div className="max-w-7xl mx-auto space-y-8">
 
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight mb-2 flex items-center gap-2">
                    Performance Analytics
@@ -189,7 +189,7 @@ export default function ValidationAnalytics() {
             </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             <MetricCard title="Win Rate %" value={(winRate != null ? Number(winRate).toFixed(1) : '--') + '%'} trend={winRate >= 50 ? 'up' : 'down'} />
             <MetricCard title="Total Signals" value={totalSignals.toString()} />
             <MetricCard title="Winning Signals" value={winningSignals.toString()} trend="up" />
@@ -205,7 +205,7 @@ export default function ValidationAnalytics() {
             <div className="bg-[#11141A] border border-[#202735] rounded-xl p-5">
                 <h2 className="text-lg font-semibold mb-4 text-white">Pair Performance Table</h2>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
+                    <table className="w-full min-w-[620px] text-left text-sm whitespace-nowrap">
                         <thead>
                             <tr className="border-b border-[#202735] text-[#5D6B80]">
                                 <th className="pb-3 px-2">Pair</th>
@@ -237,7 +237,7 @@ export default function ValidationAnalytics() {
             <div className="bg-[#11141A] border border-[#202735] rounded-xl p-5">
                 <h2 className="text-lg font-semibold mb-4 text-white">Confidence Analytics</h2>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
+                    <table className="w-full min-w-[520px] text-left text-sm whitespace-nowrap">
                         <thead>
                             <tr className="border-b border-[#202735] text-[#5D6B80]">
                                 <th className="pb-3 px-2">AI Confidence</th>

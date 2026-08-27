@@ -39,7 +39,7 @@ export default function Support() {
   };
 
   return (
-    <div className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 h-[calc(100vh-64px)] overflow-y-auto">
+  <div className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-[calc(100vh-64px)] overflow-y-auto">
       {/* Top Pill label */}
       <div className="inline-flex items-center gap-2 px-4 py-2 border border-teal-500/20 bg-teal-500/5 rounded-md text-teal-400 text-sm font-bold tracking-widest uppercase mb-8 shadow-[0_0_15px_rgba(20,184,166,0.1)]">
         <MessageSquare className="w-4 h-4" />

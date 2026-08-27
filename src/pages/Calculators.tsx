@@ -153,13 +153,13 @@ export default function Calculators() {
         {/* Main Card */}
         <div className="bg-[#11141A]/80 backdrop-blur-xl border border-[#202735] rounded-3xl overflow-hidden shadow-2xl shadow-cyan-500/5">
           {/* Tabs */}
-          <div className="flex border-b border-[#202735]">
+            <div className="flex border-b border-[#202735] overflow-x-auto">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-bold transition-all",
+                  "flex-1 min-w-[90px] flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-4 text-xs sm:text-sm font-bold transition-all",
                   activeTab === tab.id
                     ? "bg-gradient-to-r from-cyan-600/20 to-blue-600/20 text-cyan-400 border-b-2 border-cyan-400"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -172,7 +172,7 @@ export default function Calculators() {
           </div>
 
           {/* Inputs */}
-          <div className="p-6 space-y-5">
+          <div className="p-4 sm:p-6 space-y-5">
             {/* Pair Selector */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Currency Pair</label>
@@ -189,7 +189,7 @@ export default function Calculators() {
 
             {activeTab === 'position' && (
               <>
-                <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account Size ($)</label>
                     <input
@@ -227,7 +227,7 @@ export default function Calculators() {
 
             {activeTab === 'margin' && (
               <>
-                <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Lots</label>
                     <input
@@ -297,7 +297,7 @@ export default function Calculators() {
               </button>
               <button
                 onClick={handleReset}
-                className="px-5 py-4 bg-slate-700/50 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl border border-slate-600/50 transition-all"
+                className="px-4 sm:px-5 py-4 bg-slate-700/50 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl border border-slate-600/50 transition-all"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
@@ -312,7 +312,7 @@ export default function Calculators() {
                 <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Results</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {activeTab === 'position' && (
                   <>
                     <div className="bg-[#0A0D12]/70 border border-emerald-500/20 rounded-xl p-4 text-center">

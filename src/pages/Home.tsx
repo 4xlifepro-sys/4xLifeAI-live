@@ -188,10 +188,10 @@ const liveSignalPreviews: LiveSetupPreview[] = [
             </div>
 
               {/* Live Scanner Preview Widget */}
-            <div className="w-full lg:w-[480px] shrink-0 bg-[#070A10] border border-[#202735] rounded-2xl p-6 relative overflow-hidden shadow-2xl">
+             <div className="w-full lg:w-[480px] shrink-0 bg-[#070A10] border border-[#202735] rounded-2xl p-4 sm:p-6 relative overflow-hidden shadow-2xl">
               <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 blur-xl rounded-full"></div>
               
-              <div className="flex justify-between items-center pb-4 border-b border-[#202735] mb-6">
+               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pb-4 border-b border-[#202735] mb-6">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span className="text-xs font-semibold text-[#8A95A5] uppercase tracking-wider">Live Engine Preview</span>
@@ -205,7 +205,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
               <div className="space-y-4">
                 {liveSignalPreviews.map((sig, idx) => (
                   <div key={idx} className="bg-[#0E121C] border border-[#202735] rounded-xl p-4 space-y-3 hover:border-blue-500/20 transition-all">
-                    <div className="flex justify-between items-center">
+                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                       <div className="flex items-center gap-2.5">
                         <span className="font-bold text-base text-white tracking-wide">{sig.pair}</span>
                         <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${sig.direction === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
@@ -233,7 +233,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center">
+                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                       <div className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
                         <span className="text-[10px] text-[#8A95A5] font-mono uppercase truncate max-w-[140px]">{sig.status}</span>

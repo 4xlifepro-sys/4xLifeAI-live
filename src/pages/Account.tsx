@@ -132,14 +132,14 @@ export default function Account() {
         </div>
 
         <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
-           <div className="p-6 sm:p-8 flex items-start gap-6 border-b border-[#202735]">
+           <div className="p-5 sm:p-8 flex flex-col sm:flex-row items-start gap-5 sm:gap-6 border-b border-[#202735]">
               <div className="w-16 h-16 bg-blue-600/20 text-blue-500 rounded-full flex items-center justify-center shrink-0">
                 <User className="w-8 h-8" />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-white">{userName}</h2>
                 <div className="text-sm text-[#8A95A5] mt-1">{userEmail}</div>
-                <div className="mt-3 flex items-center gap-3">
+               <div className="mt-3 flex flex-wrap items-center gap-3">
                   <span className={cn(
                     "px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider",
                     isPremium ? "bg-purple-500/20 text-purple-400 border border-purple-500/20" : "bg-gray-800 text-gray-300 border border-gray-700"
@@ -154,7 +154,7 @@ export default function Account() {
            </div>
 
            <div className="p-6 sm:p-8 bg-[#0D1017]">
-              <div className="flex justify-between items-center">
+               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                  <div>
                    <h3 className="text-lg font-semibold text-white mb-1">
                      {isPremium ? 'Manage Subscription' : 'Upgrade to Pro'}
@@ -188,7 +188,7 @@ export default function Account() {
         </div>
 
         <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
-          <div className="p-6 sm:p-8 border-b border-[#202735]">
+           <div className="p-5 sm:p-8 border-b border-[#202735]">
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
               <Settings2 className="w-5 h-5 text-blue-400" />
               Signal Preferences
@@ -196,7 +196,7 @@ export default function Account() {
           </div>
           
           <div className="divide-y divide-[#202735]">
-            <div className="p-6 sm:p-8 flex items-center justify-between">
+             <div className="p-5 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex gap-4">
                  <div className="mt-1 w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
                    <Bell className="w-5 h-5 text-blue-400" />
@@ -220,7 +220,7 @@ export default function Account() {
               </button>
             </div>
 
-            <div className="p-6 sm:p-8 flex items-center justify-between">
+             <div className="p-5 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex gap-4">
                  <div className="mt-1 w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0">
                    <Shield className="w-5 h-5 text-purple-400" />
