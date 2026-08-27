@@ -57,9 +57,16 @@ export default function ChartAnalyzer() {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user?.email) {
-          const { data: userData } = await supabase.from('users').select('plan').eq('email', user.email).single();
-          if (userData?.plan === 'PRO') {
-            setIsPro(true);
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (accessToken) {
+            const subscriptionRes = await fetch('/api/auth/subscription', {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (subscriptionRes.ok) {
+              const subscription = await subscriptionRes.json();
+              setIsPro(subscription?.isPro === true);
+            }
           }
 
           const usageKey = `4xlifeai_usage_${user.email}`;

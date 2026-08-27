@@ -20,6 +20,9 @@ interface Payment {
   network: string;
   txid: string;
   amount: string | null;
+  amount_usd?: number | string | null;
+  plan?: string | null;
+  method?: string | null;
   status: string;
   created_at: string;
   proof_url?: string;
@@ -476,15 +479,15 @@ export default function Admin() {
                  <tr key={payment.id} className="hover:bg-[#0D1017] transition-colors">
                     <td className="p-4 text-xs text-[#8A95A5] font-mono whitespace-nowrap">{new Date(payment.created_at).toLocaleString()}</td>
                     <td className="p-4">
-                       <div className="text-sm font-bold text-white">{(payment as any).profiles?.full_name || 'N/A'}</div>
+                       <div className="text-sm font-bold text-white">{(payment as any).profiles?.full_name || payment.email?.split('@')[0] || 'Customer'}</div>
                        <div className="text-xs text-[#8A95A5]">{payment.email}</div>
                     </td>
-                    <td className="p-4 text-xs font-bold text-white uppercase tracking-wider">{(payment as any).profiles?.plan || 'N/A'}</td>
-                    <td className="p-4 text-sm font-bold text-emerald-400 font-mono">${payment.amount || '0'}</td>
+                    <td className="p-4 text-xs font-bold text-white uppercase tracking-wider">{payment.plan || (payment as any).profiles?.plan || 'PRO'}</td>
+                    <td className="p-4 text-sm font-bold text-emerald-400 font-mono">${payment.amount ?? payment.amount_usd ?? '0'}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <span className="bg-gray-800 text-gray-300 px-2 py-0.5 rounded text-[10px] font-mono">{payment.proof_url || payment.network || 'USDT'}</span>
-                        <a href={getExplorerLink(payment.proof_url || payment.network || '', payment.tx_hash || payment.txid || '')} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline flex items-center gap-1 font-mono">
+                        <span className="bg-gray-800 text-gray-300 px-2 py-0.5 rounded text-[10px] font-mono">{payment.proof_url || payment.network || payment.method || 'USDT'}</span>
+                        <a href={getExplorerLink(payment.proof_url || payment.network || payment.method || '', payment.tx_hash || payment.txid || '')} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline flex items-center gap-1 font-mono">
                            View Proof
                            <ExternalLink className="w-3 h-3" />
                         </a>
@@ -840,18 +843,18 @@ export default function Admin() {
                 </div>
                 <div className="text-right flex items-center gap-4">
                    <div className="text-[10px] text-[#8A95A5]">Joined {new Date(user.created_at).toLocaleDateString()}</div>
-                   <div className={cn("px-2 py-1 rounded text-[10px] font-bold tracking-wider", user.plan === 'ELITE' || user.plan === 'PREMIUM' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-800 text-gray-400')}>{user.plan || 'FREE'}</div>
+                    <div className={cn("px-2 py-1 rounded text-[10px] font-bold tracking-wider", user.plan === 'PRO' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-800 text-gray-400')}>{user.plan || 'FREE'}</div>
                    <div className="flex flex-col gap-1">
-                      {user.plan !== 'ELITE' && (
+                       {user.plan !== 'PRO' && (
                         <button onClick={async () => {
                            const { data: { session } } = await supabase.auth.getSession();
-                           await fetch(`/api/admin/users/${user.id}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` }, body: JSON.stringify({ plan: 'ELITE' }) });
+                            await fetch(`/api/admin/users/${user.id}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` }, body: JSON.stringify({ plan: 'PRO' }) });
                            fetchDashboardData();
                         }} className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded text-[10px] uppercase font-bold tracking-widest transition-colors">
-                           Upgrade to Elite
+                            Upgrade to Pro
                         </button>
                       )}
-                      {(user.plan === 'ELITE' || user.plan === 'PREMIUM') && (
+                       {user.plan === 'PRO' && (
                         <button onClick={async () => {
                            const { data: { session } } = await supabase.auth.getSession();
                            await fetch(`/api/admin/users/${user.id}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` }, body: JSON.stringify({ plan: 'FREE' }) });

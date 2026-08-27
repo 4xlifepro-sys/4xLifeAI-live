@@ -80,25 +80,24 @@ export default function Plans() {
 
     if (!user) return;
     
-    // Check if user has an elite/premium plan
     const checkStatus = async () => {
-       const { data: userRecord } = await supabase.from('users').select('plan_status, credits').eq('email', user.email).single();
-       if (userRecord?.plan_status === 'PREMIUM' || userRecord?.plan_status === 'ELITE' || (userRecord?.credits || 0) > 0) {
-          setIsPremium(true);
-       }
-       
-       // Check for pending payments
        const { data: sessionData } = await supabase.auth.getSession();
        const accessToken = sessionData.session?.access_token;
        if (accessToken) {
+         const subscriptionRes = await fetch('/api/auth/subscription', {
+           headers: { 'Authorization': `Bearer ${accessToken}` }
+         });
+         if (subscriptionRes.ok) {
+           const subscription = await subscriptionRes.json();
+           setIsPremium(subscription?.isPro === true);
+         }
+
          const res = await fetch(`/api/payments/${encodeURIComponent(user.email || '')}/status`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
          });
          const payment = res.ok ? await res.json() : null;
          if (payment?.status === 'PENDING') {
             setPaymentStatus('PENDING');
-         } else if (payment?.status === 'CONFIRMED') {
-            setIsPremium(true);
          }
        }
     };

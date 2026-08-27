@@ -27,7 +27,7 @@ interface Signal {
 export default function Signals() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const filter = searchParams.get('filter') || 'elite';
+  const filter = searchParams.get('filter') || 'all';
   
   const [signals, setSignals] = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);

@@ -31,17 +31,27 @@ export default function Account() {
   useEffect(() => {
     if (!user) return;
     
-    // Check if user has a premium plan
     const checkStatus = async () => {
-       const { data: userRecord } = await supabase.from('users').select('plan, credits').eq('email', user.email).single();
-       if (userRecord?.plan === 'PRO' || (userRecord?.credits || 0) > 0) {
-          setIsPremium(true);
+       const { data: sessionData } = await supabase.auth.getSession();
+       const accessToken = sessionData.session?.access_token;
+       if (accessToken) {
+         const subscriptionRes = await fetch('/api/auth/subscription', {
+           headers: { 'Authorization': `Bearer ${accessToken}` }
+         });
+         if (subscriptionRes.ok) {
+           const subscription = await subscriptionRes.json();
+           setIsPremium(subscription?.isPro === true);
+         }
        }
        
-       // Check for pending payments
-       const { data: payment } = await supabase.from('payments').select('status').eq('email', user.email).order('created_at', { ascending: false }).limit(1).single();
-       if (payment) {
-          setPaymentStatus(payment.status);
+       if (accessToken) {
+         const paymentRes = await fetch(`/api/payments/${encodeURIComponent(user.email || '')}/status`, {
+           headers: { 'Authorization': `Bearer ${accessToken}` }
+         });
+         if (paymentRes.ok) {
+           const payment = await paymentRes.json();
+           if (payment?.status) setPaymentStatus(payment.status);
+         }
        }
     };
     checkStatus();
@@ -88,7 +98,7 @@ export default function Account() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ email: user.email, network, txid, plan: 'ELITE', amount_usd: 50, credits: 100 })
+        body: JSON.stringify({ email: user.email, network, txid, plan: 'PRO', amount_usd: 20, credits: 25 })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -134,10 +144,10 @@ export default function Account() {
                     "px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider",
                     isPremium ? "bg-purple-500/20 text-purple-400 border border-purple-500/20" : "bg-gray-800 text-gray-300 border border-gray-700"
                   )}>
-                    {isPremium ? 'Premium Tier' : 'Free Tier'}
+                    {isPremium ? 'Pro Tier' : 'Free Tier'}
                   </span>
                   <span className="text-sm text-[#8A95A5]">
-                    {isPremium ? 'Renews on Oct 12, 2026' : 'Basic access'}
+                    {isPremium ? 'Pro access active' : 'Basic access'}
                   </span>
                 </div>
               </div>
@@ -147,11 +157,11 @@ export default function Account() {
               <div className="flex justify-between items-center">
                  <div>
                    <h3 className="text-lg font-semibold text-white mb-1">
-                     {isPremium ? 'Manage Subscription' : 'Upgrade to Premium'}
+                     {isPremium ? 'Manage Subscription' : 'Upgrade to Pro'}
                    </h3>
                    <p className="text-sm text-[#8A95A5]">
                      {isPremium 
-                        ? "You are currently on the Premium plan." 
+                        ? "You are currently on the Pro plan."
                         : paymentStatus === 'PENDING' 
                         ? "Payment pending verification. This takes up to 10 minutes to 3 hours."
                         : "Unlock A+ Signals and Telegram delivery via our Plans page."

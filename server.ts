@@ -114,6 +114,91 @@ async function notifyAdmin(title: string, message: string, type: string = 'syste
   ]);
 }
 
+type CanonicalPlan = 'FREE' | 'PRO';
+
+function canonicalPlan(value: unknown): CanonicalPlan {
+  const normalized = String(value || '').trim().toUpperCase();
+  return normalized === 'PRO' || normalized === 'PREMIUM' || normalized === 'ELITE' || normalized === 'PAID'
+    ? 'PRO'
+    : 'FREE';
+}
+
+function getCanonicalPlan(record: any): CanonicalPlan {
+  if (
+    canonicalPlan(record?.plan) === 'PRO' ||
+    canonicalPlan(record?.plan_status) === 'PRO' ||
+    Number(record?.credits || 0) > 0
+  ) {
+    return 'PRO';
+  }
+  return 'FREE';
+}
+
+async function getUserSubscription(email: string) {
+  if (!supabase) return { record: null, error: new Error('Supabase is not configured') };
+
+  let result: any = await supabase
+    .from('users')
+    .select('plan, plan_status, credits')
+    .ilike('email', email.trim());
+
+  if (result.error && result.error.message.toLowerCase().includes('plan_status')) {
+    result = await supabase
+      .from('users')
+      .select('plan, credits')
+      .ilike('email', email.trim());
+  }
+
+  if (result.error && result.error.message.toLowerCase().includes('plan')) {
+    result = await supabase
+      .from('users')
+      .select('plan_status, credits')
+      .ilike('email', email.trim());
+  }
+
+  const records = result.data || [];
+  const record = records.reduce((best: any, candidate: any) => {
+    if (!best) return candidate;
+    const bestScore = getCanonicalPlan(best) === 'PRO' ? 1 : 0;
+    const candidateScore = getCanonicalPlan(candidate) === 'PRO' ? 1 : 0;
+    if (candidateScore !== bestScore) return candidateScore > bestScore ? candidate : best;
+    return Number(candidate?.credits || 0) > Number(best?.credits || 0) ? candidate : best;
+  }, null);
+
+  return { record, error: result.error };
+}
+
+async function updateUserSubscription(email: string, plan: CanonicalPlan, credits?: number) {
+  if (!supabase) return new Error('Supabase is not configured');
+
+  const payload: Record<string, unknown> = {
+    plan,
+    plan_status: plan
+  };
+  if (credits !== undefined) payload.credits = credits;
+
+  let result = await supabase
+    .from('users')
+    .update(payload)
+    .ilike('email', email.trim());
+
+  if (result.error && result.error.message.toLowerCase().includes('plan_status')) {
+    const fallbackPayload = { plan, ...(credits !== undefined ? { credits } : {}) };
+    result = await supabase
+      .from('users')
+      .update(fallbackPayload)
+      .ilike('email', email.trim());
+  } else if (result.error && result.error.message.toLowerCase().includes('plan')) {
+    const fallbackPayload = { plan_status: plan, ...(credits !== undefined ? { credits } : {}) };
+    result = await supabase
+      .from('users')
+      .update(fallbackPayload)
+      .ilike('email', email.trim());
+  }
+
+  return result.error;
+}
+
 function getPrompts() {
   try {
     const data = fs.readFileSync(path.join(process.cwd(), 'prompts.json'), 'utf8');
@@ -304,7 +389,7 @@ async function startServer() {
       pairs: {
         configured: scannerState.pairStatuses.map(p => ({
           pair: p.pair,
-          lastUpdate: p.lastUpdate ? new Date(p.lastUpdate).toISOString() : null,
+          lastUpdate: p.lastScanTime || null,
           status: p.status,
         })),
       },
@@ -710,6 +795,25 @@ async function startServer() {
     res.json({ isAdmin: (data || []).some(row => String(row.role || '').toUpperCase() === 'ADMIN') });
   });
 
+  app.get("/api/auth/subscription", requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    const email = String(user?.email || '').trim();
+    if (!email) return res.json({ plan: 'FREE', credits: 0, isPro: false });
+
+    const { record, error } = await getUserSubscription(email);
+    if (error) {
+      console.error('[AUTH] Subscription lookup failed:', error.message);
+      return res.status(500).json({ error: 'Unable to verify subscription' });
+    }
+
+    const plan = getCanonicalPlan(record);
+    res.json({
+      plan,
+      credits: Number(record?.credits || 0),
+      isPro: plan === 'PRO'
+    });
+  });
+
   app.get("/api/today-signals", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
@@ -718,12 +822,8 @@ async function startServer() {
       let planStatus = 'FREE';
       let scanLimit: number | null = null;
       if (supabase) {
-        const { data: userRecord } = await supabase
-          .from('users')
-          .select('plan_status, credits')
-          .eq('email', user.email)
-          .single();
-        planStatus = (userRecord?.plan_status || 'FREE').toUpperCase();
+        const { record: userRecord } = await getUserSubscription(user.email);
+        planStatus = getCanonicalPlan(userRecord);
         
         // Fetch scan_limit from plans table
         const { data: planRecord } = await supabase
@@ -734,7 +834,7 @@ async function startServer() {
         scanLimit = planRecord?.scan_limit ?? null;
       }
       
-      const isPremium = planStatus === 'PRO' || planStatus === 'PREMIUM' || planStatus === 'ELITE' || planStatus === 'PAID';
+      const isPremium = planStatus === 'PRO';
       
       let signalsList: any[] = [];
       
@@ -812,7 +912,10 @@ async function startServer() {
           }));
           // Insert one by one, ignore duplicates
           for (const insert of inserts) {
-            await supabase.from('user_signal_views').insert([insert]).catch(() => {});
+           try {
+             await supabase.from('user_signal_views').insert([insert]);
+           } catch {
+           }
           }
         }
         
@@ -1013,23 +1116,21 @@ async function startServer() {
     if (!payment.email) return res.status(400).json({ error: 'Payment missing email address' });
     
     // Normalize plan name to PRO if missing
-    const userPlan = (payment.plan === 'PREMIUM' || !payment.plan) ? 'PRO' : payment.plan;
+    const userPlan = canonicalPlan(payment.plan);
+    const paymentWasAlreadyConfirmed = String(payment.status || '').toUpperCase() === 'CONFIRMED';
 
-    const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'CONFIRMED' }).eq('id', paymentId);
-    if (paymentUpdateError) return res.status(500).json({ error: paymentUpdateError.message });
+    const { record: existingUser, error: existingUserError } = await getUserSubscription(payment.email);
+    if (existingUserError) {
+      return res.status(500).json({ error: `Failed to load user subscription: ${existingUserError.message}` });
+    }
 
-    // Check if user exists in users table
-    const { data: existingUser } = await supabase.from('users').select('credits').eq('email', payment.email).single();
     let nextCredits = 0;
 
     if (existingUser) {
-      // User row already exists - just update plan/credits
-      nextCredits = Number(existingUser?.credits || 0) + Number(payment.credits || 0);
-      const { error: userUpdateError } = await supabase
-        .from('users')
-        .update({ plan: userPlan, credits: nextCredits })
-        .eq('email', payment.email);
-
+      nextCredits = paymentWasAlreadyConfirmed
+        ? Number(existingUser?.credits || 0)
+        : Number(existingUser?.credits || 0) + Number(payment.credits || 0);
+      const userUpdateError = await updateUserSubscription(payment.email, canonicalPlan(userPlan), nextCredits);
       if (userUpdateError) return res.status(500).json({ error: `Failed to update user: ${userUpdateError.message}` });
     } else {
       // No users row yet - find their Supabase Auth account so we can create one
@@ -1045,16 +1146,25 @@ async function startServer() {
       }
 
       nextCredits = Number(payment.credits || 0);
-      const { error: userInsertError } = await supabase.from('users').insert([{
+      const insertPayload: Record<string, unknown> = {
         email: payment.email,
         password_hash: 'SUPABASE_AUTH_MANAGED',
         role: 'USER',
-        plan: userPlan,
+        plan: canonicalPlan(userPlan),
+        plan_status: canonicalPlan(userPlan),
         credits: nextCredits,
-      }]);
+      };
+      let userInsert = await supabase.from('users').insert([insertPayload]);
+      if (userInsert.error && userInsert.error.message.toLowerCase().includes('plan_status')) {
+        const { plan_status, ...fallbackPayload } = insertPayload;
+        userInsert = await supabase.from('users').insert([fallbackPayload]);
+      }
 
-      if (userInsertError) return res.status(500).json({ error: `Failed to create user record: ${userInsertError.message}` });
+      if (userInsert.error) return res.status(500).json({ error: `Failed to create user record: ${userInsert.error.message}` });
     }
+
+    const { error: paymentUpdateError } = await supabase.from('payment_intents').update({ status: 'CONFIRMED' }).eq('id', paymentId);
+    if (paymentUpdateError) return res.status(500).json({ error: paymentUpdateError.message });
 
     await sendNotification(payment.email, 'Payment Approved', `Congratulations! Your subscription is now active. You have full access to all trading signals and premium features. Welcome to 4xLifeAI!`, 'success');
     await notifyAdmin(
@@ -1245,14 +1355,23 @@ async function startServer() {
     const { data: users } = await supabase.from('users').select('*');
     
     const combinedUsers = authUsersRes.data.users.map(u => {
-       const userRecord = users?.find(p => p.id === u.id || p.email === u.email);
+       const matchingRecords = users?.filter(p =>
+         p.id === u.id ||
+         String(p.email || '').trim().toLowerCase() === String(u.email || '').trim().toLowerCase()
+       ) || [];
+       const userRecord = matchingRecords.reduce((best: any, candidate: any) => {
+         if (!best) return candidate;
+         return getCanonicalPlan(candidate) === 'PRO' || Number(candidate?.credits || 0) > Number(best?.credits || 0)
+           ? candidate
+           : best;
+       }, null);
        return {
          ...userRecord,
          id: u.id,
          email: u.email,
          full_name: userRecord?.full_name || u.user_metadata?.full_name || '',
          avatar_url: userRecord?.avatar_url || u.user_metadata?.avatar_url || '',
-         plan: userRecord?.plan_status || userRecord?.plan || 'FREE',
+         plan: getCanonicalPlan(userRecord),
          credits: userRecord?.credits || 0,
          is_admin: userRecord?.role === 'ADMIN',
          created_at: u.created_at,
@@ -1267,7 +1386,12 @@ async function startServer() {
     const { plan } = req.body;
     const authUsersRes = await supabase.auth.admin.getUserById(id);
     if (authUsersRes.error || !authUsersRes.data.user?.email) return res.status(404).json({ error: "User not found" });
-    const { error } = await supabase.from('users').update({ plan_status: plan }).eq('email', authUsersRes.data.user.email);
+    const normalizedPlan = canonicalPlan(plan);
+    const error = await updateUserSubscription(
+      authUsersRes.data.user.email,
+      normalizedPlan,
+      normalizedPlan === 'FREE' ? 0 : undefined
+    );
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   });
