@@ -126,6 +126,10 @@ function GlobalLayout() {
     { path: '/ai-coach', label: 'AI Coach', icon: Cpu },
     { path: '/account', label: 'Account', icon: User },
     ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: Shield }] : []),
+    { path: '/trades', label: 'Trade Monitor', icon: Activity },
+    { path: '/validation', label: 'Validation', icon: Activity },
+    { path: '/referrals', label: 'Referrals', icon: Share2 },
+    { path: '/support', label: 'Support', icon: LifeBuoy },
   ] : [
     { path: '/', label: 'Home', icon: HomeIcon },
     { path: '/plans', label: 'Plans', icon: Sparkles },
