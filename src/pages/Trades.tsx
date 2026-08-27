@@ -60,7 +60,7 @@ export default function Trades() {
       </div>
 
       {/* PERFORMANCE CENTER */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatCard title="Win Rate" value={`${tradeStats.winRate.toFixed(1)}%`} icon={<CheckCircle2 className="w-5 h-5 text-green-500" />} />
         <StatCard title="Loss Rate" value={`${tradeStats.lossRate.toFixed(1)}%`} icon={<XCircle className="w-5 h-5 text-red-500" />} />
         <StatCard title="Net Pips" value={`${tradeStats.netPips > 0 ? '+' : ''}${tradeStats.netPips.toFixed(1)}`} icon={<TrendingUp className="w-5 h-5 text-blue-500" />} />
@@ -236,7 +236,7 @@ function TPBar({ label, value, total, color }: { label: string, value: number, t
   const percent = total > 0 ? (value / total) * 100 : 0;
   return (
     <div className="flex flex-col gap-1.5">
-       <div className="flex justify-between items-center text-xs font-bold">
+                     <div className="flex flex-wrap justify-between items-center gap-2 text-xs font-bold">
           <span className="text-[#8A95A5]">{label}</span>
           <span className="text-white">{value} <span className="text-[#5D6B80] ml-1">({percent.toFixed(0)}%)</span></span>
        </div>

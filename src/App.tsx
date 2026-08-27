@@ -159,11 +159,11 @@ function GlobalLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex min-w-0 h-16 items-center justify-between gap-3">
             <Link to={user ? "/dashboard" : "/"} className="flex min-w-0 items-center shrink-0">
-              <Logo size={36} showText={true} />
+              <Logo size={36} showText={true} className="max-w-[150px]" />
             </Link>
             
             {/* Desktop Navigation */}
-            <div className="hidden md:flex flex-1 items-center justify-center px-8">
+            <div className="hidden xl:flex flex-1 items-center justify-center px-8">
               <div className="flex items-center space-x-1 lg:space-x-2">
                 {primaryNavItems.map((item) => (
                   <Link
@@ -219,7 +219,7 @@ function GlobalLayout() {
             </div>
 
             {/* Right Side Actions */}
-            <div className="hidden md:flex items-center shrink-0">
+            <div className="hidden xl:flex items-center shrink-0">
               {!user && !isAuthPage && (
                 <div className="hidden sm:flex items-center space-x-3">
                   <Link
@@ -256,7 +256,7 @@ function GlobalLayout() {
             </div>
 
             {/* Mobile Navigation controls */}
-            <div className="flex md:hidden items-center gap-1 shrink-0">
+            <div className="flex xl:hidden items-center gap-1 shrink-0">
               {user && <NotificationDropdown />}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -275,7 +275,7 @@ function GlobalLayout() {
 
         {/* Mobile Menu Dropdown Overlay */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 right-0 h-[calc(100dvh-4rem)] z-40 bg-[#0A0D12]/98 backdrop-blur-lg border-t border-[#202735] flex flex-col justify-between overflow-y-auto p-4 sm:p-6 pb-24 animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="xl:hidden absolute top-full left-0 right-0 h-[calc(100dvh-4rem)] z-40 bg-[#0A0D12]/98 backdrop-blur-lg border-t border-[#202735] flex flex-col justify-between overflow-y-auto p-4 sm:p-6 pb-24 animate-in fade-in slide-in-from-top-4 duration-200">
             <div className="space-y-4">
               {/* User Profile Info on mobile if logged in */}
               {user && (
