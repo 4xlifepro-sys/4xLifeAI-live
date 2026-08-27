@@ -30,29 +30,56 @@ const AuthContext = createContext<AuthContextType>({
       return;
     }
 
-    const checkAdmin = async (userId: string | undefined) => {
-      if (!userId) {
+    const checkAdmin = async (currentUser: User | null, accessToken?: string) => {
+      if (!currentUser) {
         setIsAdmin(false);
         return;
       }
+
+      setIsAdmin(false);
+
+      const metadataRole = currentUser.app_metadata?.role || currentUser.user_metadata?.role;
+      if (String(metadataRole || '').toUpperCase() === 'ADMIN') {
+        setIsAdmin(true);
+        return;
+      }
+
       try {
-        // Check our custom users table for role = 'ADMIN'
-        // First get the email from auth, then look it up in users table
-        const { data: authData } = await supabase.auth.getUser();
-        const userEmail = authData?.user?.email;
-        
+        const response = await fetch('/api/auth/admin-status', {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          setIsAdmin(result?.isAdmin === true);
+          return;
+        }
+      } catch (err) {
+        console.error('Admin status endpoint failed:', err);
+      }
+
+      try {
+        const userEmail = currentUser.email;
         if (!userEmail) {
           setIsAdmin(false);
           return;
         }
-        
-        const { data } = await supabase
+
+        const { data, error } = await supabase
           .from('users')
           .select('role')
-          .eq('email', userEmail)
-          .maybeSingle();
-        
-        setIsAdmin(data?.role === 'ADMIN');
+          .ilike('email', userEmail.trim())
+          .eq('role', 'ADMIN')
+          .limit(1)
+          ;
+
+        if (error) {
+          console.error('Admin access check failed:', error.message);
+          setIsAdmin(false);
+          return;
+        }
+
+        setIsAdmin((data || []).some(record => String(record.role || '').toUpperCase() === 'ADMIN'));
       } catch (err) {
         setIsAdmin(false);
       }
@@ -63,7 +90,7 @@ const AuthContext = createContext<AuthContextType>({
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        checkAdmin(session.user.id).finally(() => setLoading(false));
+        checkAdmin(session.user, session.access_token).finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
@@ -74,7 +101,9 @@ const AuthContext = createContext<AuthContextType>({
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        checkAdmin(session.user.id).finally(() => setLoading(false));
+        setTimeout(() => {
+          checkAdmin(session.user, session.access_token).finally(() => setLoading(false));
+        }, 0);
       } else {
         setIsAdmin(false);
         setLoading(false);

@@ -688,6 +688,28 @@ async function startServer() {
     next();
   };
 
+  app.get("/api/auth/admin-status", requireAuth, async (req, res) => {
+    if (!supabase) return res.status(500).json({ error: "4x System Error" });
+
+    const user = (req as any).user;
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email) return res.json({ isAdmin: false });
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .ilike('email', email)
+      .eq('role', 'ADMIN')
+      .limit(1);
+
+    if (error) {
+      console.error('[AUTH] Admin status lookup failed:', error.message);
+      return res.status(500).json({ error: 'Unable to verify admin status' });
+    }
+
+    res.json({ isAdmin: (data || []).some(row => String(row.role || '').toUpperCase() === 'ADMIN') });
+  });
+
   app.get("/api/today-signals", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
@@ -891,8 +913,13 @@ async function startServer() {
     if (error || !user) return res.status(401).json({ error: "Invalid token" });
     
     // Check our users table for role = 'ADMIN'
-    const { data: userRecord } = await supabase.from('users').select('role').eq('email', user.email).single();
-    if (!userRecord || userRecord.role !== 'ADMIN') {
+    const { data: userRecords, error: roleError } = await supabase
+      .from('users')
+      .select('role')
+      .ilike('email', String(user.email || '').trim())
+      .eq('role', 'ADMIN')
+      .limit(1);
+    if (roleError || !userRecords?.length) {
         return res.status(403).json({ error: "Forbidden: Admin access required" });
     }
     
