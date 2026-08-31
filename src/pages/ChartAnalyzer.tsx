@@ -422,7 +422,7 @@ export default function ChartAnalyzer() {
                   </span>
                 </div>
               </div>
-              <p className="text-sm text-slate-200 leading-relaxed">
+                <p className="text-sm text-slate-200 leading-relaxed">
                 {result.newsSummary || 'No current news context was returned.'}
               </p>
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
@@ -482,7 +482,12 @@ export default function ChartAnalyzer() {
                   {result.decisionSummary || 'The final decision combines chart structure and current news.'}
                 </p>
               </div>
-              {!result.newsGrounded && (
+              {result.chartDecision?.toUpperCase() === 'WAIT' && (
+                <p className="text-xs font-semibold text-blue-300">
+                  The chart itself is WAIT because price is ranging or the setup is unclear.
+                </p>
+              )}
+              {result.newsGrounded === false && (
                 <p className="text-xs font-semibold text-amber-300">
                   News was not verified for this scan. The safe result is WAIT.
                 </p>
@@ -596,7 +601,7 @@ export default function ChartAnalyzer() {
               </div>
               <div className="bg-slate-800/60 border border-cyan-500/20 rounded-xl p-6 text-center">
                 <p className="text-xs text-slate-500 font-medium">Risk Amount = 1% of $1,000</p>
-                <p className="text-3xl font-black text-cyan-400 mt-2">$20.00</p>
+                <p className="text-3xl font-black text-cyan-400 mt-2">$10.00</p>
                 <p className="text-xs text-slate-500 mt-2">Maximum loss if Stop Loss is hit</p>
               </div>
             </div>

@@ -1440,6 +1440,26 @@ async function startServer() {
     }
   });
 
+  const trustedNewsHosts = new Set([
+    'reuters.com',
+    'bloomberg.com',
+    'cnbc.com',
+    'ft.com',
+    'wsj.com',
+    'marketwatch.com',
+    'investing.com',
+    'forexfactory.com',
+    'federalreserve.gov',
+    'ecb.europa.eu',
+    'bls.gov',
+    'treasury.gov',
+    'imf.org',
+    'worldbank.org',
+    'apnews.com',
+    'bbc.com',
+    'kitco.com'
+  ]);
+
   // AI Chart Analyzer Endpoint
   app.post("/api/chart-analyzer", async (req, res) => {
     try {
@@ -1601,10 +1621,20 @@ Return only one JSON object in this format, with no Markdown fences or extra tex
       const uniqueNewsSources = Array.from(
         new Map(groundedSources.map((source: { title: string; url: string }) => [source.url, source])).values()
       ).slice(0, 6);
-      const newsGrounded = uniqueNewsSources.length > 0;
+      const trustedNewsSources = uniqueNewsSources.filter((source: { title: string; url: string }) => {
+        try {
+          const hostname = new URL(source.url).hostname.toLowerCase().replace(/^www\./, '');
+          return Array.from(trustedNewsHosts).some((host) => hostname === host || hostname.endsWith(`.${host}`));
+        } catch {
+          return false;
+        }
+      });
+      const newsGrounded = trustedNewsSources.length > 0;
       const chartDecision = String(analysis.chartDecision || analysis.trade || 'WAIT').toUpperCase();
       const candidateFinalDecision = String(analysis.finalDecision || analysis.trade || 'WAIT').toUpperCase();
-      const newsDecision = String(analysis.newsDecision || '').toUpperCase();
+      const newsDecision = chartDecision === 'WAIT'
+        ? 'NO CLEAR EDGE'
+        : String(analysis.newsDecision || '').toUpperCase();
       const newsSupportsChart = (
         chartDecision === 'BUY' && newsDecision.includes('SUPPORTS BUY')
       ) || (
@@ -1624,10 +1654,14 @@ Return only one JSON object in this format, with no Markdown fences or extra tex
         chartDecision: ['BUY', 'SELL', 'WAIT'].includes(chartDecision) ? chartDecision : 'WAIT',
         finalDecision: ['BUY', 'SELL', 'WAIT'].includes(finalDecision) ? finalDecision : 'WAIT',
         trade: ['BUY', 'SELL', 'WAIT'].includes(finalDecision) ? finalDecision : 'WAIT',
-        newsImpact: analysis.newsImpact || "UNKNOWN",
-        newsBias: analysis.newsBias || "UNKNOWN",
-        newsDecision: newsGrounded ? (analysis.newsDecision || "NO CLEAR EDGE") : "UNVERIFIED",
-        newsSummary: analysis.newsSummary || "No current news impact was established.",
+        newsImpact: newsGrounded ? (analysis.newsImpact || "UNKNOWN") : "UNKNOWN",
+        newsBias: newsGrounded ? (analysis.newsBias || "UNKNOWN") : "UNKNOWN",
+        newsDecision: newsGrounded
+          ? (chartDecision === 'WAIT' ? "NO CLEAR EDGE" : (analysis.newsDecision || "NO CLEAR EDGE"))
+          : "UNVERIFIED",
+        newsSummary: newsGrounded
+          ? (analysis.newsSummary || "No current news impact was established.")
+          : "No current news was verified from the approved financial and official sources.",
         newsRisk: newsGrounded
           ? (analysis.newsRisk || "Check the economic calendar before trading.")
           : "No verified current-news source was returned. Check the economic calendar before trading.",
@@ -1636,7 +1670,7 @@ Return only one JSON object in this format, with no Markdown fences or extra tex
             ? "The chart and verified news did not provide aligned confirmation, so the safe decision is WAIT."
             : "Current news could not be verified, so the final decision is WAIT.")
           : (analysis.decisionSummary || "The chart and verified current news point in the same direction."),
-        newsSources: uniqueNewsSources,
+        newsSources: trustedNewsSources,
         newsGrounded,
         newsCheckedAt: currentDate
       };
