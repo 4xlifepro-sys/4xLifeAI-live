@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield, Sparkles } from 'lucide-react';
+import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield, Sparkles, Newspaper, ExternalLink } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Link } from 'react-router-dom';
@@ -26,6 +26,17 @@ interface AnalysisResult {
   confidence: number;
   reasoning: string;
   warnings: string;
+  newsImpact?: string;
+  newsBias?: string;
+  newsSummary?: string;
+  newsRisk?: string;
+  chartDecision?: string;
+  newsDecision?: string;
+  finalDecision?: string;
+  decisionSummary?: string;
+  newsSources?: Array<{ title: string; url: string }>;
+  newsGrounded?: boolean;
+  newsCheckedAt?: string;
 }
 
 const ANALYSIS_STEPS = [
@@ -381,6 +392,101 @@ export default function ChartAnalyzer() {
                   <p className={cn("text-lg font-bold", item.color)}>{item.value}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <Newspaper className="w-5 h-5 text-amber-300" />
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Current News Context</h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Gemini web-grounded scan {result.newsCheckedAt ? `• ${result.newsCheckedAt} UTC` : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs uppercase tracking-wider text-slate-500">Impact</span>
+                  <span className={cn(
+                    "px-3 py-1 rounded-lg border text-xs font-bold",
+                    result.newsImpact?.toUpperCase() === 'POSITIVE'
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      : result.newsImpact?.toUpperCase() === 'NEGATIVE'
+                        ? 'bg-red-500/15 border-red-500/30 text-red-300'
+                        : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                  )}>
+                    {result.newsImpact || 'UNKNOWN'}
+                  </span>
+                  <span className="px-3 py-1 rounded-lg border border-slate-600/50 bg-slate-700/40 text-xs font-bold text-slate-300">
+                    {result.newsBias || 'UNKNOWN'} BIAS
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-slate-200 leading-relaxed">
+                {result.newsSummary || 'No current news context was returned.'}
+              </p>
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-1">News Risk</p>
+                <p className="text-sm text-amber-100/80">{result.newsRisk || 'Check the latest economic calendar before trading.'}</p>
+              </div>
+              {result.newsSources && result.newsSources.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Sources used by Gemini</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {result.newsSources.map((source) => (
+                      <a
+                        key={source.url}
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 min-w-0 rounded-lg border border-slate-700/50 bg-slate-900/30 px-3 py-2 text-xs text-cyan-300 hover:text-cyan-200 hover:border-cyan-400/40 transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{source.title}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-800/60 border border-cyan-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
+              <div>
+                <h2 className="text-lg font-bold text-white">Chart + News Decision</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  The final verdict uses the screenshot first, then verified current news.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { label: 'Chart Only', value: result.chartDecision || result.trade },
+                  { label: 'News Filter', value: result.newsDecision || 'UNVERIFIED' },
+                  { label: 'Final Decision', value: result.finalDecision || result.trade },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
+                    <p className={cn(
+                      "text-sm font-black",
+                      item.value?.toUpperCase().includes('BUY') ? 'text-emerald-400' :
+                        item.value?.toUpperCase().includes('SELL') || item.value?.toUpperCase().includes('CONFLICT') ? 'text-red-400' :
+                          'text-amber-300'
+                    )}>
+                      {item.value || 'WAIT'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-cyan-300 mb-1">Decision Summary</p>
+                <p className="text-sm text-cyan-50/80">
+                  {result.decisionSummary || 'The final decision combines chart structure and current news.'}
+                </p>
+              </div>
+              {!result.newsGrounded && (
+                <p className="text-xs font-semibold text-amber-300">
+                  News was not verified for this scan. The safe result is WAIT.
+                </p>
+              )}
             </div>
 
             {/* Market Structure & Support/Resistance */}

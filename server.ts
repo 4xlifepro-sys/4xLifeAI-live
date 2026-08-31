@@ -1451,10 +1451,14 @@ async function startServer() {
 
       // Strip data URL prefix if present
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const imageMimeType = imageBase64.match(/^data:(image\/[\w.+-]+);base64,/)?.[1] || 'image/png';
+      const currentDate = new Date().toISOString().slice(0, 10);
       
-      const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst specialized in generating actionable trading signals.
+      const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst specialized in generating probability-based trading analysis.
 
-Analyze this trading chart screenshot using professional price action methodology.
+Today is ${currentDate} UTC. Analyze this trading chart screenshot using professional price action methodology and current financial news.
+
+You MUST use Google Search grounding to check the latest relevant news for the detected instrument, its base and quote currencies, central banks, macroeconomic releases, and major geopolitical events. Use only news that is current or clearly dated. If the instrument cannot be identified, set newsImpact and newsBias to UNKNOWN and explain that news could not be matched safely.
 
 Determine:
 1. Trend (Bullish/Bearish/Range)
@@ -1469,7 +1473,15 @@ Determine:
 10. Risk:Reward ratio
 11. Confidence Score (0-100%)
 12. Reasoning (why this trade exists)
-13. Warnings (any risks to be aware of)
+13. Chart Decision (BUY/SELL/WAIT before considering news)
+14. News Impact (POSITIVE/NEGATIVE/MIXED/NEUTRAL/UNKNOWN for the proposed trade)
+15. News Bias (BULLISH/BEARISH/NEUTRAL/UNKNOWN for the instrument)
+16. News Decision (SUPPORTS BUY/SUPPORTS SELL/CONFLICTS/NO CLEAR EDGE/UNVERIFIED)
+17. News Summary (short summary of the most relevant current news)
+18. News Risk (what event or uncertainty could invalidate the setup)
+19. Final Decision (BUY/SELL/WAIT after combining the chart and verified news)
+20. Decision Summary (one sentence explaining how news changed or confirmed the chart decision)
+21. Warnings (any risks to be aware of)
 
 CRITICAL RULES FOR SIGNAL GENERATION:
 - GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, higher timeframe structure, and confluence of price action
@@ -1483,8 +1495,15 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For WAIT trades, still show hypothetical levels based on nearest swing points
 - Never invent prices; only use what is clearly visible
 - Confidence should reflect: Strong clear setups = 75-95%, Decent setups = 60-75%, Ambiguous = 40-60%, Unclear = <40%
+- Use news as a risk and confluence filter, not as a guaranteed prediction
+- If high-impact news conflicts with the chart direction or is imminent, prefer WAIT and lower confidence
+- Assess the chart first, then use verified current news as a separate filter before returning the final decision
+- If news is not verified by Google Search sources, use News Decision UNVERIFIED and Final Decision WAIT
+- The final decision must never be BUY or SELL solely because of a headline
+- Do not claim a news event is bullish or bearish without explaining its relevance to the instrument
+- Never invent headlines, dates, prices, or sources
 
-Return the analysis in this exact JSON format:
+Return only one JSON object in this format, with no Markdown fences or extra text:
 {
   "instrument": "detected pair",
   "timeframe": "detected TF",
@@ -1501,6 +1520,14 @@ Return the analysis in this exact JSON format:
   "riskReward": "ratio",
   "confidence": number,
   "reasoning": "explanation",
+  "chartDecision": "BUY/SELL/WAIT",
+  "newsImpact": "POSITIVE/NEGATIVE/MIXED/NEUTRAL/UNKNOWN",
+  "newsBias": "BULLISH/BEARISH/NEUTRAL/UNKNOWN",
+  "newsDecision": "SUPPORTS BUY/SUPPORTS SELL/CONFLICTS/NO CLEAR EDGE/UNVERIFIED",
+  "newsSummary": "current news summary",
+  "newsRisk": "news-related risk",
+  "finalDecision": "BUY/SELL/WAIT",
+  "decisionSummary": "how the chart and news combine",
   "warnings": "risks"
 }`;
       
@@ -1512,7 +1539,7 @@ Return the analysis in this exact JSON format:
             { text: chartAnalyzerPrompt },
             {
               inlineData: {
-                mimeType: 'image/png',
+                mimeType: imageMimeType,
                 data: base64Data
               }
             }
@@ -1520,11 +1547,11 @@ Return the analysis in this exact JSON format:
         }],
         config: {
           temperature: 0.3,
-          responseMimeType: 'application/json'
+          tools: [{ googleSearch: {} }]
         }
       });
       
-      const analysisText = response.text;
+      const analysisText = response.text || '';
       let analysis;
       
       try {
@@ -1551,10 +1578,68 @@ Return the analysis in this exact JSON format:
             riskReward: "N/A",
             confidence: 0,
             reasoning: analysisText,
+            chartDecision: "WAIT",
+            newsImpact: "UNKNOWN",
+            newsBias: "UNKNOWN",
+            newsDecision: "UNVERIFIED",
+            newsSummary: "Current news could not be safely parsed.",
+            newsRisk: "Verify the latest economic calendar and headlines manually.",
+            finalDecision: "WAIT",
+            decisionSummary: "The analysis could not be verified, so waiting is safest.",
             warnings: "Could not parse structured response"
           };
         }
       }
+
+      const groundingMetadata = (response.candidates?.[0] as any)?.groundingMetadata;
+      const groundedSources = Array.isArray(groundingMetadata?.groundingChunks)
+        ? groundingMetadata.groundingChunks
+            .map((chunk: any) => chunk?.web)
+            .filter((source: any) => source?.uri)
+            .map((source: any) => ({ title: source.title || source.uri, url: source.uri }))
+        : [];
+      const uniqueNewsSources = Array.from(
+        new Map(groundedSources.map((source: { title: string; url: string }) => [source.url, source])).values()
+      ).slice(0, 6);
+      const newsGrounded = uniqueNewsSources.length > 0;
+      const chartDecision = String(analysis.chartDecision || analysis.trade || 'WAIT').toUpperCase();
+      const candidateFinalDecision = String(analysis.finalDecision || analysis.trade || 'WAIT').toUpperCase();
+      const newsDecision = String(analysis.newsDecision || '').toUpperCase();
+      const newsSupportsChart = (
+        chartDecision === 'BUY' && newsDecision.includes('SUPPORTS BUY')
+      ) || (
+        chartDecision === 'SELL' && newsDecision.includes('SUPPORTS SELL')
+      );
+      const newsConflictsWithChart = newsDecision.includes('CONFLICT');
+      const finalDecision = newsGrounded &&
+        chartDecision !== 'WAIT' &&
+        newsSupportsChart &&
+        !newsConflictsWithChart &&
+        candidateFinalDecision === chartDecision
+        ? candidateFinalDecision
+        : 'WAIT';
+
+      analysis = {
+        ...analysis,
+        chartDecision: ['BUY', 'SELL', 'WAIT'].includes(chartDecision) ? chartDecision : 'WAIT',
+        finalDecision: ['BUY', 'SELL', 'WAIT'].includes(finalDecision) ? finalDecision : 'WAIT',
+        trade: ['BUY', 'SELL', 'WAIT'].includes(finalDecision) ? finalDecision : 'WAIT',
+        newsImpact: analysis.newsImpact || "UNKNOWN",
+        newsBias: analysis.newsBias || "UNKNOWN",
+        newsDecision: newsGrounded ? (analysis.newsDecision || "NO CLEAR EDGE") : "UNVERIFIED",
+        newsSummary: analysis.newsSummary || "No current news impact was established.",
+        newsRisk: newsGrounded
+          ? (analysis.newsRisk || "Check the economic calendar before trading.")
+          : "No verified current-news source was returned. Check the economic calendar before trading.",
+        decisionSummary: finalDecision === 'WAIT'
+          ? (newsGrounded
+            ? "The chart and verified news did not provide aligned confirmation, so the safe decision is WAIT."
+            : "Current news could not be verified, so the final decision is WAIT.")
+          : (analysis.decisionSummary || "The chart and verified current news point in the same direction."),
+        newsSources: uniqueNewsSources,
+        newsGrounded,
+        newsCheckedAt: currentDate
+      };
       
       res.json({ success: true, analysis });
     } catch (e: any) {
