@@ -173,6 +173,60 @@ async function getEconomicCalendar() {
   return economicCalendarCache.events;
 }
 
+function parseStructuredJson(text: string): Record<string, any> | null {
+  const normalized = String(text || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  try {
+    const parsed = JSON.parse(normalized);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+  }
+
+  const start = normalized.indexOf('{');
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < normalized.length; index += 1) {
+    const character = normalized[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+    } else if (character === '{') {
+      depth += 1;
+    } else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(normalized.slice(start, index + 1));
+          return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 async function getUserSubscription(email: string) {
   if (!supabase) return { record: null, error: new Error('Supabase is not configured') };
 
@@ -1697,7 +1751,7 @@ ${calendarPayload}`;
         newsImpact: hasSuppliedNews ? 'UNKNOWN' : notProvided,
         bigMoveRisk: hasSuppliedNews ? 'UNKNOWN' : notProvided,
         newsDecision: 'UNVERIFIED',
-        newsSummary: hasSuppliedNews ? 'The supplied calendar data could not be safely parsed.' : 'No economic-calendar data was provided.',
+        newsSummary: hasSuppliedNews ? 'The supplied calendar data was available, but the AI response could not be safely parsed.' : 'No economic-calendar data was provided.',
         fundamentalBias: hasSuppliedNews ? 'UNKNOWN' : notProvided,
         alignment: 'Unverified',
         mainReasons: ['The response was not valid structured analysis.'],
@@ -1715,24 +1769,15 @@ ${calendarPayload}`;
         invalidation: 'No verified setup is available.',
         newsRisk: 'Calendar data was not verified.',
         mainRisk: 'The chart analysis could not be verified.',
-        reasoning: analysisText || 'No structured analysis was returned.',
+        reasoning: 'The AI response was not valid structured analysis. Please run the screenshot again.',
         decisionSummary: 'WAIT is safest because the analysis could not be verified.',
         warnings: 'Educational analysis only. Not financial advice.',
       };
       
-      try {
-        analysis = JSON.parse(analysisText);
-      } catch (e) {
-        const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            analysis = JSON.parse(jsonMatch[0]);
-          } catch {
-            analysis = fallbackAnalysis;
-          }
-        } else {
-          analysis = fallbackAnalysis;
-        }
+      analysis = parseStructuredJson(analysisText);
+      if (!analysis) {
+        console.warn(`[CHART ANALYZER] Invalid structured response (${analysisText.length} characters)`);
+        analysis = fallbackAnalysis;
       }
 
       const validDecisions = new Set(['BUY', 'SELL', 'WAIT']);

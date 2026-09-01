@@ -250,6 +250,9 @@ export default function ChartAnalyzer() {
     ? result.riskReward
     : { tp1: result?.riskReward || 'Not visible / not provided', tp2: result?.riskReward || 'Not visible / not provided', tp3: result?.riskReward || 'Not visible / not provided' };
   const notProvided = 'Not visible / not provided';
+  const analysisReasoning = result?.reasoning?.trim().startsWith('{')
+    ? result.decisionSummary || 'The analysis response could not be safely displayed. Please run the screenshot again.'
+    : result?.reasoning || 'Not visible / not provided';
 
   return (
     <div className="flex-1 w-full min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">
@@ -684,7 +687,7 @@ export default function ChartAnalyzer() {
             {/* Reasoning & Warnings */}
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
               <h2 className="text-lg font-bold text-white">Analysis Reasoning</h2>
-              <p className="text-sm text-slate-300 leading-relaxed">{result.reasoning}</p>
+              <p className="text-sm text-slate-300 leading-relaxed">{analysisReasoning}</p>
               {result.invalidation && (
                 <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
                   <p className="text-xs font-bold uppercase tracking-wider text-red-300 mb-1">Invalidation</p>
