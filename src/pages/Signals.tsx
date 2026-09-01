@@ -24,6 +24,13 @@ interface Signal {
   tier: string;
 }
 
+function getDisplayDirection(direction: string) {
+  const normalized = String(direction || '').toUpperCase();
+  if (normalized === 'LONG' || normalized === 'BUY') return 'BUY';
+  if (normalized === 'SHORT' || normalized === 'SELL') return 'SELL';
+  return 'WAIT';
+}
+
 export default function Signals() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -49,7 +56,13 @@ export default function Signals() {
     async function fetchSignals() {
       try {
         let fetchedData: Signal[] = [];
-        const res = await fetch('/api/today-signals');
+        const { data: sessionData } = supabase
+          ? await supabase.auth.getSession()
+          : { data: { session: null } };
+        const token = sessionData?.session?.access_token;
+        const res = await fetch('/api/today-signals', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) throw new Error('Failed to fetch signals');
         const responseData = await res.json();
         const data = Array.isArray(responseData) ? responseData : responseData?.signals;
@@ -104,7 +117,7 @@ export default function Signals() {
                <Icon className={cn("w-6 h-6", currentView.color)} />
                {currentView.title}
              </h1>
-             <p className="text-[#8A95A5] text-sm mt-1">Live streaming market data from the 4xFiveAI Engine</p>
+             <p className="text-[#8A95A5] text-sm mt-1">Live streaming market data from the 4xLifeAI Engine</p>
           </div>
         </div>
 
@@ -149,7 +162,9 @@ export default function Signals() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#202735]/50 text-[#8A95A5]">
-                {signals.map((sig) => (
+                {signals.map((sig) => {
+                  const displayDirection = getDisplayDirection(sig.direction);
+                  return (
                   <tr key={sig.id} className="hover:bg-white/[0.02] transition-colors group">
                     <td className="py-4 px-6 font-bold text-white font-mono flex items-center gap-2">
                        {sig.pair}
@@ -157,11 +172,19 @@ export default function Signals() {
                     <td className="py-4 px-6">
                        <span className={cn(
                           "px-2 py-1 rounded text-xs font-bold uppercase tracking-widest border",
-                          sig.direction === 'LONG' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
+                          displayDirection === 'BUY'
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : displayDirection === 'SELL'
+                              ? "bg-red-500/10 text-red-400 border-red-500/20"
+                              : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                        )}>
                           <span className="flex items-center gap-1">
-                             {sig.direction === 'LONG' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                             {sig.direction}
+                             {displayDirection === 'BUY'
+                               ? <TrendingUp className="w-3 h-3" />
+                               : displayDirection === 'SELL'
+                                 ? <TrendingDown className="w-3 h-3" />
+                                 : <Activity className="w-3 h-3" />}
+                             {displayDirection}
                           </span>
                        </span>
                     </td>
@@ -195,7 +218,8 @@ export default function Signals() {
                        })}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

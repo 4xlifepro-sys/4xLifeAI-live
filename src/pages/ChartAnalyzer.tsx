@@ -26,6 +26,8 @@ interface AnalysisResult {
   entry: string;
   sl?: string;
   stopLoss: string;
+  stopLossBasis?: string;
+  stopLossQuality?: string;
   tp1: string;
   tp2: string;
   tp3: string;
@@ -50,6 +52,9 @@ interface AnalysisResult {
   bigMoveRisk?: string;
   fundamentalBias?: string;
   alignment?: string;
+  signalSource?: string;
+  newsSource?: string;
+  newsStatus?: string;
   mainReasons?: string[];
   conflictingSignals?: string;
   invalidation?: string;
@@ -245,11 +250,19 @@ export default function ChartAnalyzer() {
     });
   };
 
-  const displayDecision = String(result?.finalDecision || result?.signal || result?.trade || 'WAIT').toUpperCase();
+  const notProvided = 'Not visible / not provided';
+  const normalizeDecision = (value: unknown): 'BUY' | 'SELL' | 'WAIT' => {
+    const decision = String(value || '').toUpperCase();
+    return decision === 'BUY' || decision === 'SELL' ? decision : 'WAIT';
+  };
+  const customerNewsValue = (value: unknown, fallback = notProvided) => {
+    const text = String(value || '').trim();
+    return text && !['UNKNOWN', 'UNVERIFIED'].includes(text.toUpperCase()) ? text : fallback;
+  };
+  const displayDecision = normalizeDecision(result?.finalDecision || result?.signal || result?.trade);
   const riskRewardValues = result && typeof result.riskReward === 'object'
     ? result.riskReward
     : { tp1: result?.riskReward || 'Not visible / not provided', tp2: result?.riskReward || 'Not visible / not provided', tp3: result?.riskReward || 'Not visible / not provided' };
-  const notProvided = 'Not visible / not provided';
   const analysisReasoning = result?.reasoning?.trim().startsWith('{')
     ? result.decisionSummary || 'The analysis response could not be safely displayed. Please run the screenshot again.'
     : result?.reasoning || 'Not visible / not provided';
@@ -422,6 +435,11 @@ export default function ChartAnalyzer() {
                         ? 'Possible sell setup — confirm your own risk plan.'
                         : 'No trade now — wait for the stated confirmation.'}
                   </p>
+                  {result.signalSource && (
+                    <p className="text-xs text-slate-400 mt-2">
+                      Analysis source: {result.signalSource}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="text-right">
@@ -475,9 +493,10 @@ export default function ChartAnalyzer() {
                 <div className="flex items-center gap-3">
                   <Newspaper className="w-5 h-5 text-amber-300" />
                   <div>
-                    <h2 className="text-lg font-bold text-white">Economic Calendar Context</h2>
+                    <h2 className="text-lg font-bold text-white">Live News & Economic Calendar</h2>
                     <p className="text-xs text-slate-500 mt-1">
-                      Uses only data supplied by the application{result.newsCheckedAt ? ` • ${result.newsCheckedAt} UTC` : ''}
+                      {result.newsStatus || 'Live calendar checked'}
+                      {result.newsCheckedAt ? ` • ${result.newsCheckedAt} UTC` : ''}
                     </p>
                   </div>
                 </div>
@@ -493,23 +512,27 @@ export default function ChartAnalyzer() {
                           ? 'bg-orange-500/15 border-orange-500/30 text-orange-300'
                         : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                   )}>
-                    {result.newsImpact || 'UNKNOWN'}
+                    {customerNewsValue(result.newsImpact, 'No verified impact')}
                   </span>
                   <span className="px-3 py-1 rounded-lg border border-slate-600/50 bg-slate-700/40 text-xs font-bold text-slate-300">
-                    {result.newsBias || 'UNKNOWN'} BIAS
+                    {customerNewsValue(result.newsBias, 'No verified news bias')} BIAS
                   </span>
                 </div>
               </div>
                 <p className="text-sm text-slate-200 leading-relaxed">
-                {result.newsSummary || 'No economic-calendar data was supplied for this scan.'}
+                {result.newsSummary || 'Live economic-calendar data was checked for this scan.'}
               </p>
+              <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">News Source</p>
+                <p className="text-sm text-slate-200 break-words">{result.newsSource || 'Current economic calendar'}</p>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
-                  { label: 'Affected Currency', value: result.affectedCurrency },
-                  { label: 'Important Event', value: result.importantEvent },
-                  { label: 'Event Status', value: result.eventStatus },
-                  { label: 'Actual / Forecast / Previous', value: `${result.actual || 'Not provided'} / ${result.forecast || 'Not provided'} / ${result.previous || 'Not provided'}` },
-                  { label: 'Big-Move Risk', value: result.bigMoveRisk },
+                  { label: 'Affected Currency', value: customerNewsValue(result.affectedCurrency) },
+                  { label: 'Important Event', value: customerNewsValue(result.importantEvent) },
+                  { label: 'Event Status', value: customerNewsValue(result.eventStatus) },
+                  { label: 'Actual / Forecast / Previous', value: `${customerNewsValue(result.actual)} / ${customerNewsValue(result.forecast)} / ${customerNewsValue(result.previous)}` },
+                  { label: 'Big-Move Risk', value: customerNewsValue(result.bigMoveRisk, 'No verified risk level') },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{item.label}</p>
@@ -532,8 +555,8 @@ export default function ChartAnalyzer() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
-                  { label: 'Chart Only', value: result.chartDecision || result.trade },
-                  { label: 'News Filter', value: result.newsDecision || 'UNVERIFIED' },
+                  { label: 'Chart Only', value: normalizeDecision(result.chartDecision || result.trade) },
+                  { label: 'News Filter', value: customerNewsValue(result.newsDecision, 'No verified news edge') },
                   { label: 'Final Decision', value: displayDecision },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
@@ -560,16 +583,11 @@ export default function ChartAnalyzer() {
                   The chart itself is WAIT because price is ranging or the setup is unclear.
                 </p>
               )}
-              {result.newsDecision?.toUpperCase() === 'UNVERIFIED' && (
-                <p className="text-xs font-semibold text-amber-300">
-                  No calendar data was supplied for this scan. The safe result is WAIT.
-                </p>
-              )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
-                  { label: 'Fundamental Bias', value: result.fundamentalBias },
-                  { label: 'Alignment', value: result.alignment },
-                  { label: 'Conflicting Signals', value: result.conflictingSignals },
+                  { label: 'Fundamental Bias', value: customerNewsValue(result.fundamentalBias) },
+                  { label: 'Alignment', value: customerNewsValue(result.alignment) },
+                  { label: 'Conflicting Signals', value: customerNewsValue(result.conflictingSignals) },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
@@ -718,9 +736,9 @@ export default function ChartAnalyzer() {
                 <h2 className="text-lg font-bold text-white">Position Size Calculator</h2>
               </div>
               <div className="bg-slate-800/60 border border-cyan-500/20 rounded-xl p-6 text-center">
-                <p className="text-xs text-slate-500 font-medium">Risk Amount = 1% of $1,000</p>
-                <p className="text-3xl font-black text-cyan-400 mt-2">$10.00</p>
-                <p className="text-xs text-slate-500 mt-2">Maximum loss if Stop Loss is hit</p>
+                <p className="text-xs text-slate-500 font-medium">Risk amount = 1% of your account balance</p>
+                <p className="text-2xl font-black text-cyan-400 mt-2">CALCULATE FROM BALANCE</p>
+                <p className="text-xs text-slate-500 mt-2">Use the structural Stop Loss and adjust position size before entering</p>
               </div>
             </div>
 
@@ -734,7 +752,7 @@ export default function ChartAnalyzer() {
                     <p className="text-sm font-bold text-orange-300">⚡ High Volatility Kill Zone</p>
                     <p className="text-sm text-orange-200/80 mt-1">
                       🔴 <strong>London Session (08:00-17:00 UTC)</strong> & <strong>New York Session (13:00-22:00 UTC)</strong> experience extreme volatility and rapid price movements. 
-                      Use TIGHTER stops and smaller positions during these windows. Many traders get stopped out in the kill zone — trade with caution.
+                      Keep the structural Stop Loss valid, reduce position size, and avoid forcing a tight stop. Many traders get stopped out during these windows — trade with caution.
                     </p>
                   </div>
                 </div>
@@ -754,7 +772,7 @@ export default function ChartAnalyzer() {
                     <strong>⚠️ Full Risk Disclosure:</strong> Trading and investing involve substantial risk of loss, including potential loss of principal. You could lose your entire investment. Only trade what you can afford to lose.
                   </p>
                   <p>
-                    <strong>💡 Recommended:</strong> For the BEST results, use <strong>4xFiveAI Automated Signal Engine</strong> (Dashboard → Today's Signals) which generates institutional-grade signals 24/7. Auto-signals outperform manual analysis.
+                    <strong>💡 Recommended:</strong> For the BEST results, use <strong>4xLifeAI Automated Signal Engine</strong> (Dashboard → Today's Signals) which generates institutional-grade signals 24/7. Auto-signals outperform manual analysis.
                   </p>
                 </div>
               </div>
