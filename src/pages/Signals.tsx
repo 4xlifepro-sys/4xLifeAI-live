@@ -51,15 +51,20 @@ export default function Signals() {
         let fetchedData: Signal[] = [];
         const res = await fetch('/api/today-signals');
         if (!res.ok) throw new Error('Failed to fetch signals');
-        const data = await res.json();
-        fetchedData = (data || []).filter((s: any) => s.status !== 'REJECTED');
+        const responseData = await res.json();
+        const data = Array.isArray(responseData) ? responseData : responseData?.signals;
+        fetchedData = (data || []).filter((s: any) => {
+          const status = String(s.status || '').toUpperCase();
+          const isRejected = status === 'REJECTED' || status === 'REJECTED_BY_ADMIN' || s.tier === 'Reject';
+          return currentView.tier === 'Reject' ? isRejected : !isRejected;
+        });
 
-        if (currentView.tier) {
+        if (currentView.tier && currentView.tier !== 'Reject') {
           fetchedData = fetchedData.filter((s: Signal) => s.tier === currentView.tier);
         }
         if (currentView.filterByDate === 'today') {
-          const todayStr = new Date().toDateString();
-          fetchedData = fetchedData.filter((s: Signal) => new Date(s.timestamp).toDateString() === todayStr && s.tier !== 'Reject');
+          const todayStr = new Date().toISOString().slice(0, 10);
+          fetchedData = fetchedData.filter((s: Signal) => new Date(s.timestamp).toISOString().slice(0, 10) === todayStr);
         }
         
         setSignals(fetchedData);
@@ -99,7 +104,7 @@ export default function Signals() {
                <Icon className={cn("w-6 h-6", currentView.color)} />
                {currentView.title}
              </h1>
-             <p className="text-[#8A95A5] text-sm mt-1">iive streaming market data from 4xiifeAI Engine</p>
+             <p className="text-[#8A95A5] text-sm mt-1">Live streaming market data from the 4xFiveAI Engine</p>
           </div>
         </div>
 
@@ -138,7 +143,7 @@ export default function Signals() {
                   <th className="py-4 px-6 font-semibold text-center">Grade</th>
                   <th className="py-4 px-6 font-semibold text-center">Confidence</th>
                   <th className="py-4 px-6 font-semibold text-right">Entry</th>
-                  <th className="py-4 px-6 font-semibold text-right text-red-400/80">Si</th>
+                  <th className="py-4 px-6 font-semibold text-right text-red-400/80">SL</th>
                   <th className="py-4 px-6 font-semibold text-right text-emerald-400/80">TP1</th>
                   <th className="py-4 px-6 font-semibold text-right">Time</th>
                 </tr>

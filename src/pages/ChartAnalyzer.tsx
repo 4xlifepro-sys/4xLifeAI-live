@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield, Sparkles, Newspaper, ExternalLink } from 'lucide-react';
+import { Upload, Scan, TrendingUp, TrendingDown, Minus, AlertTriangle, RotateCcw, Zap, Shield, Sparkles, Newspaper } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Link } from 'react-router-dom';
@@ -12,17 +12,24 @@ export function cn(...inputs: ClassValue[]) {
 interface AnalysisResult {
   instrument: string;
   timeframe: string;
+  currentPrice?: string;
+  chartQuality?: string;
   trend: string;
   marketStructure: string;
+  technicalBias?: string;
   support: string;
   resistance: string;
+  priceAction?: string;
+  indicators?: string[];
   trade: string;
+  signal?: string;
   entry: string;
+  sl?: string;
   stopLoss: string;
   tp1: string;
   tp2: string;
   tp3: string;
-  riskReward: string;
+  riskReward: string | { tp1: string; tp2: string; tp3: string };
   confidence: number;
   reasoning: string;
   warnings: string;
@@ -34,6 +41,19 @@ interface AnalysisResult {
   newsDecision?: string;
   finalDecision?: string;
   decisionSummary?: string;
+  affectedCurrency?: string;
+  importantEvent?: string;
+  eventStatus?: string;
+  actual?: string;
+  forecast?: string;
+  previous?: string;
+  bigMoveRisk?: string;
+  fundamentalBias?: string;
+  alignment?: string;
+  mainReasons?: string[];
+  conflictingSignals?: string;
+  invalidation?: string;
+  mainRisk?: string;
   newsSources?: Array<{ title: string; url: string }>;
   newsGrounded?: boolean;
   newsCheckedAt?: string;
@@ -125,7 +145,26 @@ export default function ChartAnalyzer() {
     if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10MB'); return; }
     setError(''); setResult(null); setSelectedFileName(file.name);
     const reader = new FileReader();
-    reader.onload = (e) => setSelectedImage(e.target?.result as string);
+    reader.onload = (e) => {
+      const source = e.target?.result as string;
+      const image = new Image();
+      image.onload = () => {
+        const maxDimension = 1600;
+        const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          setSelectedImage(source);
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        setSelectedImage(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      image.onerror = () => setSelectedImage(source);
+      image.src = source;
+    };
     reader.readAsDataURL(file);
   };
 
@@ -141,13 +180,18 @@ export default function ChartAnalyzer() {
     }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError('');
     try {
-      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
-      
-      if (res.status === 503) {
-        setAnalysisStep(analysisStep);
-        await new Promise(r => setTimeout(r, 3000));
-        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
-      }
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      const res = await fetch('/api/chart-analyzer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+        },
+        body: JSON.stringify({
+          imageBase64: selectedImage,
+        })
+      });
       
       const data = await res.json();
       if (data.success) {
@@ -201,8 +245,14 @@ export default function ChartAnalyzer() {
     });
   };
 
+  const displayDecision = String(result?.finalDecision || result?.signal || result?.trade || 'WAIT').toUpperCase();
+  const riskRewardValues = result && typeof result.riskReward === 'object'
+    ? result.riskReward
+    : { tp1: result?.riskReward || 'Not visible / not provided', tp2: result?.riskReward || 'Not visible / not provided', tp3: result?.riskReward || 'Not visible / not provided' };
+  const notProvided = 'Not visible / not provided';
+
   return (
-    <div className="flex-1 w-full bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">
+    <div className="flex-1 w-full min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">
       {/* Premium Gradient Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-1/3 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl opacity-20"></div>
@@ -258,7 +308,7 @@ export default function ChartAnalyzer() {
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
           {selectedImage ? (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <img src={selectedImage} alt="Selected chart" className="max-h-96 mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
+              <img src={selectedImage} alt="Selected chart" className="max-h-96 max-w-full h-auto mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
               <p className="text-sm text-slate-400 font-medium">{selectedFileName}</p>
               <p className="text-xs text-slate-600">Click or drop to replace</p>
             </div>
@@ -289,7 +339,7 @@ export default function ChartAnalyzer() {
           <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30 rounded-2xl p-6 text-center backdrop-blur-sm">
             <Shield className="w-6 h-6 text-cyan-400 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-cyan-300 mb-2">Daily Analysis Limit Reached</h3>
-            <p className="text-sm text-slate-400 mb-4">Upgrade to Pro for unlimited daily analyses and priority support.</p>
+            <p className="text-sm text-slate-400 mb-4">Upgrade to Pro for 30 daily analyses and priority support.</p>
             <Link to="/plans" className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all shadow-lg hover:shadow-xl">
               <Zap className="w-4 h-4" />
               Upgrade to Pro
@@ -349,18 +399,25 @@ export default function ChartAnalyzer() {
             {/* Trade Decision Card */}
             <div className={cn(
               "rounded-2xl p-8 border-2 flex items-center justify-between flex-wrap gap-6 backdrop-blur-sm",
-              getTradeBadge(result.trade).bg, 
-              getTradeBadge(result.trade).border
+              getTradeBadge(displayDecision).bg,
+              getTradeBadge(displayDecision).border
             )}>
               <div className="flex items-center gap-4">
                 {(() => { 
-                  const BadgeIcon = getTradeBadge(result.trade).icon; 
-                  return <BadgeIcon className={cn("w-12 h-12", getTradeBadge(result.trade).text)} />; 
+                  const BadgeIcon = getTradeBadge(displayDecision).icon;
+                  return <BadgeIcon className={cn("w-12 h-12", getTradeBadge(displayDecision).text)} />;
                 })()}
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Trade Decision</p>
-                  <p className={cn("text-4xl font-black", getTradeBadge(result.trade).text)}>
-                    {getTradeBadge(result.trade).label}
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Final Signal</p>
+                  <p className={cn("text-4xl font-black", getTradeBadge(displayDecision).text)}>
+                    {getTradeBadge(displayDecision).label}
+                  </p>
+                  <p className="text-sm text-slate-300 mt-2">
+                    {displayDecision === 'BUY'
+                      ? 'Possible buy setup — confirm your own risk plan.'
+                      : displayDecision === 'SELL'
+                        ? 'Possible sell setup — confirm your own risk plan.'
+                        : 'No trade now — wait for the stated confirmation.'}
                   </p>
                 </div>
               </div>
@@ -386,6 +443,9 @@ export default function ChartAnalyzer() {
                 { label: 'Instrument', value: result.instrument, icon: '📊', color: 'text-cyan-300' },
                 { label: 'Timeframe', value: result.timeframe, icon: '⏱️', color: 'text-cyan-300' },
                 { label: 'Trend Direction', value: result.trend, icon: '📈', color: getTrendColor(result.trend) },
+                { label: 'Technical Bias', value: result.technicalBias || 'Not visible / not provided', icon: '🧭', color: getTrendColor(result.technicalBias || '') },
+                { label: 'Current Price', value: result.currentPrice || 'Not visible / not provided', icon: '💲', color: 'text-cyan-300' },
+                { label: 'Chart Quality', value: result.chartQuality || 'Not visible / not provided', icon: '🔎', color: result.chartQuality?.toUpperCase() === 'SUFFICIENT' ? 'text-emerald-400' : 'text-amber-300' },
               ].map((item) => (
                 <div key={item.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 backdrop-blur-sm hover:border-cyan-400/30 transition-colors">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
@@ -394,14 +454,27 @@ export default function ChartAnalyzer() {
               ))}
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Price Action</p>
+                <p className="text-sm text-slate-200 leading-relaxed">{result.priceAction || 'Not visible / not provided'}</p>
+              </div>
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Visible Indicators</p>
+                <p className="text-sm text-slate-200 leading-relaxed">
+                  {result.indicators?.length ? result.indicators.join(' • ') : 'Not visible / not provided'}
+                </p>
+              </div>
+            </div>
+
             <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
                   <Newspaper className="w-5 h-5 text-amber-300" />
                   <div>
-                    <h2 className="text-lg font-bold text-white">Current News Context</h2>
+                    <h2 className="text-lg font-bold text-white">Economic Calendar Context</h2>
                     <p className="text-xs text-slate-500 mt-1">
-                      Gemini web-grounded scan {result.newsCheckedAt ? `• ${result.newsCheckedAt} UTC` : ''}
+                      Uses only data supplied by the application{result.newsCheckedAt ? ` • ${result.newsCheckedAt} UTC` : ''}
                     </p>
                   </div>
                 </div>
@@ -413,6 +486,8 @@ export default function ChartAnalyzer() {
                       ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                       : result.newsImpact?.toUpperCase() === 'NEGATIVE'
                         ? 'bg-red-500/15 border-red-500/30 text-red-300'
+                        : ['HIGH', 'EXTREME'].includes(result.newsImpact?.toUpperCase() || '')
+                          ? 'bg-orange-500/15 border-orange-500/30 text-orange-300'
                         : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                   )}>
                     {result.newsImpact || 'UNKNOWN'}
@@ -423,45 +498,40 @@ export default function ChartAnalyzer() {
                 </div>
               </div>
                 <p className="text-sm text-slate-200 leading-relaxed">
-                {result.newsSummary || 'No current news context was returned.'}
+                {result.newsSummary || 'No economic-calendar data was supplied for this scan.'}
               </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { label: 'Affected Currency', value: result.affectedCurrency },
+                  { label: 'Important Event', value: result.importantEvent },
+                  { label: 'Event Status', value: result.eventStatus },
+                  { label: 'Actual / Forecast / Previous', value: `${result.actual || 'Not provided'} / ${result.forecast || 'Not provided'} / ${result.previous || 'Not provided'}` },
+                  { label: 'Big-Move Risk', value: result.bigMoveRisk },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{item.label}</p>
+                    <p className="text-sm text-slate-200 break-words">{item.value || 'Not visible / not provided'}</p>
+                  </div>
+                ))}
+              </div>
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-1">News Risk</p>
-                <p className="text-sm text-amber-100/80">{result.newsRisk || 'Check the latest economic calendar before trading.'}</p>
+                <p className="text-sm text-amber-100/80">{result.newsRisk || 'No calendar risk was supplied. Do not assume current news conditions.'}</p>
               </div>
-              {result.newsSources && result.newsSources.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Sources used by Gemini</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {result.newsSources.map((source) => (
-                      <a
-                        key={source.url}
-                        href={source.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 min-w-0 rounded-lg border border-slate-700/50 bg-slate-900/30 px-3 py-2 text-xs text-cyan-300 hover:text-cyan-200 hover:border-cyan-400/40 transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{source.title}</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="bg-slate-800/60 border border-cyan-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
               <div>
-                <h2 className="text-lg font-bold text-white">Chart + News Decision</h2>
+                <h2 className="text-lg font-bold text-white">Confluence Decision</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  The final verdict uses the screenshot first, then verified current news.
+                  Technical structure and supplied calendar data are checked together.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: 'Chart Only', value: result.chartDecision || result.trade },
                   { label: 'News Filter', value: result.newsDecision || 'UNVERIFIED' },
-                  { label: 'Final Decision', value: result.finalDecision || result.trade },
+                  { label: 'Final Decision', value: displayDecision },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
@@ -487,10 +557,32 @@ export default function ChartAnalyzer() {
                   The chart itself is WAIT because price is ranging or the setup is unclear.
                 </p>
               )}
-              {result.newsGrounded === false && (
+              {result.newsDecision?.toUpperCase() === 'UNVERIFIED' && (
                 <p className="text-xs font-semibold text-amber-300">
-                  News was not verified for this scan. The safe result is WAIT.
+                  No calendar data was supplied for this scan. The safe result is WAIT.
                 </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { label: 'Fundamental Bias', value: result.fundamentalBias },
+                  { label: 'Alignment', value: result.alignment },
+                  { label: 'Conflicting Signals', value: result.conflictingSignals },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
+                    <p className="text-sm text-slate-200 break-words">{item.value || 'Not visible / not provided'}</p>
+                  </div>
+                ))}
+              </div>
+              {result.mainReasons && result.mainReasons.length > 0 && (
+                <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Main Reasons</p>
+                  <ol className="list-decimal list-inside space-y-1 text-sm text-slate-200">
+                    {result.mainReasons.slice(0, 3).map((reason, index) => (
+                      <li key={`${index}-${reason}`}>{reason}</li>
+                    ))}
+                  </ol>
+                </div>
               )}
             </div>
 
@@ -505,14 +597,14 @@ export default function ChartAnalyzer() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs text-slate-500">Support</p>
-                    <p className="text-lg font-bold text-emerald-400">{result.support}</p>
+                    <p className="text-lg font-bold text-emerald-400 break-words">{result.support}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-2xl text-slate-600">—</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-500">Resistance</p>
-                    <p className="text-lg font-bold text-red-400">{result.resistance}</p>
+                    <p className="text-lg font-bold text-red-400 break-words">{result.resistance}</p>
                   </div>
                 </div>
               </div>
@@ -529,41 +621,41 @@ export default function ChartAnalyzer() {
                 {/* ACTION BADGE - Shows BUY/SELL/WAIT prominently */}
                 <div className={cn(
                   "px-6 py-3 rounded-xl font-bold text-lg flex items-center gap-2",
-                  result.trade.toUpperCase() === 'BUY' 
+                  displayDecision === 'BUY'
                     ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
-                    : result.trade.toUpperCase() === 'SELL' 
+                    : displayDecision === 'SELL'
                       ? 'bg-red-500/20 border border-red-500/50 text-red-400'
                       : 'bg-blue-500/20 border border-blue-500/50 text-blue-300'
                 )}>
-                  {result.trade.toUpperCase() === 'BUY' && '↗️ BUY'}
-                  {result.trade.toUpperCase() === 'SELL' && '↘️ SELL'}
-                  {result.trade.toUpperCase() === 'WAIT' && '⏸️ WAIT'}
+                  {displayDecision === 'BUY' && '↗️ BUY'}
+                  {displayDecision === 'SELL' && '↘️ SELL'}
+                  {displayDecision === 'WAIT' && '⏸️ WAIT'}
                 </div>
               </div>
 
               {/* Use these prices to [BUY/SELL] */}
               <p className="text-xs text-slate-500 font-medium">
-                {result.trade.toUpperCase() === 'BUY' && '🔼 Use these prices to BUY'}
-                {result.trade.toUpperCase() === 'SELL' && '🔽 Use these prices to SELL'}
-                {result.trade.toUpperCase() === 'WAIT' && '⏸️ Wait for a better setup - do NOT trade now'}
+                {displayDecision === 'BUY' && '🔼 Possible BUY setup — confirm before entering'}
+                {displayDecision === 'SELL' && '🔽 Possible SELL setup — confirm before entering'}
+                {displayDecision === 'WAIT' && '⏸️ WAIT — do NOT trade until confirmation'}
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {[
-                  { label: 'Entry', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
-                  { label: 'Stop Loss', value: result.stopLoss, color: 'text-red-400', bg: 'bg-red-500/10' },
-                  { label: 'TP1', value: result.tp1, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP2', value: result.tp2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP3', value: result.tp3, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'Entry', value: result.entry || notProvided, color: 'text-white', bg: 'bg-slate-700/50' },
+                  { label: 'Stop Loss', value: result.stopLoss || notProvided, color: 'text-red-400', bg: 'bg-red-500/10' },
+                  { label: 'TP1', value: result.tp1 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP2', value: result.tp2 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP3', value: result.tp3 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                 ].map((level) => (
                   <button
                     key={level.label}
-                    onClick={() => copyToClipboard(level.value)}
+                    onClick={() => copyToClipboard(String(level.value))}
                     className={cn("border border-slate-600/50 rounded-xl p-3 text-center transition-all hover:border-cyan-400/50 hover:shadow-lg group relative", level.bg)}
                     title={`Click to copy ${level.label}`}
                   >
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{level.label}</p>
-                    <p className={cn("text-sm font-bold", level.color)}>{level.value}</p>
+                    <p className={cn("text-sm font-bold break-words", level.color)}>{String(level.value)}</p>
                     <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-slate-700 text-cyan-300 px-2 py-1 rounded whitespace-nowrap pointer-events-none">
                       {copiedValue === level.value ? '✓ Copied!' : 'Click to copy'}
                     </div>
@@ -573,7 +665,18 @@ export default function ChartAnalyzer() {
               <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Risk : Reward Ratio</p>
-                  <p className="text-2xl font-bold text-cyan-400 mt-1">{result.riskReward}</p>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {[
+                      { label: 'TP1', value: riskRewardValues.tp1 },
+                      { label: 'TP2', value: riskRewardValues.tp2 },
+                      { label: 'TP3', value: riskRewardValues.tp3 },
+                    ].map((target) => (
+                      <div key={target.label} className="rounded-lg bg-slate-900/40 border border-slate-700/50 p-2">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">{target.label}</p>
+                        <p className="text-sm font-bold text-cyan-400 break-words">{String(target.value)}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -582,6 +685,18 @@ export default function ChartAnalyzer() {
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
               <h2 className="text-lg font-bold text-white">Analysis Reasoning</h2>
               <p className="text-sm text-slate-300 leading-relaxed">{result.reasoning}</p>
+              {result.invalidation && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-300 mb-1">Invalidation</p>
+                  <p className="text-sm text-red-100/80">{result.invalidation}</p>
+                </div>
+              )}
+              {result.mainRisk && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-1">Main Risk</p>
+                  <p className="text-sm text-amber-100/80">{result.mainRisk}</p>
+                </div>
+              )}
               {result.warnings && result.warnings !== 'None' && result.warnings !== '' && (
                 <div className="flex items-start gap-4 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mt-4">
                   <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
