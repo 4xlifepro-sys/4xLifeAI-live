@@ -34,6 +34,7 @@ interface AnalysisResult {
   riskReward: string | { tp1: string; tp2: string; tp3: string };
   confidence: number;
   reasoning: string;
+  analysisError?: boolean;
   warnings: string;
   newsImpact?: string;
   newsBias?: string;
@@ -263,9 +264,7 @@ export default function ChartAnalyzer() {
   const riskRewardValues = result && typeof result.riskReward === 'object'
     ? result.riskReward
     : { tp1: result?.riskReward || 'Not visible / not provided', tp2: result?.riskReward || 'Not visible / not provided', tp3: result?.riskReward || 'Not visible / not provided' };
-  const analysisReasoning = result?.reasoning?.trim().startsWith('{')
-    ? result.decisionSummary || 'The analysis response could not be safely displayed. Please run the screenshot again.'
-    : result?.reasoning || 'Not visible / not provided';
+  const analysisReasoning = result?.reasoning || 'Not visible / not provided';
 
   return (
     <div className="flex-1 w-full min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">

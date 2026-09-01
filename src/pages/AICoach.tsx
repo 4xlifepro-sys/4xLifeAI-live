@@ -17,13 +17,13 @@ interface Message {
 const INITIAL_MESSAGE: Message = {
     id: '1',
     role: 'assistant',
-    content: `Hello! I am the **4xFiveAI Coach**, your in-app assistant here to help you trade smarter.
+    content: `Hello! I am the **4xLifeAI Coach**, your in-app assistant here to help you trade smarter.
 
 How can I help you level up your trading today? We can dive into:
 * **Risk Management & Position Sizing** (calculating lot sizes, managing drawdowns)
 * **Market structure and risk management** (BOS, CHoCH, Pullbacks, Liquidity)
 * **Trading Psychology & Journaling**
-* **4xFiveAI Plans** (from Starter to Quantum)`
+* **4xLifeAI Plans** (from Starter to Quantum)`
 };
 
 export default function AICoach() {
@@ -109,7 +109,7 @@ export default function AICoach() {
              try {
                 const parsed = JSON.parse(errorContent);
                 if (parsed.error && parsed.error.message && parsed.error.message.includes('quota')) {
-                     errorContent = '4xFiveAI Coach is currently experiencing high demand. Please try again in 1 minute.';
+                     errorContent = '4xLifeAI Coach is currently experiencing high demand. Please try again in 1 minute.';
                 } else if (parsed.error && parsed.error.message) {
                      errorContent = parsed.error.message;
                 }
@@ -158,7 +158,7 @@ export default function AICoach() {
              </div>
              <div>
                 <h1 className="text-white font-bold flex items-center gap-2">
-                    4xFiveAI Coach <span className="text-pink-500 drop-shadow-[0_0_5px_rgba(236,72,153,0.5)]">🧠</span>
+                    4xLifeAI Coach <span className="text-pink-500 drop-shadow-[0_0_5px_rgba(236,72,153,0.5)]">🧠</span>
                 </h1>
                 <div className="flex items-center gap-3 text-xs">
                     <span className="flex items-center gap-1.5 text-teal-400 font-medium">

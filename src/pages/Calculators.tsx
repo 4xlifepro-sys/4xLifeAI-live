@@ -389,7 +389,7 @@ export default function Calculators() {
               <h3 className="font-bold text-white">Best Used With</h3>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Combine with 4xFiveAI signals. Copy the Entry/SL from Today's Signals into this calculator to get the exact lot size for your account.
+              Combine with 4xLifeAI signals. Copy the Entry/SL from Today's Signals into this calculator to get the exact lot size for your account.
             </p>
           </div>
         </div>

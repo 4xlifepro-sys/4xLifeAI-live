@@ -1918,6 +1918,7 @@ ${calendarPayload}`;
         reasoning: 'The AI response was not valid structured analysis. Please run the screenshot again.',
         decisionSummary: 'WAIT is safest because the analysis could not be verified.',
         warnings: 'Educational analysis only. Not financial advice.',
+        analysisError: true,
       };
       
       analysis = parseStructuredJson(analysisText);
