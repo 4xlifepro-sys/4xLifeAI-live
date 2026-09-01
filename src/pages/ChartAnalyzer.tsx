@@ -199,7 +199,7 @@ export default function ChartAnalyzer() {
       });
       
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.analysis) {
         setResult(data.analysis);
         const newUsage = usage + 1; 
         setUsage(newUsage);
@@ -211,7 +211,7 @@ export default function ChartAnalyzer() {
         
         setTimeout(() => { resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300);
       } else {
-        const errMsg = data.error || '';
+        const errMsg = data.error || 'The chart analysis response was invalid. Please try again.';
         if (errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429')) {
           setError('The AI is temporarily busy. Please wait 30 seconds and try again.');
         } else {
