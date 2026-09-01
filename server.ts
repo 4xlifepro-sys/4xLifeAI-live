@@ -8,7 +8,7 @@ import { startSessionMessaging, sendSessionUpdate } from "./server/sessionMessag
 import { supabase } from './server/supabase.js';
 import { sendTelegramMessage } from './server/telegram.js';
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 const adminAlertCooldown = new Map<string, number>();
 let notificationsTableAvailable = true;
@@ -240,6 +240,110 @@ function parseStructuredJson(text: string): Record<string, any> | null {
 
   return null;
 }
+
+const chartAnalysisResponseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    instrument: { type: Type.STRING },
+    timeframe: { type: Type.STRING },
+    currentPrice: { type: Type.STRING },
+    chartQuality: { type: Type.STRING },
+    marketStructure: { type: Type.STRING },
+    trend: { type: Type.STRING },
+    technicalBias: { type: Type.STRING },
+    support: { type: Type.STRING },
+    resistance: { type: Type.STRING },
+    priceAction: { type: Type.STRING },
+    indicators: { type: Type.ARRAY, items: { type: Type.STRING } },
+    chartDecision: { type: Type.STRING, enum: ['BUY', 'SELL', 'WAIT'] },
+    newsBias: { type: Type.STRING },
+    affectedCurrency: { type: Type.STRING },
+    importantEvent: { type: Type.STRING },
+    eventStatus: { type: Type.STRING },
+    actual: { type: Type.STRING },
+    forecast: { type: Type.STRING },
+    previous: { type: Type.STRING },
+    newsImpact: { type: Type.STRING },
+    bigMoveRisk: { type: Type.STRING },
+    newsDecision: { type: Type.STRING },
+    newsSummary: { type: Type.STRING },
+    fundamentalBias: { type: Type.STRING },
+    alignment: { type: Type.STRING },
+    mainReasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+    conflictingSignals: { type: Type.STRING },
+    signal: { type: Type.STRING, enum: ['BUY', 'SELL', 'WAIT'] },
+    confidence: { type: Type.INTEGER, minimum: 0, maximum: 100 },
+    entry: { type: Type.STRING },
+    sl: { type: Type.STRING },
+    stopLoss: { type: Type.STRING },
+    stopLossBasis: { type: Type.STRING },
+    stopLossQuality: { type: Type.STRING },
+    tp1: { type: Type.STRING },
+    tp2: { type: Type.STRING },
+    tp3: { type: Type.STRING },
+    riskReward: {
+      type: Type.OBJECT,
+      properties: {
+        tp1: { type: Type.STRING },
+        tp2: { type: Type.STRING },
+        tp3: { type: Type.STRING }
+      },
+      required: ['tp1', 'tp2', 'tp3']
+    },
+    invalidation: { type: Type.STRING },
+    newsRisk: { type: Type.STRING },
+    mainRisk: { type: Type.STRING },
+    reasoning: { type: Type.STRING },
+    decisionSummary: { type: Type.STRING },
+    warnings: { type: Type.STRING }
+  },
+  required: [
+    'instrument',
+    'timeframe',
+    'currentPrice',
+    'chartQuality',
+    'marketStructure',
+    'trend',
+    'technicalBias',
+    'support',
+    'resistance',
+    'priceAction',
+    'indicators',
+    'chartDecision',
+    'newsBias',
+    'affectedCurrency',
+    'importantEvent',
+    'eventStatus',
+    'actual',
+    'forecast',
+    'previous',
+    'newsImpact',
+    'bigMoveRisk',
+    'newsDecision',
+    'newsSummary',
+    'fundamentalBias',
+    'alignment',
+    'mainReasons',
+    'conflictingSignals',
+    'signal',
+    'confidence',
+    'entry',
+    'sl',
+    'stopLoss',
+    'stopLossBasis',
+    'stopLossQuality',
+    'tp1',
+    'tp2',
+    'tp3',
+    'riskReward',
+    'invalidation',
+    'newsRisk',
+    'mainRisk',
+    'reasoning',
+    'decisionSummary',
+    'warnings'
+  ]
+};
 
 async function getUserSubscription(email: string) {
   if (!supabase) return { record: null, error: new Error('Supabase is not configured') };
@@ -1746,8 +1850,10 @@ ${calendarPayload}`;
         }],
         config: {
           temperature: 0.2,
-          maxOutputTokens: 1600,
-          responseMimeType: 'application/json'
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json',
+          responseSchema: chartAnalysisResponseSchema,
+          thinkingConfig: { thinkingBudget: 0 }
         }
       });
       
