@@ -63,6 +63,13 @@ interface AnalysisResult {
   newsSources?: Array<{ title: string; url: string }>;
   newsGrounded?: boolean;
   newsCheckedAt?: string;
+  volatilityRisk?: string;
+  pairRelevance?: string;
+  bullishScenario?: string;
+  bearishScenario?: string;
+  tradingAction?: string;
+  eventTiming?: string;
+  newsBlockReason?: string;
 }
 
 const ANALYSIS_STEPS = [
@@ -530,18 +537,55 @@ export default function ChartAnalyzer() {
               </div>
             )}
 
-            {/* 4. NEWS — one simple line, only when verified news exists */}
+            {/* 4. NEWS — compact scenario-only card, only when verified news exists */}
             {hasNews && (
-              <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-5 backdrop-blur-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Newspaper className="w-4 h-4 text-amber-300" />
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500">News affecting this pair</p>
+              <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-5 backdrop-blur-sm space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Newspaper className="w-4 h-4 text-amber-300" />
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Upcoming Event</p>
+                  </div>
+                  {(() => {
+                    const level = String(result.volatilityRisk || result.bigMoveRisk || result.newsImpact || 'UNKNOWN').toUpperCase();
+                    const badgeStyle = level === 'EXTREME'
+                      ? 'bg-red-500/20 border-red-500/40 text-red-300'
+                      : level === 'HIGH'
+                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-300'
+                        : level === 'MEDIUM'
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                          : level === 'LOW'
+                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                            : 'bg-slate-700/40 border-slate-600/50 text-slate-400';
+                    return (
+                      <span className={cn("px-2.5 py-1 rounded-lg border text-xs font-bold", badgeStyle)}>
+                        {['HIGH', 'EXTREME'].includes(level) ? '🔴' : level === 'MEDIUM' ? '🟠' : level === 'LOW' ? '🟢' : ''} {level} VOLATILITY
+                      </span>
+                    );
+                  })()}
                 </div>
-                <p className="text-sm text-slate-200 leading-relaxed">
-                  {result.newsSummary || [result.importantEvent, result.affectedCurrency].filter(Boolean).join(' — ')}
-                </p>
-                {['HIGH', 'EXTREME'].includes(String(result.bigMoveRisk || result.newsImpact || '').toUpperCase()) && (
-                  <p className="text-sm font-semibold text-amber-300 mt-2">⚡ High-impact news near — expect sharp moves. Reduce size or wait.</p>
+                <div>
+                  <p className="text-sm font-bold text-slate-100">
+                    {[result.affectedCurrency, result.importantEvent].filter(Boolean).join(' · ') || result.newsSummary}
+                  </p>
+                  {result.eventTiming && result.eventTiming !== 'Not visible / not provided' && (
+                    <p className="text-xs text-slate-500 mt-1">{result.eventTiming}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5 text-sm text-slate-300">
+                  {result.bullishScenario && result.bullishScenario !== 'Not visible / not provided' && (
+                    <p>📈 If stronger than expected: <span className="text-slate-200">{result.bullishScenario}</span></p>
+                  )}
+                  {result.bearishScenario && result.bearishScenario !== 'Not visible / not provided' && (
+                    <p>📉 If weaker than expected: <span className="text-slate-200">{result.bearishScenario}</span></p>
+                  )}
+                  {!result.bullishScenario && !result.bearishScenario && result.newsSummary && (
+                    <p>{result.newsSummary}</p>
+                  )}
+                </div>
+                {result.newsBlockReason && result.newsBlockReason !== 'Not visible / not provided' ? (
+                  <p className="text-sm font-bold text-amber-300">⚠️ WAIT FOR CONFIRMATION — {result.newsBlockReason}</p>
+                ) : ['HIGH', 'EXTREME'].includes(String(result.volatilityRisk || result.bigMoveRisk || result.newsImpact || '').toUpperCase()) && (
+                  <p className="text-sm font-semibold text-amber-300">⚡ High-impact news near — expect sharp moves. Reduce size or wait.</p>
                 )}
               </div>
             )}
@@ -551,8 +595,9 @@ export default function ChartAnalyzer() {
               onClick={() => setShowDetails(!showDetails)}
               className="w-full bg-slate-800/40 border border-slate-700/40 rounded-xl p-4 text-sm font-semibold text-slate-300 hover:border-cyan-400/30 transition-colors"
             >
-              {showDetails ? '▲ Hide technical details' : '▼ Show technical details (structure, indicators, news data)'}
+              {showDetails ? '▲ Hide advanced news analysis & technical details' : '▼ Advanced News Analysis & technical details ▾'}
             </button>
+
 
             {showDetails && (
               <div className="space-y-5">
@@ -606,6 +651,8 @@ export default function ChartAnalyzer() {
                       { label: 'Actual / Forecast / Previous', value: `${customerNewsValue(result.actual)} / ${customerNewsValue(result.forecast)} / ${customerNewsValue(result.previous)}` },
                       { label: 'News Bias', value: customerNewsValue(result.newsBias, 'No verified news bias') },
                       { label: 'Big-Move Risk', value: customerNewsValue(result.bigMoveRisk, 'No verified risk level') },
+                      { label: 'Pair Relevance', value: customerNewsValue(result.pairRelevance, 'Not assessed') },
+                      { label: 'Trading Action', value: customerNewsValue(result.tradingAction, 'None') },
                     ].map((item) => (
                       <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{item.label}</p>

@@ -14,6 +14,11 @@ const adminAlertCooldown = new Map<string, number>();
 let notificationsTableAvailable = true;
 let economicCalendarCache: { expiresAt: number; events: any[] } = { expiresAt: 0, events: [] };
 
+// Pre-news protection window: pause new trade entries around HIGH/EXTREME impact events.
+// Hardcoded for now; move to an Admin-configurable setting if that becomes a separate task.
+const NEWS_BLOCK_BEFORE_MIN = 30;
+const NEWS_BLOCK_AFTER_MIN = 15;
+
 function escapeTelegramHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -188,6 +193,58 @@ function getRelevantCalendarEvents(events: any[], pair: unknown) {
   });
 }
 
+// Deterministic, code-level check: this is the "risk engine" for news timing and cannot be
+// bypassed by the model's own output. Only HIGH/EXTREME impact events trigger a hard block.
+type NewsBlockStatus =
+  | { blocked: false }
+  | { blocked: true; direction: 'before' | 'after'; minutes: number; event: any };
+
+function getNewsBlockStatus(events: any[], now: Date): NewsBlockStatus {
+  const beforeMs = NEWS_BLOCK_BEFORE_MIN * 60 * 1000;
+  const afterMs = NEWS_BLOCK_AFTER_MIN * 60 * 1000;
+  for (const event of Array.isArray(events) ? events : []) {
+    const impact = String(event?.impact || '').toUpperCase();
+    if (!['HIGH', 'EXTREME'].includes(impact)) continue;
+    const rawTime = event?.time || event?.date;
+    if (!rawTime) continue;
+    const eventTime = new Date(rawTime);
+    if (Number.isNaN(eventTime.getTime())) continue;
+    const diffMs = eventTime.getTime() - now.getTime();
+    if (diffMs >= 0 && diffMs <= beforeMs) {
+      return { blocked: true, direction: 'before', minutes: Math.round(diffMs / 60000), event };
+    }
+    if (diffMs < 0 && Math.abs(diffMs) <= afterMs) {
+      return { blocked: true, direction: 'after', minutes: Math.round(Math.abs(diffMs) / 60000), event };
+    }
+  }
+  return { blocked: false };
+}
+
+// Human-readable "how far away is the nearest relevant event" label, computed in code so
+// Gemini never has to guess or invent the current time.
+function getNearestRelevantEventTiming(
+  events: any[],
+  now: Date,
+  notProvided: string
+): string {
+  let nearest: { event: any; diffMs: number } | null = null;
+  for (const event of Array.isArray(events) ? events : []) {
+    const rawTime = event?.time || event?.date;
+    if (!rawTime) continue;
+    const eventTime = new Date(rawTime);
+    if (Number.isNaN(eventTime.getTime())) continue;
+    const diffMs = eventTime.getTime() - now.getTime();
+    if (!nearest || Math.abs(diffMs) < Math.abs(nearest.diffMs)) {
+      nearest = { event, diffMs };
+    }
+  }
+  if (!nearest) return notProvided;
+  const minutes = Math.round(Math.abs(nearest.diffMs) / 60000);
+  const hours = Math.round(minutes / 60);
+  const label = minutes < 60 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'}`;
+  return nearest.diffMs >= 0 ? `Upcoming · in ${label}` : `Released · ${label} ago`;
+}
+
 function parseStructuredJson(text: string): Record<string, any> | null {
   const normalized = String(text || '')
     .trim()
@@ -265,6 +322,11 @@ const chartAnalysisResponseSchema = {
     previous: { type: Type.STRING },
     newsImpact: { type: Type.STRING },
     bigMoveRisk: { type: Type.STRING },
+    volatilityRisk: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH', 'EXTREME', 'UNKNOWN'] },
+    pairRelevance: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN'] },
+    bullishScenario: { type: Type.STRING },
+    bearishScenario: { type: Type.STRING },
+    tradingAction: { type: Type.STRING, enum: ['CONFIRMED', 'WAIT_FOR_CONFIRMATION', 'NONE'] },
     newsDecision: { type: Type.STRING },
     newsSummary: { type: Type.STRING },
     fundamentalBias: { type: Type.STRING },
@@ -319,6 +381,11 @@ const chartAnalysisResponseSchema = {
     'previous',
     'newsImpact',
     'bigMoveRisk',
+    'volatilityRisk',
+    'pairRelevance',
+    'bullishScenario',
+    'bearishScenario',
+    'tradingAction',
     'newsDecision',
     'newsSummary',
     'fundamentalBias',
@@ -1761,10 +1828,14 @@ Screenshot rules:
 - Do not invent prices, indicators, patterns, news, event values, or sources. Use "${notProvided}" for unavailable values.
 
 News rules:
-- Treat the server-fetched calendar as the source of truth.
+- Treat the server-fetched calendar as the source of truth. You are acting as an FX economic-news analysis engine: analyze only the provided verified calendar data. Do not invent events, dates, times, forecasts, previous values, or actual results.
 - Distinguish Upcoming from Released.
 - Compare Actual, Forecast, and Previous only when those values are supplied.
 - Identify affected currency, event, impact, news bias, and big-move risk without claiming certainty.
+- For Upcoming events where Actual is unavailable, use only conditional scenario language: "If stronger than expected...", "If weaker than expected...", "Could support USD...", "Could pressure EUR...". Never state a guaranteed direction such as "USD will rise" or a guaranteed price level. Your analysis is informational and must not claim certainty.
+- Classify volatilityRisk as LOW, MEDIUM, HIGH, or EXTREME based on event importance and timing. Classify pairRelevance as LOW, MEDIUM, or HIGH based on whether the event affects the analyzed pair's two currencies.
+- Provide bullishScenario and bearishScenario as short conditional sentences describing what could happen under each outcome, using only the supplied calendar data. Use "${notProvided}" when no relevant event is supplied.
+- Set tradingAction to CONFIRMED when the chart setup is clean with no material news warning, WAIT_FOR_CONFIRMATION when a nearby high-impact event or unclear structure means better confirmation is needed, or NONE when no trade is proposed.
 - If the live calendar was checked but no relevant event was returned, say that the live calendar was checked and no relevant event was found. Never say the customer failed to attach news.
 
 Decision rules:
@@ -1806,6 +1877,11 @@ Return only valid JSON with this exact shape:
   "previous": "${notProvided}",
   "newsImpact": "Low/Medium/High/Extreme/UNKNOWN",
   "bigMoveRisk": "Low/Medium/High/Extreme/UNKNOWN",
+  "volatilityRisk": "LOW/MEDIUM/HIGH/EXTREME/UNKNOWN",
+  "pairRelevance": "LOW/MEDIUM/HIGH/UNKNOWN",
+  "bullishScenario": "conditional scenario or ${notProvided}",
+  "bearishScenario": "conditional scenario or ${notProvided}",
+  "tradingAction": "CONFIRMED/WAIT_FOR_CONFIRMATION/NONE",
   "newsDecision": "SUPPORTS BUY/SUPPORTS SELL/CONFLICTS/NO CLEAR EDGE/UNVERIFIED",
   "newsSummary": "summary using only supplied data",
   "fundamentalBias": "Bullish/Bearish/Neutral/UNKNOWN",
@@ -1890,6 +1966,11 @@ ${calendarPayload}`;
         previous: notProvided,
         newsImpact: hasSuppliedNews ? 'UNKNOWN' : notProvided,
         bigMoveRisk: hasSuppliedNews ? 'UNKNOWN' : notProvided,
+        volatilityRisk: hasSuppliedNews ? 'UNKNOWN' : notProvided,
+        pairRelevance: hasSuppliedNews ? 'UNKNOWN' : notProvided,
+        bullishScenario: notProvided,
+        bearishScenario: notProvided,
+        tradingAction: 'NONE',
         newsDecision: 'UNVERIFIED',
         newsSummary: hasSuppliedNews
           ? 'No clear news edge was established from the live calendar data.'
@@ -2000,24 +2081,39 @@ ${calendarPayload}`;
       const imminentHighImpactNews = hasSuppliedNews &&
         ['HIGH', 'EXTREME'].includes(bigMoveRisk) &&
         ['UPCOMING', 'RECENTLY RELEASED'].some((status) => eventStatus.includes(status));
+      // Deterministic pre-news protection: this cannot be bypassed by the model's own output.
+      const newsBlockCheck = getNewsBlockStatus(pairCalendar, new Date());
+      const newsBlockReason = newsBlockCheck.blocked
+        ? (() => {
+            const blockedEvent = newsBlockCheck.event;
+            const eventName = toText(blockedEvent?.event || blockedEvent?.name || blockedEvent?.title, 'A high-impact event');
+            const eventCurrency = toText(blockedEvent?.currency || blockedEvent?.currencyCode || blockedEvent?.country, '');
+            const minuteLabel = `${newsBlockCheck.minutes} minute${newsBlockCheck.minutes === 1 ? '' : 's'}`;
+            const currencySuffix = eventCurrency && eventCurrency !== notProvided ? ` (${eventCurrency})` : '';
+            return newsBlockCheck.direction === 'before'
+              ? `${eventName}${currencySuffix} is due in ${minuteLabel} — new entries are paused ${NEWS_BLOCK_BEFORE_MIN} minutes before high-impact news.`
+              : `${eventName}${currencySuffix} was released ${minuteLabel} ago — entries stay paused for ${NEWS_BLOCK_AFTER_MIN} minutes after high-impact news.`;
+          })()
+        : notProvided;
       const chartSetupIsActionable = normalizedChartDecision !== 'WAIT' &&
         hasReliableLevels &&
         targetsAreDirectional &&
         !stopLossIsTooTight &&
         tp1MeetsMinimumRiskReward &&
-        true;
+        !newsBlockCheck.blocked;
       const finalDecision = normalizedChartDecision !== 'WAIT'
         && hasReliableLevels
         && targetsAreDirectional
         && !stopLossIsTooTight
         && tp1MeetsMinimumRiskReward
+        && !newsBlockCheck.blocked
         ? normalizedChartDecision
         : 'WAIT';
       const confidenceValue = Number(analysis.confidence);
       const confidence = Number.isFinite(confidenceValue)
         ? Math.max(0, Math.min(100, Math.round(confidenceValue)))
         : 0;
-      const newsRiskAdjustment = newsConflictsWithChart || imminentHighImpactNews;
+      const newsRiskAdjustment = newsConflictsWithChart || imminentHighImpactNews || newsBlockCheck.blocked;
       const chartOnlyDecision = finalDecision !== 'WAIT' &&
         (!hasSuppliedNews || newsDecision === 'UNVERIFIED' || newsDecision === 'NO CLEAR EDGE');
       const riskReward = {
@@ -2089,12 +2185,23 @@ ${calendarPayload}`;
             : 'Live calendar unavailable',
         newsSources: [],
         newsCheckedAt: currentDate,
+        volatilityRisk: toText(analysis.volatilityRisk, hasSuppliedNews ? 'UNKNOWN' : notProvided),
+        pairRelevance: toText(analysis.pairRelevance, hasSuppliedNews ? 'UNKNOWN' : notProvided),
+        bullishScenario: toText(analysis.bullishScenario),
+        bearishScenario: toText(analysis.bearishScenario),
+        tradingAction: newsBlockCheck.blocked
+          ? 'WAIT_FOR_CONFIRMATION'
+          : toText(analysis.tradingAction, finalDecision === 'WAIT' ? 'WAIT_FOR_CONFIRMATION' : 'CONFIRMED'),
+        eventTiming: getNearestRelevantEventTiming(pairCalendar, new Date(), notProvided),
+        newsBlockReason,
         decisionSummary: finalDecision === 'WAIT'
-          ? tp1RiskReward !== null && tp1RiskReward < 2
-            ? 'WAIT was selected because the realistic TP1 target did not provide the required minimum 1:2 R:R. The structural Stop Loss was not tightened.'
-            : !targetsAreDirectional
-              ? 'WAIT was selected because a complete directional TP1, TP2, and TP3 structure could not be validated from the visible chart.'
-            : 'WAIT was selected because the chart did not provide a reliable actionable setup.'
+          ? newsBlockCheck.blocked
+            ? newsBlockReason
+            : tp1RiskReward !== null && tp1RiskReward < 2
+              ? 'WAIT was selected because the realistic TP1 target did not provide the required minimum 1:2 R:R. The structural Stop Loss was not tightened.'
+              : !targetsAreDirectional
+                ? 'WAIT was selected because a complete directional TP1, TP2, and TP3 structure could not be validated from the visible chart.'
+              : 'WAIT was selected because the chart did not provide a reliable actionable setup.'
           : newsConflictsWithChart
             ? 'The chart provides the signal, but supplied news conflicts with the direction. Confidence is reduced; use caution.'
             : imminentHighImpactNews
