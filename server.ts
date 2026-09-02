@@ -298,50 +298,19 @@ const chartAnalysisResponseSchema = {
     warnings: { type: Type.STRING }
   },
   required: [
-    'instrument',
-    'timeframe',
-    'currentPrice',
-    'chartQuality',
     'marketStructure',
-    'trend',
     'technicalBias',
-    'support',
-    'resistance',
-    'priceAction',
-    'indicators',
     'chartDecision',
     'newsBias',
-    'affectedCurrency',
-    'importantEvent',
-    'eventStatus',
-    'actual',
-    'forecast',
-    'previous',
-    'newsImpact',
-    'bigMoveRisk',
     'newsDecision',
-    'newsSummary',
-    'fundamentalBias',
-    'alignment',
-    'mainReasons',
-    'conflictingSignals',
     'signal',
     'confidence',
     'entry',
     'sl',
-    'stopLoss',
-    'stopLossBasis',
-    'stopLossQuality',
     'tp1',
     'tp2',
     'tp3',
-    'riskReward',
-    'invalidation',
-    'newsRisk',
-    'mainRisk',
     'reasoning',
-    'decisionSummary',
-    'warnings'
   ]
 };
 
@@ -1664,7 +1633,7 @@ async function startServer() {
         recentReleases
       } = req.body;
       
-      if (!imageBase64) {
+      if (typeof imageBase64 !== 'string' || imageBase64.length < 100) {
         return res.status(400).json({ error: "No image provided" });
       }
 
@@ -1924,7 +1893,9 @@ ${calendarPayload}`;
       analysis = parseStructuredJson(analysisText);
       if (!analysis) {
         console.warn(`[CHART ANALYZER] Invalid structured response (${analysisText.length} characters)`);
-        analysis = fallbackAnalysis;
+        return res.status(502).json({
+          error: 'Chart analysis could not be completed. Please retry the screenshot analysis.'
+        });
       }
 
       const validDecisions = new Set(['BUY', 'SELL', 'WAIT']);
