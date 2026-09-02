@@ -85,6 +85,7 @@ export default function ChartAnalyzer() {
   const [usage, setUsage] = useState(0);
   const [isPro, setIsPro] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -273,13 +274,24 @@ export default function ChartAnalyzer() {
       : { tp1: result?.riskReward || notProvided, tp2: result?.riskReward || notProvided, tp3: result?.riskReward || notProvided };
   const analysisReasoning = result?.reasoning || 'Not visible / not provided';
   const chartDirection = normalizeDecision(result?.chartDecision || result?.trade);
-  const finalSignalMessage = displayDecision === 'BUY'
-    ? 'Possible buy setup — confirm your own risk plan.'
+  const hasNews = Boolean(
+    result && [result.importantEvent, result.newsSummary, result.affectedCurrency, result.actual, result.forecast]
+      .some((v) => {
+        const t = String(v || '').trim();
+        return t && t !== notProvided && !['UNKNOWN', 'UNVERIFIED'].includes(t.toUpperCase());
+      })
+  );
+  const plainReason = (() => {
+    if (!result) return '';
+    if (result.decisionSummary) return result.decisionSummary;
+    if (result.mainReasons && result.mainReasons.length > 0) return result.mainReasons[0];
+    return result.reasoning || '';
+  })();
+  const whatToDo = displayDecision === 'BUY'
+    ? 'You may look for a BUY entry at the price below. Always use the Stop Loss shown.'
     : displayDecision === 'SELL'
-      ? 'Possible sell setup — confirm your own risk plan.'
-      : chartDirection !== 'WAIT'
-        ? `No trade now — technical direction is ${chartDirection}, but the complete trade plan is not confirmed.`
-        : 'No trade now — wait for the stated confirmation.';
+      ? 'You may look for a SELL entry at the price below. Always use the Stop Loss shown.'
+      : 'Do not open a trade now. Wait for a clearer setup and scan again later.';
 
   return (
     <div className="flex-1 w-full min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">
@@ -425,380 +437,292 @@ export default function ChartAnalyzer() {
 
         {/* Results */}
         {result && !isAnalyzing && (
-          <div ref={resultRef} className="space-y-6">
-            {/* Trade Decision Card */}
+          <div ref={resultRef} className="space-y-5">
+
+            {/* 1. THE SIGNAL — one dominant card */}
             <div className={cn(
-              "rounded-2xl p-8 border-2 flex items-center justify-between flex-wrap gap-6 backdrop-blur-sm",
+              "rounded-2xl p-6 sm:p-8 border-2 backdrop-blur-sm text-center",
               getTradeBadge(displayDecision).bg,
               getTradeBadge(displayDecision).border
             )}>
-              <div className="flex items-center gap-4">
-                {(() => { 
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Your Signal</p>
+              <div className="flex items-center justify-center gap-3">
+                {(() => {
                   const BadgeIcon = getTradeBadge(displayDecision).icon;
-                  return <BadgeIcon className={cn("w-12 h-12", getTradeBadge(displayDecision).text)} />;
+                  return <BadgeIcon className={cn("w-12 h-12 sm:w-16 sm:h-16", getTradeBadge(displayDecision).text)} />;
                 })()}
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Final Signal</p>
-                  <p className={cn("text-4xl font-black", getTradeBadge(displayDecision).text)}>
-                    {getTradeBadge(displayDecision).label}
-                  </p>
-                  <p className="text-sm text-slate-300 mt-2">{finalSignalMessage}</p>
-                  {result.signalSource && (
-                    <p className="text-xs text-slate-400 mt-2">
-                      Analysis source: {result.signalSource}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Setup Quality</p>
-                <p className={cn("text-4xl font-black", getConfidenceColor(result.confidence))}>
-                  {result.confidence}%
+                <p className={cn("text-5xl sm:text-6xl font-black tracking-tight", getTradeBadge(displayDecision).text)}>
+                  {getTradeBadge(displayDecision).label}
                 </p>
-                <p className={cn("text-xs font-semibold mt-1", getConfidenceColor(result.confidence))}>
-                  {getConfidenceLabel(result.confidence)}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">Not a win probability</p>
               </div>
+              <p className="text-base sm:text-lg text-slate-200 mt-4 font-medium max-w-xl mx-auto">{whatToDo}</p>
+              <div className="flex items-center justify-center gap-6 mt-5 text-sm">
+                <span className="text-slate-400">
+                  Setup quality: <span className={cn("font-bold", getConfidenceColor(result.confidence))}>{result.confidence}% ({getConfidenceLabel(result.confidence)})</span>
+                </span>
+              </div>
+              <div className="w-full max-w-md mx-auto bg-slate-700/50 rounded-full h-2 overflow-hidden border border-slate-600/50 mt-3">
+                <div className={cn("h-full rounded-full transition-all duration-1000", getConfidenceBg(result.confidence))} style={{ width: `${result.confidence}%` }}></div>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-2">Setup quality is not a win probability.</p>
             </div>
 
-            {/* Confidence Bar */}
-            <div className="w-full bg-slate-700/50 rounded-full h-2.5 overflow-hidden border border-slate-600/50">
-              <div className={cn("h-full rounded-full transition-all duration-1000 shadow-lg", getConfidenceBg(result.confidence))} style={{ width: `${result.confidence}%` }}></div>
-            </div>
-
-            {/* Quick Info Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { label: 'Instrument', value: result.instrument, icon: '📊', color: 'text-cyan-300' },
-                { label: 'Timeframe', value: result.timeframe, icon: '⏱️', color: 'text-cyan-300' },
-                { label: 'Trend Direction', value: result.trend, icon: '📈', color: getTrendColor(result.trend) },
-                { label: 'Technical Bias', value: result.technicalBias || 'Not visible / not provided', icon: '🧭', color: getTrendColor(result.technicalBias || '') },
-                { label: 'Current Price', value: result.currentPrice || 'Not visible / not provided', icon: '💲', color: 'text-cyan-300' },
-                { label: 'Chart Quality', value: result.chartQuality || 'Not visible / not provided', icon: '🔎', color: result.chartQuality?.toUpperCase() === 'SUFFICIENT' ? 'text-emerald-400' : 'text-amber-300' },
-              ].map((item) => (
-                <div key={item.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 backdrop-blur-sm hover:border-cyan-400/30 transition-colors">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
-                  <p className={cn("text-lg font-bold", item.color)}>{item.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 2. WHY — one plain sentence */}
+            {plainReason && (
               <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Price Action</p>
-                <p className="text-sm text-slate-200 leading-relaxed">{result.priceAction || 'Not visible / not provided'}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Why this signal</p>
+                <p className="text-sm sm:text-base text-slate-200 leading-relaxed">{plainReason}</p>
               </div>
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Visible Indicators</p>
-                <p className="text-sm text-slate-200 leading-relaxed">
-                  {result.indicators?.length ? result.indicators.join(' • ') : 'Not visible / not provided'}
-                </p>
-              </div>
-            </div>
+            )}
 
-            <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <Newspaper className="w-5 h-5 text-amber-300" />
-                  <div>
-                    <h2 className="text-lg font-bold text-white">Live News & Economic Calendar</h2>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {result.newsStatus || 'Live calendar checked'}
-                      {result.newsCheckedAt ? ` • ${result.newsCheckedAt} UTC` : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs uppercase tracking-wider text-slate-500">Impact</span>
-                  <span className={cn(
-                    "px-3 py-1 rounded-lg border text-xs font-bold",
-                    result.newsImpact?.toUpperCase() === 'POSITIVE'
-                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                      : result.newsImpact?.toUpperCase() === 'NEGATIVE'
-                        ? 'bg-red-500/15 border-red-500/30 text-red-300'
-                        : ['HIGH', 'EXTREME'].includes(result.newsImpact?.toUpperCase() || '')
-                          ? 'bg-orange-500/15 border-orange-500/30 text-orange-300'
-                        : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                  )}>
-                    {customerNewsValue(result.newsImpact, 'No verified impact')}
-                  </span>
-                  <span className="px-3 py-1 rounded-lg border border-slate-600/50 bg-slate-700/40 text-xs font-bold text-slate-300">
-                    {customerNewsValue(result.newsBias, 'No verified news bias')} BIAS
-                  </span>
-                </div>
-              </div>
-                <p className="text-sm text-slate-200 leading-relaxed">
-                {result.newsSummary || 'Live economic-calendar data was checked for this scan.'}
-              </p>
-              <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">News Source</p>
-                <p className="text-sm text-slate-200 break-words">{result.newsSource || 'Current economic calendar'}</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { label: 'Affected Currency', value: customerNewsValue(result.affectedCurrency) },
-                  { label: 'Important Event', value: customerNewsValue(result.importantEvent) },
-                  { label: 'Event Status', value: customerNewsValue(result.eventStatus) },
-                  { label: 'Actual / Forecast / Previous', value: `${customerNewsValue(result.actual)} / ${customerNewsValue(result.forecast)} / ${customerNewsValue(result.previous)}` },
-                  { label: 'Big-Move Risk', value: customerNewsValue(result.bigMoveRisk, 'No verified risk level') },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{item.label}</p>
-                    <p className="text-sm text-slate-200 break-words">{item.value || 'Not visible / not provided'}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-1">News Risk</p>
-                <p className="text-sm text-amber-100/80">{result.newsRisk || 'No calendar risk was supplied. Do not assume current news conditions.'}</p>
-              </div>
-            </div>
-
-            <div className="bg-slate-800/60 border border-cyan-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
-              <div>
-                <h2 className="text-lg font-bold text-white">Confluence Decision</h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  Technical direction and news context are shown below. Final Signal controls the action.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { label: 'Technical Direction', value: chartDirection === 'WAIT' ? 'WAIT' : `${chartDirection} (context only)` },
-                  { label: 'News Context', value: customerNewsValue(result.newsDecision, 'No verified news edge') },
-                  { label: 'Final Decision', value: displayDecision },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
-                    <p className={cn(
-                      "text-sm font-black",
-                      item.value?.toUpperCase().includes('BUY') ? 'text-emerald-400' :
-                        item.value?.toUpperCase().includes('SELL') || item.value?.toUpperCase().includes('CONFLICT') ? 'text-red-400' :
-                          'text-amber-300'
-                    )}>
-                      {item.value || 'WAIT'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-cyan-300 mb-1">Decision Summary</p>
-                <p className="text-sm text-cyan-50/80">
-                  {result.decisionSummary || 'The final decision combines chart structure and current news.'}
-                </p>
-              </div>
-              {displayDecision === 'WAIT' && (
-                <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-blue-300 mb-1">Customer Action</p>
-                  <p className="text-sm font-semibold text-blue-100">
-                    WAIT — do not enter a trade. {chartDirection !== 'WAIT'
-                      ? `The ${chartDirection} chart direction is context only until the complete entry, Stop Loss, and target plan is confirmed.`
-                      : 'Wait for the stated confirmation.'}
-                  </p>
-                </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { label: 'Fundamental Bias', value: customerNewsValue(result.fundamentalBias) },
-                  { label: 'Alignment', value: customerNewsValue(result.alignment) },
-                  { label: 'Conflicting Signals', value: customerNewsValue(result.conflictingSignals) },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
-                    <p className="text-sm text-slate-200 break-words">{item.value || 'Not visible / not provided'}</p>
-                  </div>
-                ))}
-              </div>
-              {result.mainReasons && result.mainReasons.length > 0 && (
-                <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Main Reasons</p>
-                  <ol className="list-decimal list-inside space-y-1 text-sm text-slate-200">
-                    {result.mainReasons.slice(0, 3).map((reason, index) => (
-                      <li key={`${index}-${reason}`}>{reason}</li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-            </div>
-
-            {/* Market Structure & Support/Resistance */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Market Structure</p>
-                <p className="text-sm text-slate-200 leading-relaxed">{result.marketStructure}</p>
-              </div>
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Support / Resistance Levels</p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-500">Support</p>
-                    <p className="text-lg font-bold text-emerald-400 break-words">{result.support}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl text-slate-600">—</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500">Resistance</p>
-                    <p className="text-lg font-bold text-red-400 break-words">{result.resistance}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Trade Levels */}
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
-              <div className="flex items-center justify-between mb-6">
+            {/* 3. TRADE PLAN — only for BUY/SELL */}
+            {displayDecision !== 'WAIT' ? (
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
                 <div className="flex items-center gap-3">
                   <Shield className="w-5 h-5 text-cyan-400" />
                   <h2 className="text-lg font-bold text-white">Trade Plan</h2>
+                  <span className="text-xs text-slate-500">— tap any price to copy</span>
                 </div>
-                
-                {/* ACTION BADGE - Shows BUY/SELL/WAIT prominently */}
-                <div className={cn(
-                  "px-6 py-3 rounded-xl font-bold text-lg flex items-center gap-2",
-                  displayDecision === 'BUY'
-                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
-                    : displayDecision === 'SELL'
-                      ? 'bg-red-500/20 border border-red-500/50 text-red-400'
-                      : 'bg-blue-500/20 border border-blue-500/50 text-blue-300'
-                )}>
-                  {displayDecision === 'BUY' && '↗️ BUY'}
-                  {displayDecision === 'SELL' && '↘️ SELL'}
-                  {displayDecision === 'WAIT' && '⏸️ WAIT'}
-                </div>
-              </div>
-
-              {/* Use these prices to [BUY/SELL] */}
-              <p className="text-xs text-slate-500 font-medium">
-                {displayDecision === 'BUY' && '🔼 Possible BUY setup — confirm before entering'}
-                {displayDecision === 'SELL' && '🔽 Possible SELL setup — confirm before entering'}
-                {displayDecision === 'WAIT' && '⏸️ No active trade plan — WAIT for confirmation'}
-              </p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                {[
-                  { label: 'Entry', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.entry || notProvided, color: 'text-white', bg: 'bg-slate-700/50' },
-                  { label: 'Stop Loss', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.stopLoss || notProvided, color: 'text-red-400', bg: 'bg-red-500/10' },
-                  { label: 'TP1', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.tp1 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP2', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.tp2 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP3', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.tp3 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                ].map((level) => (
-                  <button
-                    key={level.label}
-                    onClick={() => copyToClipboard(String(level.value))}
-                    className={cn("border border-slate-600/50 rounded-xl p-3 text-center transition-all hover:border-cyan-400/50 hover:shadow-lg group relative", level.bg)}
-                    title={`Click to copy ${level.label}`}
-                  >
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{level.label}</p>
-                    <p className={cn("text-sm font-bold break-words", level.color)}>{String(level.value)}</p>
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-slate-700 text-cyan-300 px-2 py-1 rounded whitespace-nowrap pointer-events-none">
-                      {copiedValue === level.value ? '✓ Copied!' : 'Click to copy'}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {displayDecision !== 'WAIT' && (
-              <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Risk : Reward Ratio</p>
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    {[
-                      { label: 'TP1', value: riskRewardValues.tp1 },
-                      { label: 'TP2', value: riskRewardValues.tp2 },
-                      { label: 'TP3', value: riskRewardValues.tp3 },
-                    ].map((target) => (
-                      <div key={target.label} className="rounded-lg bg-slate-900/40 border border-slate-700/50 p-2">
-                        <p className="text-[10px] uppercase tracking-wider text-slate-500">{target.label}</p>
-                        <p className="text-sm font-bold text-cyan-400 break-words">{String(target.value)}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {[
+                    { label: 'Entry', value: result.entry || notProvided, color: 'text-white', bg: 'bg-slate-700/50' },
+                    { label: 'Stop Loss', value: result.stopLoss || notProvided, color: 'text-red-400', bg: 'bg-red-500/10' },
+                    { label: 'Take Profit 1', value: result.tp1 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                    { label: 'Take Profit 2', value: result.tp2 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                    { label: 'Take Profit 3', value: result.tp3 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  ].map((level) => (
+                    <button
+                      key={level.label}
+                      onClick={() => copyToClipboard(String(level.value))}
+                      className={cn("border border-slate-600/50 rounded-xl p-3 text-center transition-all hover:border-cyan-400/50 hover:shadow-lg group relative", level.bg)}
+                      title={`Click to copy ${level.label}`}
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{level.label}</p>
+                      <p className={cn("text-sm font-bold break-words", level.color)}>{String(level.value)}</p>
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-slate-700 text-cyan-300 px-2 py-1 rounded whitespace-nowrap pointer-events-none">
+                        {copiedValue === level.value ? '✓ Copied!' : 'Click to copy'}
                       </div>
-                    ))}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-4 border-t border-slate-700/50">
+                  {[
+                    { label: 'Reward : Risk TP1', value: riskRewardValues.tp1 },
+                    { label: 'Reward : Risk TP2', value: riskRewardValues.tp2 },
+                    { label: 'Reward : Risk TP3', value: riskRewardValues.tp3 },
+                  ].map((target) => (
+                    <div key={target.label} className="rounded-lg bg-slate-900/40 border border-slate-700/50 p-2 text-center">
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500">{target.label}</p>
+                      <p className="text-sm font-bold text-cyan-400 break-words">{String(target.value)}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-slate-900/40 border border-cyan-500/20 rounded-xl p-4 text-center">
+                  <p className="text-xs text-slate-400">Risk max 1% of your account. Set your lot size from the Stop Loss distance before entering.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-6 backdrop-blur-sm text-center">
+                <p className="text-base font-bold text-blue-200">No trade plan yet</p>
+                <p className="text-sm text-blue-100/80 mt-2 max-w-xl mx-auto">
+                  {result.invalidation || result.mainRisk || 'The setup is not confirmed. Waiting protects your money — a valid plan will show Entry, Stop Loss and Take Profits here.'}
+                </p>
+              </div>
+            )}
+
+            {/* 4. NEWS — one simple line, only when verified news exists */}
+            {hasNews && (
+              <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-5 backdrop-blur-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Newspaper className="w-4 h-4 text-amber-300" />
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500">News affecting this pair</p>
+                </div>
+                <p className="text-sm text-slate-200 leading-relaxed">
+                  {result.newsSummary || [result.importantEvent, result.affectedCurrency].filter(Boolean).join(' — ')}
+                </p>
+                {['HIGH', 'EXTREME'].includes(String(result.bigMoveRisk || result.newsImpact || '').toUpperCase()) && (
+                  <p className="text-sm font-semibold text-amber-300 mt-2">⚡ High-impact news near — expect sharp moves. Reduce size or wait.</p>
+                )}
+              </div>
+            )}
+
+            {/* 5. DETAILS — collapsed by default */}
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="w-full bg-slate-800/40 border border-slate-700/40 rounded-xl p-4 text-sm font-semibold text-slate-300 hover:border-cyan-400/30 transition-colors"
+            >
+              {showDetails ? '▲ Hide technical details' : '▼ Show technical details (structure, indicators, news data)'}
+            </button>
+
+            {showDetails && (
+              <div className="space-y-5">
+                {/* Quick Info Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Instrument', value: result.instrument, color: 'text-cyan-300' },
+                    { label: 'Timeframe', value: result.timeframe, color: 'text-cyan-300' },
+                    { label: 'Trend Direction', value: result.trend, color: getTrendColor(result.trend) },
+                    { label: 'Technical Bias', value: result.technicalBias || notProvided, color: getTrendColor(result.technicalBias || '') },
+                    { label: 'Current Price', value: result.currentPrice || notProvided, color: 'text-cyan-300' },
+                    { label: 'Chart Quality', value: result.chartQuality || notProvided, color: result.chartQuality?.toUpperCase() === 'SUFFICIENT' ? 'text-emerald-400' : 'text-amber-300' },
+                  ].map((item) => (
+                    <div key={item.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 backdrop-blur-sm">
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
+                      <p className={cn("text-lg font-bold", item.color)}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Price Action</p>
+                    <p className="text-sm text-slate-200 leading-relaxed">{result.priceAction || notProvided}</p>
                   </div>
-                </div>
-              </div>
-              )}
-            </div>
-
-            {/* Reasoning & Warnings */}
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
-              <h2 className="text-lg font-bold text-white">Analysis Reasoning</h2>
-              <p className="text-sm text-slate-300 leading-relaxed">{analysisReasoning}</p>
-              {result.invalidation && (
-                <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-red-300 mb-1">Invalidation</p>
-                  <p className="text-sm text-red-100/80">{result.invalidation}</p>
-                </div>
-              )}
-              {result.mainRisk && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-1">Main Risk</p>
-                  <p className="text-sm text-amber-100/80">{result.mainRisk}</p>
-                </div>
-              )}
-              {result.warnings && result.warnings !== 'None' && result.warnings !== '' && (
-                <div className="flex items-start gap-4 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mt-4">
-                  <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-bold text-blue-300">⚠️ Important Warnings</p>
-                    <p className="text-sm text-blue-200/80 mt-1">{result.warnings}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Position Size Calculator */}
-            <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <Zap className="w-5 h-5 text-cyan-400" />
-                <h2 className="text-lg font-bold text-white">Position Size Calculator</h2>
-              </div>
-              <div className="bg-slate-800/60 border border-cyan-500/20 rounded-xl p-6 text-center">
-                <p className="text-xs text-slate-500 font-medium">Risk amount = 1% of your account balance</p>
-                <p className="text-2xl font-black text-cyan-400 mt-2">CALCULATE FROM BALANCE</p>
-                <p className="text-xs text-slate-500 mt-2">Use the structural Stop Loss and adjust position size before entering</p>
-              </div>
-            </div>
-
-            {/* Comprehensive Disclaimer & Market Warning */}
-            <div className="space-y-4">
-              {/* Kill Zone Warning */}
-              <div className="bg-orange-500/15 border border-orange-500/40 rounded-xl p-5 space-y-3">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-bold text-orange-300">⚡ High Volatility Kill Zone</p>
-                    <p className="text-sm text-orange-200/80 mt-1">
-                      🔴 <strong>London Session (08:00-17:00 UTC)</strong> & <strong>New York Session (13:00-22:00 UTC)</strong> experience extreme volatility and rapid price movements. 
-                      Keep the structural Stop Loss valid, reduce position size, and avoid forcing a tight stop. Many traders get stopped out during these windows — trade with caution.
+                  <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Visible Indicators</p>
+                    <p className="text-sm text-slate-200 leading-relaxed">
+                      {result.indicators?.length ? result.indicators.join(' • ') : notProvided}
                     </p>
                   </div>
                 </div>
-              </div>
 
-              {/* Legal Disclaimer */}
-              <div className="bg-slate-800/60 border border-slate-700/40 rounded-xl p-5 space-y-3">
-                <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">📋 Important Disclaimers</p>
-                <div className="space-y-2 text-xs text-slate-400 leading-relaxed">
-                  <p>
-                    <strong>🚫 Not Financial Advice:</strong> 4xLifeAI Chart Analyzer is an educational tool only. Nothing here constitutes financial advice, investment advice, or a recommendation to buy/sell. Always consult a licensed financial advisor before trading.
-                  </p>
-                  <p>
-                    <strong>📊 Probability, Not Certainty:</strong> All trading is based on <strong>probabilities, not predictions</strong>. No analysis tool (manual or AI) can predict exact market movements. Past performance does not guarantee future results.
-                  </p>
-                  <p>
-                    <strong>⚠️ Full Risk Disclosure:</strong> Trading and investing involve substantial risk of loss, including potential loss of principal. You could lose your entire investment. Only trade what you can afford to lose.
-                  </p>
-                  <p>
-                    <strong>💡 Recommended:</strong> For the BEST results, use <strong>4xLifeAI Automated Signal Engine</strong> (Dashboard → Today's Signals) which generates institutional-grade signals 24/7. Auto-signals outperform manual analysis.
-                  </p>
+                {/* Full news detail */}
+                <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <Newspaper className="w-5 h-5 text-amber-300" />
+                    <div>
+                      <h2 className="text-lg font-bold text-white">News & Economic Calendar</h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {result.newsStatus || 'Calendar checked'}
+                        {result.newsCheckedAt ? ` • ${result.newsCheckedAt} UTC` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { label: 'Affected Currency', value: customerNewsValue(result.affectedCurrency) },
+                      { label: 'Important Event', value: customerNewsValue(result.importantEvent) },
+                      { label: 'Event Status', value: customerNewsValue(result.eventStatus) },
+                      { label: 'Actual / Forecast / Previous', value: `${customerNewsValue(result.actual)} / ${customerNewsValue(result.forecast)} / ${customerNewsValue(result.previous)}` },
+                      { label: 'News Bias', value: customerNewsValue(result.newsBias, 'No verified news bias') },
+                      { label: 'Big-Move Risk', value: customerNewsValue(result.bigMoveRisk, 'No verified risk level') },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{item.label}</p>
+                        <p className="text-sm text-slate-200 break-words">{item.value || notProvided}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-1">News Risk</p>
+                    <p className="text-sm text-amber-100/80">{result.newsRisk || 'No calendar risk was supplied.'}</p>
+                  </div>
+                </div>
+
+                {/* Confluence */}
+                <div className="bg-slate-800/60 border border-cyan-500/30 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
+                  <h2 className="text-lg font-bold text-white">Confluence</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      { label: 'Chart Direction', value: chartDirection },
+                      { label: 'News Context', value: customerNewsValue(result.newsDecision, 'No verified news edge') },
+                      { label: 'Final Decision', value: displayDecision },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
+                        <p className={cn(
+                          "text-sm font-black",
+                          item.value?.toUpperCase().includes('BUY') ? 'text-emerald-400' :
+                            item.value?.toUpperCase().includes('SELL') ? 'text-red-400' :
+                              'text-amber-300'
+                        )}>
+                          {item.value || 'WAIT'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      { label: 'Fundamental Bias', value: customerNewsValue(result.fundamentalBias) },
+                      { label: 'Alignment', value: customerNewsValue(result.alignment) },
+                      { label: 'Conflicting Signals', value: customerNewsValue(result.conflictingSignals) },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">{item.label}</p>
+                        <p className="text-sm text-slate-200 break-words">{item.value || notProvided}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {result.mainReasons && result.mainReasons.length > 0 && (
+                    <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Main Reasons</p>
+                      <ol className="list-decimal list-inside space-y-1 text-sm text-slate-200">
+                        {result.mainReasons.slice(0, 3).map((reason, index) => (
+                          <li key={`${index}-${reason}`}>{reason}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
+
+                {/* Market Structure & S/R */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Market Structure</p>
+                    <p className="text-sm text-slate-200 leading-relaxed">{result.marketStructure}</p>
+                  </div>
+                  <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Support / Resistance</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-slate-500">Support</p>
+                        <p className="text-lg font-bold text-emerald-400 break-words">{result.support}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl text-slate-600">—</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Resistance</p>
+                        <p className="text-lg font-bold text-red-400 break-words">{result.resistance}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Full reasoning */}
+                <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
+                  <h2 className="text-lg font-bold text-white">Full Analysis</h2>
+                  <p className="text-sm text-slate-300 leading-relaxed">{analysisReasoning}</p>
+                  {result.invalidation && (
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-red-300 mb-1">Invalidation</p>
+                      <p className="text-sm text-red-100/80">{result.invalidation}</p>
+                    </div>
+                  )}
+                  {result.mainRisk && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-amber-300 mb-1">Main Risk</p>
+                      <p className="text-sm text-amber-100/80">{result.mainRisk}</p>
+                    </div>
+                  )}
+                  {result.warnings && result.warnings !== 'None' && result.warnings !== '' && (
+                    <div className="flex items-start gap-4 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+                      <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-blue-300">⚠️ Important Warnings</p>
+                        <p className="text-sm text-blue-200/80 mt-1">{result.warnings}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
 
-              {/* Simple Footer Disclaimer */}
-              <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 text-center">
-                <p className="text-[11px] text-slate-500 font-mono uppercase tracking-wider">
-                  ⚠️ Chart Analysis Tool • Educational Purpose • Not Financial Advice • Trade at Your Own Risk
-                </p>
-              </div>
+            {/* Disclaimer — compact */}
+            <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 text-center space-y-1">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                4xLifeAI is an educational analysis tool — not financial advice. Trading involves substantial risk of loss. Setup quality is a probability estimate, never a guarantee. Only trade what you can afford to lose.
+              </p>
             </div>
           </div>
         )}
