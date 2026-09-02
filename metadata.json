@@ -1,5 +1,5 @@
 {
-  "name": "4xFiveAI",
+  "name": "4xLifeAI",
   "description": "Premium live signal intelligence and real-time quantitative trading signals.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -1086,7 +1086,7 @@ export default function Admin() {
           {/* AI Coach System Prompt */}
           <div className="space-y-2">
             <label className="block text-sm font-bold text-white tracking-wider uppercase">
-              1. 4xFiveAI Coach System Instruction
+              1. 4xLifeAI Coach System Instruction
             </label>
             <p className="text-xs text-[#8A95A5]">
               This instruction defines the personality, expertise, and behavioral rules of the in-app chatbot coach.
@@ -1152,7 +1152,7 @@ export default function Admin() {
                   });
                   if (!confirmed) return;
                   setPromptsConfig({
-                      coach_system_instruction: "You are the 4xFiveAI Coach, an expert trading assistant. You help users with risk management, position sizing, signal discipline, and trading psychology. Keep responses concise, professional, and directly actionable. Avoid long generic paragraphs.",
+                      coach_system_instruction: "You are the 4xLifeAI Coach, an expert trading assistant. You help users with risk management, position sizing, signal discipline, and trading psychology. Keep responses concise, professional, and directly actionable. Avoid long generic paragraphs.",
                       signal_explainer_prompt: "You are an expert forex trading assistant. Explain this signal to a user in plain English:\nPair: ${signal.pair}\nDirection: ${signal.direction}\nConfidence Score: ${signal.aiConfidence}%\nStatus: ${signal.tier}\nQuality: ${signal.qualityLabel}\n\nGive a short, punchy 2-3 sentence explanation. No proprietary strategy details, no fluffy intros. Keep it to the point."
                     });
                 }}
@@ -1245,7 +1245,7 @@ export default function Admin() {
               <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-12 text-center shadow-sm">
                 <ShieldAlert className="w-12 h-12 text-[#202735] mx-auto mb-4" />
                 <h3 className="text-white text-lg font-bold tracking-widest uppercase mb-2">{TABS.find(t=>t.id === activeTab)?.label} Module</h3>
-                <p className="text-[#8A95A5] max-w-md mx-auto">This administrative module is currently under active development. Connection to the 4xFiveAI core node is pending.</p>
+                <p className="text-[#8A95A5] max-w-md mx-auto">This administrative module is currently under active development. Connection to the 4xLifeAI core node is pending.</p>
               </div>
             )}
           </div>

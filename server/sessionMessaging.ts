@@ -108,7 +108,7 @@ function generateMarketVisualization(status: MarketStatus): string {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ⏰ ${new Date(status.time).toUTCString().slice(0, 16)} UTC
-✨ 4xFiveAI Signal Engine
+✨ 4xLifeAI Signal Engine
 `;
 }
 
