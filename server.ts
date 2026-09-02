@@ -298,19 +298,50 @@ const chartAnalysisResponseSchema = {
     warnings: { type: Type.STRING }
   },
   required: [
+    'instrument',
+    'timeframe',
+    'currentPrice',
+    'chartQuality',
     'marketStructure',
+    'trend',
     'technicalBias',
+    'support',
+    'resistance',
+    'priceAction',
+    'indicators',
     'chartDecision',
     'newsBias',
+    'affectedCurrency',
+    'importantEvent',
+    'eventStatus',
+    'actual',
+    'forecast',
+    'previous',
+    'newsImpact',
+    'bigMoveRisk',
     'newsDecision',
+    'newsSummary',
+    'fundamentalBias',
+    'alignment',
+    'mainReasons',
+    'conflictingSignals',
     'signal',
     'confidence',
     'entry',
     'sl',
+    'stopLoss',
+    'stopLossBasis',
+    'stopLossQuality',
     'tp1',
     'tp2',
     'tp3',
+    'riskReward',
     'reasoning',
+    'invalidation',
+    'newsRisk',
+    'mainRisk',
+    'decisionSummary',
+    'warnings'
   ]
 };
 
@@ -1837,12 +1868,12 @@ ${calendarPayload}`;
         });
       }
       let analysis;
-      const fallbackAnalysis = {
+      const analysisDefaults = {
         instrument: requestedPair || notProvided,
         timeframe: toText(timeframe),
         currentPrice: toText(currentPrice),
         chartQuality: 'Insufficient',
-        marketStructure: 'The structured analysis could not be verified.',
+        marketStructure: notProvided,
         trend: 'Neutral',
         technicalBias: 'Neutral',
         support: notProvided,
@@ -1861,13 +1892,13 @@ ${calendarPayload}`;
         bigMoveRisk: hasSuppliedNews ? 'UNKNOWN' : notProvided,
         newsDecision: 'UNVERIFIED',
         newsSummary: hasSuppliedNews
-          ? 'The live calendar was checked, but the analysis response could not be safely parsed.'
+          ? 'No clear news edge was established from the live calendar data.'
           : calendarFetchSucceeded
             ? 'The live calendar was checked; no relevant event was returned.'
             : 'The live economic calendar was unavailable for this scan.',
         fundamentalBias: hasSuppliedNews ? 'UNKNOWN' : notProvided,
         alignment: 'Unverified',
-        mainReasons: ['The response was not valid structured analysis.'],
+        mainReasons: [],
         conflictingSignals: notProvided,
         signal: 'WAIT',
         trade: 'WAIT',
@@ -1881,13 +1912,12 @@ ${calendarPayload}`;
         tp2: notProvided,
         tp3: notProvided,
         riskReward: { tp1: notProvided, tp2: notProvided, tp3: notProvided },
-        invalidation: 'No verified setup is available.',
-        newsRisk: 'Calendar data was not verified.',
-        mainRisk: 'The chart analysis could not be verified.',
-        reasoning: 'The AI response was not valid structured analysis. Please run the screenshot again.',
-        decisionSummary: 'WAIT is safest because the analysis could not be verified.',
+        invalidation: notProvided,
+        newsRisk: hasSuppliedNews ? 'Review the supplied calendar before entering.' : 'No verified calendar risk was found.',
+        mainRisk: notProvided,
+        reasoning: notProvided,
+        decisionSummary: notProvided,
         warnings: 'Educational analysis only. Not financial advice.',
-        analysisError: true,
       };
       
       analysis = parseStructuredJson(analysisText);
@@ -2005,7 +2035,7 @@ ${calendarPayload}`;
       };
 
       analysis = {
-        ...fallbackAnalysis,
+        ...analysisDefaults,
         ...analysis,
         instrument: toText(analysis.instrument, requestedPair || notProvided),
         timeframe: toText(analysis.timeframe, toText(timeframe)),

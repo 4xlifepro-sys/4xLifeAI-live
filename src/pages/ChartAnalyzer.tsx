@@ -200,8 +200,13 @@ export default function ChartAnalyzer() {
       });
       
       const data = await res.json();
-      if (data.success && data.analysis) {
-        setResult(data.analysis);
+      const returnedAnalysis = data.analysis;
+      const isStaleFallback = returnedAnalysis?.analysisError === true ||
+        (Number(returnedAnalysis?.confidence) === 0 &&
+          String(returnedAnalysis?.instrument || '').toLowerCase().includes('not visible') &&
+          String(returnedAnalysis?.marketStructure || '').toLowerCase().includes('could not be verified'));
+      if (data.success && returnedAnalysis && !isStaleFallback) {
+        setResult(returnedAnalysis);
         const newUsage = usage + 1; 
         setUsage(newUsage);
         
