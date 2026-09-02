@@ -266,10 +266,20 @@ export default function ChartAnalyzer() {
     return text && !['UNKNOWN', 'UNVERIFIED'].includes(text.toUpperCase()) ? text : fallback;
   };
   const displayDecision = normalizeDecision(result?.finalDecision || result?.signal || result?.trade);
-  const riskRewardValues = result && typeof result.riskReward === 'object'
-    ? result.riskReward
-    : { tp1: result?.riskReward || 'Not visible / not provided', tp2: result?.riskReward || 'Not visible / not provided', tp3: result?.riskReward || 'Not visible / not provided' };
+  const riskRewardValues = displayDecision === 'WAIT'
+    ? { tp1: notProvided, tp2: notProvided, tp3: notProvided }
+    : result && typeof result.riskReward === 'object'
+      ? result.riskReward
+      : { tp1: result?.riskReward || notProvided, tp2: result?.riskReward || notProvided, tp3: result?.riskReward || notProvided };
   const analysisReasoning = result?.reasoning || 'Not visible / not provided';
+  const chartDirection = normalizeDecision(result?.chartDecision || result?.trade);
+  const finalSignalMessage = displayDecision === 'BUY'
+    ? 'Possible buy setup — confirm your own risk plan.'
+    : displayDecision === 'SELL'
+      ? 'Possible sell setup — confirm your own risk plan.'
+      : chartDirection !== 'WAIT'
+        ? `No trade now — technical direction is ${chartDirection}, but the complete trade plan is not confirmed.`
+        : 'No trade now — wait for the stated confirmation.';
 
   return (
     <div className="flex-1 w-full min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen">
@@ -432,13 +442,7 @@ export default function ChartAnalyzer() {
                   <p className={cn("text-4xl font-black", getTradeBadge(displayDecision).text)}>
                     {getTradeBadge(displayDecision).label}
                   </p>
-                  <p className="text-sm text-slate-300 mt-2">
-                    {displayDecision === 'BUY'
-                      ? 'Possible buy setup — confirm your own risk plan.'
-                      : displayDecision === 'SELL'
-                        ? 'Possible sell setup — confirm your own risk plan.'
-                        : 'No trade now — wait for the stated confirmation.'}
-                  </p>
+                  <p className="text-sm text-slate-300 mt-2">{finalSignalMessage}</p>
                   {result.signalSource && (
                     <p className="text-xs text-slate-400 mt-2">
                       Analysis source: {result.signalSource}
@@ -447,13 +451,14 @@ export default function ChartAnalyzer() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Confidence Score</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Setup Quality</p>
                 <p className={cn("text-4xl font-black", getConfidenceColor(result.confidence))}>
                   {result.confidence}%
                 </p>
                 <p className={cn("text-xs font-semibold mt-1", getConfidenceColor(result.confidence))}>
                   {getConfidenceLabel(result.confidence)}
                 </p>
+                <p className="text-[10px] text-slate-500 mt-1">Not a win probability</p>
               </div>
             </div>
 
@@ -554,13 +559,13 @@ export default function ChartAnalyzer() {
               <div>
                 <h2 className="text-lg font-bold text-white">Confluence Decision</h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Technical structure and supplied calendar data are checked together.
+                  Technical direction and news context are shown below. Final Signal controls the action.
                 </p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
-                  { label: 'Chart Only', value: normalizeDecision(result.chartDecision || result.trade) },
-                  { label: 'News Filter', value: customerNewsValue(result.newsDecision, 'No verified news edge') },
+                  { label: 'Technical Direction', value: chartDirection === 'WAIT' ? 'WAIT' : `${chartDirection} (context only)` },
+                  { label: 'News Context', value: customerNewsValue(result.newsDecision, 'No verified news edge') },
                   { label: 'Final Decision', value: displayDecision },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
@@ -582,10 +587,15 @@ export default function ChartAnalyzer() {
                   {result.decisionSummary || 'The final decision combines chart structure and current news.'}
                 </p>
               </div>
-              {result.chartDecision?.toUpperCase() === 'WAIT' && (
-                <p className="text-xs font-semibold text-blue-300">
-                  The chart itself is WAIT because price is ranging or the setup is unclear.
-                </p>
+              {displayDecision === 'WAIT' && (
+                <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-blue-300 mb-1">Customer Action</p>
+                  <p className="text-sm font-semibold text-blue-100">
+                    WAIT — do not enter a trade. {chartDirection !== 'WAIT'
+                      ? `The ${chartDirection} chart direction is context only until the complete entry, Stop Loss, and target plan is confirmed.`
+                      : 'Wait for the stated confirmation.'}
+                  </p>
+                </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
@@ -640,7 +650,7 @@ export default function ChartAnalyzer() {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <Shield className="w-5 h-5 text-cyan-400" />
-                  <h2 className="text-lg font-bold text-white">Trade Levels</h2>
+                  <h2 className="text-lg font-bold text-white">Trade Plan</h2>
                 </div>
                 
                 {/* ACTION BADGE - Shows BUY/SELL/WAIT prominently */}
@@ -662,16 +672,16 @@ export default function ChartAnalyzer() {
               <p className="text-xs text-slate-500 font-medium">
                 {displayDecision === 'BUY' && '🔼 Possible BUY setup — confirm before entering'}
                 {displayDecision === 'SELL' && '🔽 Possible SELL setup — confirm before entering'}
-                {displayDecision === 'WAIT' && '⏸️ WAIT — do NOT trade until confirmation'}
+                {displayDecision === 'WAIT' && '⏸️ No active trade plan — WAIT for confirmation'}
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {[
-                  { label: 'Entry', value: result.entry || notProvided, color: 'text-white', bg: 'bg-slate-700/50' },
-                  { label: 'Stop Loss', value: result.stopLoss || notProvided, color: 'text-red-400', bg: 'bg-red-500/10' },
-                  { label: 'TP1', value: result.tp1 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP2', value: result.tp2 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP3', value: result.tp3 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'Entry', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.entry || notProvided, color: 'text-white', bg: 'bg-slate-700/50' },
+                  { label: 'Stop Loss', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.stopLoss || notProvided, color: 'text-red-400', bg: 'bg-red-500/10' },
+                  { label: 'TP1', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.tp1 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP2', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.tp2 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP3', value: displayDecision === 'WAIT' ? 'Inactive — WAIT' : result.tp3 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                 ].map((level) => (
                   <button
                     key={level.label}
@@ -687,6 +697,7 @@ export default function ChartAnalyzer() {
                   </button>
                 ))}
               </div>
+              {displayDecision !== 'WAIT' && (
               <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Risk : Reward Ratio</p>
@@ -704,6 +715,7 @@ export default function ChartAnalyzer() {
                   </div>
                 </div>
               </div>
+              )}
             </div>
 
             {/* Reasoning & Warnings */}
