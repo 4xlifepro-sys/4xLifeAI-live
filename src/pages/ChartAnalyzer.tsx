@@ -348,12 +348,9 @@ export default function ChartAnalyzer() {
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
           {selectedImage ? (
             result ? (
-              <div className="flex items-center gap-3 text-left">
-                <img src={selectedImage} alt="Selected chart" className="h-14 w-24 object-cover rounded-lg border border-cyan-400/30" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-slate-300 font-medium truncate">{selectedFileName}</p>
-                  <p className="text-xs text-slate-500">Click to analyze a different chart</p>
-                </div>
+              <div className="flex items-center justify-center gap-2 text-slate-400">
+                <Upload className="w-4 h-4 text-cyan-400" />
+                <span className="text-sm font-medium">Analyze another chart</span>
               </div>
             ) : (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -447,176 +444,68 @@ export default function ChartAnalyzer() {
         {result && !isAnalyzing && (
           <div ref={resultRef} className="space-y-5">
 
-            {/* 1. THE SIGNAL — clean professional header card */}
-            <div className={cn(
-              "relative overflow-hidden rounded-2xl border backdrop-blur-sm",
-              getTradeBadge(displayDecision).border,
-              "bg-slate-900/60"
-            )}>
-              {/* colored accent bar */}
-              <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", getConfidenceBg(result.confidence))}></div>
+            {/* SINGLE CLEAN SIGNAL CARD */}
+            <div className="relative overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/70 backdrop-blur-sm">
+              <div className={cn("absolute left-0 top-0 bottom-0 w-1.5",
+                displayDecision === 'BUY' ? 'bg-emerald-400' : displayDecision === 'SELL' ? 'bg-red-400' : 'bg-slate-500'
+              )}></div>
 
-              <div className="p-5 sm:p-6">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div className="flex items-center gap-3">
-                    {(() => {
-                      const BadgeIcon = getTradeBadge(displayDecision).icon;
-                      return (
-                        <span className={cn(
-                          "inline-flex items-center gap-2 px-4 py-2 rounded-xl border font-black text-2xl sm:text-3xl tracking-tight",
-                          getTradeBadge(displayDecision).bg,
-                          getTradeBadge(displayDecision).border,
-                          getTradeBadge(displayDecision).text
-                        )}>
-                          <BadgeIcon className="w-6 h-6 sm:w-7 sm:h-7" />
-                          {getTradeBadge(displayDecision).label}
-                        </span>
-                      );
-                    })()}
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Signal</p>
-                      {result.instrument && (
-                        <p className="text-base font-bold text-white leading-tight">{result.instrument}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Setup Quality</p>
-                    <p className={cn("text-2xl font-black leading-tight", getConfidenceColor(result.confidence))}>
-                      {result.confidence}%
-                    </p>
-                    <p className="text-[11px] text-slate-500">{getConfidenceLabel(result.confidence)}</p>
-                  </div>
-                </div>
-
-                {/* quality meter */}
-                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden mt-4">
-                  <div className={cn("h-full rounded-full transition-all duration-1000", getConfidenceBg(result.confidence))} style={{ width: `${result.confidence}%` }}></div>
-                </div>
-
-                <p className="text-sm sm:text-base text-slate-200 mt-4 leading-relaxed">{whatToDo}</p>
-                <p className="text-[11px] text-slate-500 mt-2">Setup quality is not a win probability. Trade at your own risk.</p>
-              </div>
-            </div>
-
-            {/* 2. TRADE PLAN — only for BUY/SELL */}
-            {displayDecision !== 'WAIT' ? (
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl overflow-hidden backdrop-blur-sm">
-                <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-700/50">
-                  <Shield className="w-4 h-4 text-cyan-400" />
-                  <h2 className="text-sm font-bold text-white uppercase tracking-wide">Trade Plan</h2>
-                  <span className="text-[11px] text-slate-500 ml-auto">tap price to copy</span>
-                </div>
-                <div className="divide-y divide-slate-800">
-                  {[
-                    { label: 'Entry', value: result.entry || notProvided, color: 'text-white', dot: 'bg-slate-400' },
-                    { label: 'Stop Loss', value: result.stopLoss || notProvided, color: 'text-red-400', dot: 'bg-red-400' },
-                    { label: 'Take Profit 1', value: result.tp1 || notProvided, color: 'text-emerald-400', dot: 'bg-emerald-400' },
-                    { label: 'Take Profit 2', value: result.tp2 || notProvided, color: 'text-emerald-400', dot: 'bg-emerald-400' },
-                    { label: 'Take Profit 3', value: result.tp3 || notProvided, color: 'text-emerald-400', dot: 'bg-emerald-400' },
-                  ].map((level) => (
-                    <button
-                      key={level.label}
-                      onClick={() => copyToClipboard(String(level.value))}
-                      className="w-full flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-slate-800/60 group"
-                      title={`Click to copy ${level.label}`}
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <span className={cn("w-1.5 h-1.5 rounded-full", level.dot)}></span>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{level.label}</span>
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <span className={cn("text-base font-bold font-mono tabular-nums", level.color)}>{String(level.value)}</span>
-                        <span className="text-[10px] text-slate-600 group-hover:text-cyan-400 transition-colors">
-                          {copiedValue === level.value ? '✓' : '⧉'}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div className="px-5 py-3 bg-slate-950/40 border-t border-slate-800">
-                  <p className="text-[11px] text-slate-500">Risk max 1% per trade. Size your lot from the Stop Loss distance before entering.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 backdrop-blur-sm">
-                <div className="flex items-center gap-2.5 mb-3">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                  <p className="text-sm font-bold text-amber-300 uppercase tracking-wide">No trade plan yet</p>
-                </div>
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  {result.invalidation || result.mainRisk || 'The setup is not confirmed. Waiting protects your money — a valid plan will show Entry, Stop Loss and Take Profits here.'}
-                </p>
-              </div>
-            )}
-
-            {/* 3. WHY — one plain sentence */}
-            {plainReason && (
-              <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Why this signal</p>
-                <p className="text-sm sm:text-base text-slate-200 leading-relaxed">{plainReason}</p>
-              </div>
-            )}
-
-            {/* 4. NEWS — compact scenario-only card, only when verified news exists */}
-            {hasNews && (
-              <div className="bg-slate-800/60 border border-amber-500/30 rounded-2xl p-5 backdrop-blur-sm space-y-3">
+              <div className="p-5 sm:p-6 space-y-5">
+                {/* header: pair + direction + quality */}
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Newspaper className="w-4 h-4 text-amber-300" />
-                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Upcoming Event</p>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">{result.instrument || 'Signal'}</h2>
+                    <span className={cn(
+                      "px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider border",
+                      getTradeBadge(displayDecision).bg,
+                      getTradeBadge(displayDecision).border,
+                      getTradeBadge(displayDecision).text
+                    )}>
+                      {displayDecision === 'BUY' ? 'BUY / LONG' : displayDecision === 'SELL' ? 'SELL / SHORT' : 'WAIT'}
+                    </span>
                   </div>
-                  {(() => {
-                    const level = String(result.volatilityRisk || result.bigMoveRisk || result.newsImpact || 'UNKNOWN').toUpperCase();
-                    const badgeStyle = level === 'EXTREME'
-                      ? 'bg-red-500/20 border-red-500/40 text-red-300'
-                      : level === 'HIGH'
-                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-300'
-                        : level === 'MEDIUM'
-                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                          : level === 'LOW'
-                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                            : 'bg-slate-700/40 border-slate-600/50 text-slate-400';
-                    return (
-                      <span className={cn("px-2.5 py-1 rounded-lg border text-xs font-bold", badgeStyle)}>
-                        {['HIGH', 'EXTREME'].includes(level) ? '🔴' : level === 'MEDIUM' ? '🟠' : level === 'LOW' ? '🟢' : ''} {level} VOLATILITY
-                      </span>
-                    );
-                  })()}
+                  <span className={cn("text-xs font-bold uppercase tracking-wider", getConfidenceColor(result.confidence))}>
+                    {result.confidence}% {getConfidenceLabel(result.confidence)}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-100">
-                    {[result.affectedCurrency, result.importantEvent].filter(Boolean).join(' · ') || result.newsSummary}
-                  </p>
-                  {result.eventTiming && result.eventTiming !== 'Not visible / not provided' && (
-                    <p className="text-xs text-slate-500 mt-1">{result.eventTiming}</p>
-                  )}
-                </div>
-                <div className="space-y-1.5 text-sm text-slate-300">
-                  {result.bullishScenario && result.bullishScenario !== 'Not visible / not provided' && (
-                    <p>📈 If stronger than expected: <span className="text-slate-200">{result.bullishScenario}</span></p>
-                  )}
-                  {result.bearishScenario && result.bearishScenario !== 'Not visible / not provided' && (
-                    <p>📉 If weaker than expected: <span className="text-slate-200">{result.bearishScenario}</span></p>
-                  )}
-                  {!result.bullishScenario && !result.bearishScenario && result.newsSummary && (
-                    <p>{result.newsSummary}</p>
-                  )}
-                </div>
-                {result.newsBlockReason && result.newsBlockReason !== 'Not visible / not provided' ? (
-                  <p className="text-sm font-bold text-amber-300">⚠️ WAIT FOR CONFIRMATION — {result.newsBlockReason}</p>
-                ) : ['HIGH', 'EXTREME'].includes(String(result.volatilityRisk || result.bigMoveRisk || result.newsImpact || '').toUpperCase()) && (
-                  <p className="text-sm font-semibold text-amber-300">⚡ High-impact news near — expect sharp moves. Reduce size or wait.</p>
+
+                {/* reason */}
+                {plainReason && (
+                  <p className="text-sm text-slate-300 leading-relaxed">{plainReason}</p>
                 )}
+
+                {/* price boxes OR wait */}
+                {displayDecision !== 'WAIT' ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      { label: 'Entry Price', value: result.entry || notProvided, color: 'text-white' },
+                      { label: 'Stop Loss', value: result.stopLoss || notProvided, color: 'text-red-400' },
+                      { label: 'TP1 Target', value: result.tp1 || notProvided, color: 'text-emerald-400' },
+                      { label: 'TP2 Target', value: result.tp2 || notProvided, color: 'text-emerald-400' },
+                      { label: 'TP3 Target', value: result.tp3 || notProvided, color: 'text-emerald-400' },
+                    ].map((box) => (
+                      <button
+                        key={box.label}
+                        onClick={() => copyToClipboard(String(box.value))}
+                        className="relative text-left rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 transition-colors hover:border-cyan-400/40 hover:bg-slate-800/70 group"
+                        title={`Click to copy ${box.label}`}
+                      >
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{box.label}</p>
+                        <p className={cn("text-lg font-black font-mono tabular-nums", box.color)}>{String(box.value)}</p>
+                        <span className="absolute top-3 right-3 text-xs text-slate-600 group-hover:text-cyan-400 transition-colors">
+                          {copiedValue === box.value ? '✓' : '⧉'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                    <p className="text-sm font-bold text-amber-300">No trade now — wait for a clearer setup and scan again later.</p>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-slate-500">Not financial advice · trade at your own risk · risk max 1% per trade.</p>
               </div>
-            )}
-
-
-            {/* Disclaimer — compact */}
-            <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl p-4 text-center space-y-1">
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                4xLifeAI is an educational analysis tool — not financial advice. Trading involves substantial risk of loss. Setup quality is a probability estimate, never a guarantee. Only trade what you can afford to lose.
-              </p>
             </div>
           </div>
         )}
