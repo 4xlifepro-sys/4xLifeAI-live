@@ -11,6 +11,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Public receive-only wallet fallbacks (mirror server /api/config defaults)
+const DEFAULT_WALLETS = {
+  trc20: 'TN3zCR5gACd16f7iDJH97GMB7mKRg3opXe',
+  bep20: '0xa061175dd8cd00a87ae55d29a3fc7c31f8cb476a'
+};
+
 export default function Plans() {
   const dialog = useDialog();
   const { user } = useAuth();
@@ -20,7 +26,7 @@ export default function Plans() {
   const [txid, setTxid] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [copied, setCopied] = useState('');
-  const [wallets, setWallets] = useState({ trc20: '', bep20: '' });
+  const [wallets, setWallets] = useState(DEFAULT_WALLETS);
   
   const [dbPlans, setDbPlans] = useState<any[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -107,18 +113,28 @@ export default function Plans() {
     fetch('/api/config')
       .then(res => res.json())
       .then(data => {
-        if (data.USDT_TRC20_ADDRESS) {
-          setWallets({
-            trc20: data.USDT_TRC20_ADDRESS,
-            bep20: data.USDT_BEP20_ADDRESS
-          });
-        }
+        setWallets({
+          trc20: data?.USDT_TRC20_ADDRESS || DEFAULT_WALLETS.trc20,
+          bep20: data?.USDT_BEP20_ADDRESS || DEFAULT_WALLETS.bep20
+        });
       })
-      .catch(console.error);
+      .catch(() => setWallets(DEFAULT_WALLETS));
   }, [user]);
 
-  const handleCopy = (text: string, type: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string, type: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+    }
     setCopied(type);
     setTimeout(() => setCopied(''), 2000);
   };
@@ -287,35 +303,49 @@ export default function Plans() {
                   <div className="bg-[#11141A] p-4 rounded-xl border border-[#202735]">
                     <div className="text-sm text-[#8A95A5] mb-2 font-medium">USDT (TRC-20)</div>
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <code className="text-white font-mono text-xs break-all select-all">{wallets.trc20 || "Loading..."}</code>
-                        <button onClick={() => handleCopy(wallets.trc20, 'trc20')} disabled={!wallets.trc20} className="mt-2 p-2 hover:bg-[#202735] rounded-lg transition-colors group disabled:opacity-50">
-                          {copied === 'trc20' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#8A95A5] group-hover:text-white" />}
-                        </button>
+                      <code
+                        onClick={() => handleCopy(wallets.trc20, 'trc20')}
+                        className="text-white font-mono text-xs break-all select-all cursor-pointer hover:text-teal-300 transition-colors min-w-0 flex-1"
+                        title="Tap to copy"
+                      >
+                        {wallets.trc20}
+                      </code>
+                      <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (TRC-20)">
+                        <QRCodeSVG value={wallets.trc20} size={88} />
                       </div>
-                      {wallets.trc20 && (
-                        <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (TRC-20)">
-                          <QRCodeSVG value={wallets.trc20} size={88} />
-                        </div>
-                      )}
                     </div>
+                    <button
+                      onClick={() => handleCopy(wallets.trc20, 'trc20')}
+                      className="mt-3 w-full py-2 rounded-lg border border-[#202735] hover:border-teal-500/50 text-xs font-bold uppercase tracking-widest text-[#8A95A5] hover:text-teal-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                      {copied === 'trc20'
+                        ? <><Check className="w-4 h-4 text-emerald-400" /> <span className="text-emerald-400">Copied!</span></>
+                        : <><Copy className="w-4 h-4" /> Copy Address</>}
+                    </button>
                   </div>
-                  
+
                   <div className="bg-[#11141A] p-4 rounded-xl border border-[#202735]">
                     <div className="text-sm text-[#8A95A5] mb-2 font-medium">USDT (BEP-20)</div>
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <code className="text-white font-mono text-xs break-all select-all">{wallets.bep20 || "Loading..."}</code>
-                        <button onClick={() => handleCopy(wallets.bep20, 'bep20')} disabled={!wallets.bep20} className="mt-2 p-2 hover:bg-[#202735] rounded-lg transition-colors group disabled:opacity-50">
-                          {copied === 'bep20' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#8A95A5] group-hover:text-white" />}
-                        </button>
+                      <code
+                        onClick={() => handleCopy(wallets.bep20, 'bep20')}
+                        className="text-white font-mono text-xs break-all select-all cursor-pointer hover:text-teal-300 transition-colors min-w-0 flex-1"
+                        title="Tap to copy"
+                      >
+                        {wallets.bep20}
+                      </code>
+                      <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (BEP-20)">
+                        <QRCodeSVG value={wallets.bep20} size={88} />
                       </div>
-                      {wallets.bep20 && (
-                        <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (BEP-20)">
-                          <QRCodeSVG value={wallets.bep20} size={88} />
-                        </div>
-                      )}
                     </div>
+                    <button
+                      onClick={() => handleCopy(wallets.bep20, 'bep20')}
+                      className="mt-3 w-full py-2 rounded-lg border border-[#202735] hover:border-teal-500/50 text-xs font-bold uppercase tracking-widest text-[#8A95A5] hover:text-teal-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                      {copied === 'bep20'
+                        ? <><Check className="w-4 h-4 text-emerald-400" /> <span className="text-emerald-400">Copied!</span></>
+                        : <><Copy className="w-4 h-4" /> Copy Address</>}
+                    </button>
                   </div>
                 </div>
 
