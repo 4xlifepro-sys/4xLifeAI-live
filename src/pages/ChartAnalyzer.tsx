@@ -441,72 +441,104 @@ export default function ChartAnalyzer() {
         {result && !isAnalyzing && (
           <div ref={resultRef} className="space-y-5">
 
-            {/* 1. THE SIGNAL — one dominant card */}
+            {/* 1. THE SIGNAL — clean professional header card */}
             <div className={cn(
-              "rounded-2xl p-6 sm:p-8 border-2 backdrop-blur-sm text-center",
-              getTradeBadge(displayDecision).bg,
-              getTradeBadge(displayDecision).border
+              "relative overflow-hidden rounded-2xl border backdrop-blur-sm",
+              getTradeBadge(displayDecision).border,
+              "bg-slate-900/60"
             )}>
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Your Signal</p>
-              <div className="flex items-center justify-center gap-3">
-                {(() => {
-                  const BadgeIcon = getTradeBadge(displayDecision).icon;
-                  return <BadgeIcon className={cn("w-12 h-12 sm:w-16 sm:h-16", getTradeBadge(displayDecision).text)} />;
-                })()}
-                <p className={cn("text-5xl sm:text-6xl font-black tracking-tight", getTradeBadge(displayDecision).text)}>
-                  {getTradeBadge(displayDecision).label}
-                </p>
+              {/* colored accent bar */}
+              <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", getConfidenceBg(result.confidence))}></div>
+
+              <div className="p-5 sm:p-6">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    {(() => {
+                      const BadgeIcon = getTradeBadge(displayDecision).icon;
+                      return (
+                        <span className={cn(
+                          "inline-flex items-center gap-2 px-4 py-2 rounded-xl border font-black text-2xl sm:text-3xl tracking-tight",
+                          getTradeBadge(displayDecision).bg,
+                          getTradeBadge(displayDecision).border,
+                          getTradeBadge(displayDecision).text
+                        )}>
+                          <BadgeIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+                          {getTradeBadge(displayDecision).label}
+                        </span>
+                      );
+                    })()}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Signal</p>
+                      {result.instrument && (
+                        <p className="text-base font-bold text-white leading-tight">{result.instrument}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Setup Quality</p>
+                    <p className={cn("text-2xl font-black leading-tight", getConfidenceColor(result.confidence))}>
+                      {result.confidence}%
+                    </p>
+                    <p className="text-[11px] text-slate-500">{getConfidenceLabel(result.confidence)}</p>
+                  </div>
+                </div>
+
+                {/* quality meter */}
+                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden mt-4">
+                  <div className={cn("h-full rounded-full transition-all duration-1000", getConfidenceBg(result.confidence))} style={{ width: `${result.confidence}%` }}></div>
+                </div>
+
+                <p className="text-sm sm:text-base text-slate-200 mt-4 leading-relaxed">{whatToDo}</p>
+                <p className="text-[11px] text-slate-500 mt-2">Setup quality is not a win probability. Trade at your own risk.</p>
               </div>
-              <p className="text-base sm:text-lg text-slate-200 mt-4 font-medium max-w-xl mx-auto">{whatToDo}</p>
-              <div className="flex items-center justify-center gap-6 mt-5 text-sm">
-                <span className="text-slate-400">
-                  Setup quality: <span className={cn("font-bold", getConfidenceColor(result.confidence))}>{result.confidence}% ({getConfidenceLabel(result.confidence)})</span>
-                </span>
-              </div>
-              <div className="w-full max-w-md mx-auto bg-slate-700/50 rounded-full h-2 overflow-hidden border border-slate-600/50 mt-3">
-                <div className={cn("h-full rounded-full transition-all duration-1000", getConfidenceBg(result.confidence))} style={{ width: `${result.confidence}%` }}></div>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-2">Setup quality is not a win probability.</p>
             </div>
 
             {/* 2. TRADE PLAN — only for BUY/SELL */}
             {displayDecision !== 'WAIT' ? (
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-cyan-400" />
-                  <h2 className="text-lg font-bold text-white">Trade Plan</h2>
-                  <span className="text-xs text-slate-500">— tap any price to copy</span>
+              <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl overflow-hidden backdrop-blur-sm">
+                <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-700/50">
+                  <Shield className="w-4 h-4 text-cyan-400" />
+                  <h2 className="text-sm font-bold text-white uppercase tracking-wide">Trade Plan</h2>
+                  <span className="text-[11px] text-slate-500 ml-auto">tap price to copy</span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                <div className="divide-y divide-slate-800">
                   {[
-                    { label: 'Entry', value: result.entry || notProvided, color: 'text-white', bg: 'bg-slate-700/50' },
-                    { label: 'Stop Loss', value: result.stopLoss || notProvided, color: 'text-red-400', bg: 'bg-red-500/10' },
-                    { label: 'Take Profit 1', value: result.tp1 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                    { label: 'Take Profit 2', value: result.tp2 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                    { label: 'Take Profit 3', value: result.tp3 || notProvided, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                    { label: 'Entry', value: result.entry || notProvided, color: 'text-white', dot: 'bg-slate-400' },
+                    { label: 'Stop Loss', value: result.stopLoss || notProvided, color: 'text-red-400', dot: 'bg-red-400' },
+                    { label: 'Take Profit 1', value: result.tp1 || notProvided, color: 'text-emerald-400', dot: 'bg-emerald-400' },
+                    { label: 'Take Profit 2', value: result.tp2 || notProvided, color: 'text-emerald-400', dot: 'bg-emerald-400' },
+                    { label: 'Take Profit 3', value: result.tp3 || notProvided, color: 'text-emerald-400', dot: 'bg-emerald-400' },
                   ].map((level) => (
                     <button
                       key={level.label}
                       onClick={() => copyToClipboard(String(level.value))}
-                      className={cn("border border-slate-600/50 rounded-xl p-3 text-center transition-all hover:border-cyan-400/50 hover:shadow-lg group relative", level.bg)}
+                      className="w-full flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-slate-800/60 group"
                       title={`Click to copy ${level.label}`}
                     >
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">{level.label}</p>
-                      <p className={cn("text-sm font-bold break-words", level.color)}>{String(level.value)}</p>
-                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-slate-700 text-cyan-300 px-2 py-1 rounded whitespace-nowrap pointer-events-none">
-                        {copiedValue === level.value ? '✓ Copied!' : 'Click to copy'}
-                      </div>
+                      <span className="flex items-center gap-2.5">
+                        <span className={cn("w-1.5 h-1.5 rounded-full", level.dot)}></span>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{level.label}</span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className={cn("text-base font-bold font-mono tabular-nums", level.color)}>{String(level.value)}</span>
+                        <span className="text-[10px] text-slate-600 group-hover:text-cyan-400 transition-colors">
+                          {copiedValue === level.value ? '✓' : '⧉'}
+                        </span>
+                      </span>
                     </button>
                   ))}
                 </div>
-                <div className="bg-slate-900/40 border border-cyan-500/20 rounded-xl p-4 text-center">
-                  <p className="text-xs text-slate-400">Risk max 1% of your account. Set your lot size from the Stop Loss distance before entering.</p>
+                <div className="px-5 py-3 bg-slate-950/40 border-t border-slate-800">
+                  <p className="text-[11px] text-slate-500">Risk max 1% per trade. Size your lot from the Stop Loss distance before entering.</p>
                 </div>
               </div>
             ) : (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-6 backdrop-blur-sm text-center">
-                <p className="text-base font-bold text-blue-200">No trade plan yet</p>
-                <p className="text-sm text-blue-100/80 mt-2 max-w-xl mx-auto">
+              <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-6 backdrop-blur-sm">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  <p className="text-sm font-bold text-amber-300 uppercase tracking-wide">No trade plan yet</p>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed">
                   {result.invalidation || result.mainRisk || 'The setup is not confirmed. Waiting protects your money — a valid plan will show Entry, Stop Loss and Take Profits here.'}
                 </p>
               </div>
@@ -514,7 +546,7 @@ export default function ChartAnalyzer() {
 
             {/* 3. WHY — one plain sentence */}
             {plainReason && (
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+              <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Why this signal</p>
                 <p className="text-sm sm:text-base text-slate-200 leading-relaxed">{plainReason}</p>
               </div>
