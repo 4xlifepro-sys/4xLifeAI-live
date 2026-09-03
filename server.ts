@@ -8,16 +8,10 @@ import { startSessionMessaging, sendSessionUpdate } from "./server/sessionMessag
 import { supabase } from './server/supabase.js';
 import { sendTelegramMessage } from './server/telegram.js';
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const adminAlertCooldown = new Map<string, number>();
 let notificationsTableAvailable = true;
-let economicCalendarCache: { expiresAt: number; events: any[] } = { expiresAt: 0, events: [] };
-
-// Pre-news protection window: pause new trade entries around HIGH/EXTREME impact events.
-// Hardcoded for now; move to an Admin-configurable setting if that becomes a separate task.
-const NEWS_BLOCK_BEFORE_MIN = 30;
-const NEWS_BLOCK_AFTER_MIN = 15;
 
 function escapeTelegramHtml(value: string) {
   return value
@@ -139,278 +133,6 @@ function getCanonicalPlan(record: any): CanonicalPlan {
   }
   return 'FREE';
 }
-
-async function getEconomicCalendar() {
-  const now = Date.now();
-  if (economicCalendarCache.expiresAt > now) return economicCalendarCache.events;
-
-  const calendarUrl = process.env.ECONOMIC_CALENDAR_URL || 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
-  const response = await fetch(calendarUrl, {
-    headers: { 'User-Agent': '4xLifeAI/1.0' }
-  });
-  if (!response.ok) throw new Error(`Economic calendar request failed with ${response.status}`);
-
-  const payload = await response.json();
-  const events = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.events) ? payload.events : [];
-
-  economicCalendarCache = {
-    expiresAt: now + 10 * 60 * 1000,
-    events: events.slice(0, 100).map((event: any) => ({
-      currency: event?.currency || event?.currencyCode || event?.country || null,
-      event: event?.event || event?.name || event?.title || null,
-      impact: event?.impact || null,
-      time: event?.time || event?.date || null,
-      status: event?.status || (
-        event?.actual !== undefined &&
-        event?.actual !== null &&
-        String(event.actual).trim()
-          ? 'Released'
-          : 'Upcoming'
-      ),
-      actual: event?.actual ?? null,
-      forecast: event?.forecast ?? null,
-      previous: event?.previous ?? null
-    }))
-  };
-
-  return economicCalendarCache.events;
-}
-
-function getCalendarCurrencies(pair: unknown) {
-  const normalizedPair = String(pair || '').toUpperCase().replace(/[^A-Z]/g, '');
-  const currencies = normalizedPair.match(/[A-Z]{3}/g) || [];
-  return currencies.length === 2 ? currencies : [];
-}
-
-function getRelevantCalendarEvents(events: any[], pair: unknown) {
-  const currencies = getCalendarCurrencies(pair);
-  return events.filter((event: any) => {
-    if (!currencies.length) return true;
-    const currency = String(event?.currency || event?.currencyCode || '').toUpperCase();
-    return !currency || currencies.includes(currency);
-  });
-}
-
-// Deterministic, code-level check: this is the "risk engine" for news timing and cannot be
-// bypassed by the model's own output. Only HIGH/EXTREME impact events trigger a hard block.
-type NewsBlockStatus =
-  | { blocked: false }
-  | { blocked: true; direction: 'before' | 'after'; minutes: number; event: any };
-
-function getNewsBlockStatus(events: any[], now: Date): NewsBlockStatus {
-  const beforeMs = NEWS_BLOCK_BEFORE_MIN * 60 * 1000;
-  const afterMs = NEWS_BLOCK_AFTER_MIN * 60 * 1000;
-  for (const event of Array.isArray(events) ? events : []) {
-    const impact = String(event?.impact || '').toUpperCase();
-    if (!['HIGH', 'EXTREME'].includes(impact)) continue;
-    const rawTime = event?.time || event?.date;
-    if (!rawTime) continue;
-    const eventTime = new Date(rawTime);
-    if (Number.isNaN(eventTime.getTime())) continue;
-    const diffMs = eventTime.getTime() - now.getTime();
-    if (diffMs >= 0 && diffMs <= beforeMs) {
-      return { blocked: true, direction: 'before', minutes: Math.round(diffMs / 60000), event };
-    }
-    if (diffMs < 0 && Math.abs(diffMs) <= afterMs) {
-      return { blocked: true, direction: 'after', minutes: Math.round(Math.abs(diffMs) / 60000), event };
-    }
-  }
-  return { blocked: false };
-}
-
-// Human-readable "how far away is the nearest relevant event" label, computed in code so
-// Gemini never has to guess or invent the current time.
-function getNearestRelevantEventTiming(
-  events: any[],
-  now: Date,
-  notProvided: string
-): string {
-  let nearest: { event: any; diffMs: number } | null = null;
-  for (const event of Array.isArray(events) ? events : []) {
-    const rawTime = event?.time || event?.date;
-    if (!rawTime) continue;
-    const eventTime = new Date(rawTime);
-    if (Number.isNaN(eventTime.getTime())) continue;
-    const diffMs = eventTime.getTime() - now.getTime();
-    if (!nearest || Math.abs(diffMs) < Math.abs(nearest.diffMs)) {
-      nearest = { event, diffMs };
-    }
-  }
-  if (!nearest) return notProvided;
-  const minutes = Math.round(Math.abs(nearest.diffMs) / 60000);
-  const hours = Math.round(minutes / 60);
-  const label = minutes < 60 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'}`;
-  return nearest.diffMs >= 0 ? `Upcoming · in ${label}` : `Released · ${label} ago`;
-}
-
-function parseStructuredJson(text: string): Record<string, any> | null {
-  const normalized = String(text || '')
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-
-  try {
-    const parsed = JSON.parse(normalized);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
-  } catch {
-  }
-
-  for (let start = normalized.indexOf('{'); start >= 0; start = normalized.indexOf('{', start + 1)) {
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-
-    for (let index = start; index < normalized.length; index += 1) {
-      const character = normalized[index];
-
-      if (inString) {
-        if (escaped) {
-          escaped = false;
-        } else if (character === '\\') {
-          escaped = true;
-        } else if (character === '"') {
-          inString = false;
-        }
-        continue;
-      }
-
-      if (character === '"') {
-        inString = true;
-      } else if (character === '{') {
-        depth += 1;
-      } else if (character === '}') {
-        depth -= 1;
-        if (depth === 0) {
-          try {
-            const parsed = JSON.parse(normalized.slice(start, index + 1));
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-          } catch {
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-const chartAnalysisResponseSchema = {
-  type: Type.OBJECT,
-  properties: {
-    instrument: { type: Type.STRING },
-    timeframe: { type: Type.STRING },
-    currentPrice: { type: Type.STRING },
-    chartQuality: { type: Type.STRING },
-    marketStructure: { type: Type.STRING },
-    trend: { type: Type.STRING },
-    technicalBias: { type: Type.STRING },
-    support: { type: Type.STRING },
-    resistance: { type: Type.STRING },
-    priceAction: { type: Type.STRING },
-    indicators: { type: Type.ARRAY, items: { type: Type.STRING } },
-    chartDecision: { type: Type.STRING, enum: ['BUY', 'SELL', 'WAIT'] },
-    newsBias: { type: Type.STRING },
-    affectedCurrency: { type: Type.STRING },
-    importantEvent: { type: Type.STRING },
-    eventStatus: { type: Type.STRING },
-    actual: { type: Type.STRING },
-    forecast: { type: Type.STRING },
-    previous: { type: Type.STRING },
-    newsImpact: { type: Type.STRING },
-    bigMoveRisk: { type: Type.STRING },
-    volatilityRisk: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH', 'EXTREME', 'UNKNOWN'] },
-    pairRelevance: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH', 'UNKNOWN'] },
-    bullishScenario: { type: Type.STRING },
-    bearishScenario: { type: Type.STRING },
-    tradingAction: { type: Type.STRING, enum: ['CONFIRMED', 'WAIT_FOR_CONFIRMATION', 'NONE'] },
-    newsDecision: { type: Type.STRING },
-    newsSummary: { type: Type.STRING },
-    fundamentalBias: { type: Type.STRING },
-    alignment: { type: Type.STRING },
-    mainReasons: { type: Type.ARRAY, items: { type: Type.STRING } },
-    conflictingSignals: { type: Type.STRING },
-    signal: { type: Type.STRING, enum: ['BUY', 'SELL', 'WAIT'] },
-    confidence: { type: Type.INTEGER, minimum: 0, maximum: 100 },
-    entry: { type: Type.STRING },
-    sl: { type: Type.STRING },
-    stopLoss: { type: Type.STRING },
-    stopLossBasis: { type: Type.STRING },
-    stopLossQuality: { type: Type.STRING },
-    tp1: { type: Type.STRING },
-    tp2: { type: Type.STRING },
-    tp3: { type: Type.STRING },
-    riskReward: {
-      type: Type.OBJECT,
-      properties: {
-        tp1: { type: Type.STRING },
-        tp2: { type: Type.STRING },
-        tp3: { type: Type.STRING }
-      },
-      required: ['tp1', 'tp2', 'tp3']
-    },
-    invalidation: { type: Type.STRING },
-    newsRisk: { type: Type.STRING },
-    mainRisk: { type: Type.STRING },
-    reasoning: { type: Type.STRING },
-    decisionSummary: { type: Type.STRING },
-    warnings: { type: Type.STRING }
-  },
-  required: [
-    'instrument',
-    'timeframe',
-    'currentPrice',
-    'chartQuality',
-    'marketStructure',
-    'trend',
-    'technicalBias',
-    'support',
-    'resistance',
-    'priceAction',
-    'indicators',
-    'chartDecision',
-    'newsBias',
-    'affectedCurrency',
-    'importantEvent',
-    'eventStatus',
-    'actual',
-    'forecast',
-    'previous',
-    'newsImpact',
-    'bigMoveRisk',
-    'volatilityRisk',
-    'pairRelevance',
-    'bullishScenario',
-    'bearishScenario',
-    'tradingAction',
-    'newsDecision',
-    'newsSummary',
-    'fundamentalBias',
-    'alignment',
-    'mainReasons',
-    'conflictingSignals',
-    'signal',
-    'confidence',
-    'entry',
-    'sl',
-    'stopLoss',
-    'stopLossBasis',
-    'stopLossQuality',
-    'tp1',
-    'tp2',
-    'tp3',
-    'riskReward',
-    'reasoning',
-    'invalidation',
-    'newsRisk',
-    'mainRisk',
-    'decisionSummary',
-    'warnings'
-  ]
-};
 
 async function getUserSubscription(email: string) {
   if (!supabase) return { record: null, error: new Error('Supabase is not configured') };
@@ -1719,520 +1441,120 @@ async function startServer() {
   });
 
   // AI Chart Analyzer Endpoint
-  app.post("/api/chart-analyzer", requireAuth, async (req, res) => {
+  app.post("/api/chart-analyzer", async (req, res) => {
     try {
-      if (!supabase) return res.status(500).json({ error: "4x System Error" });
-      const {
-        imageBase64,
-        pair,
-        timeframe,
-        currentPrice,
-        economicCalendar,
-        recentReleases
-      } = req.body;
+      const { imageBase64, chartType } = req.body;
       
-      if (typeof imageBase64 !== 'string' || imageBase64.length < 100) {
+      if (!imageBase64) {
         return res.status(400).json({ error: "No image provided" });
       }
 
-      const user = (req as any).user;
-      const userEmail = String(user?.email || '').trim().toLowerCase();
-      if (!userEmail) return res.status(401).json({ error: "Authenticated email is required" });
-      const { data: userRecord } = await supabase
-        .from('users')
-        .select('plan, subscription_plan, role')
-        .ilike('email', userEmail)
-        .limit(1)
-        .maybeSingle();
-      const plan = getCanonicalPlan(userRecord);
-      const isAdminUser = String(userRecord?.role || '').toUpperCase() === 'ADMIN';
-      const dailyLimit = plan === 'PRO' || isAdminUser ? 30 : 4;
-      const usageKey = `chart-analyzer:${userEmail}:${new Date().toISOString().slice(0, 10)}`;
-      const requestStore = (globalThis as any).__chartAnalyzerUsage as Map<string, number> | undefined;
-      const usageStore = requestStore || new Map<string, number>();
-      (globalThis as any).__chartAnalyzerUsage = usageStore;
-      const usedToday = usageStore.get(usageKey) || 0;
-      if (usedToday >= dailyLimit) {
-        return res.status(429).json({ error: `Daily chart analysis limit reached (${dailyLimit}/${dailyLimit}).` });
-      }
-      usageStore.set(usageKey, usedToday + 1);
-
+      // Strip data URL prefix if present
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      const imageMimeType = imageBase64.match(/^data:(image\/[\w.+-]+);base64,/)?.[1] || 'image/png';
-      const notProvided = 'Not visible / not provided';
-      const toText = (value: unknown, fallback = notProvided) => {
-        if (value === null || value === undefined) return fallback;
-        const text = String(value).trim();
-        return text || fallback;
-      };
-      let serverCalendar: any[] = [];
-      let calendarFetchSucceeded = false;
-      let calendarSource = process.env.ECONOMIC_CALENDAR_URL
-        ? 'Configured live economic calendar'
-        : 'Forex Factory economic calendar feed';
-      try {
-        serverCalendar = await getEconomicCalendar();
-        calendarFetchSucceeded = true;
-      } catch (error: any) {
-        console.warn('[CHART ANALYZER] Economic calendar unavailable:', error?.message || error);
-        calendarSource = 'Live economic calendar unavailable';
-      }
-      const requestedPair = toText(pair, '');
-      const calendarRows = [
-        ...(Array.isArray(serverCalendar) ? serverCalendar : []),
-        ...(Array.isArray(economicCalendar)
-          ? economicCalendar
-          : Array.isArray(economicCalendar?.events) ? economicCalendar.events : []),
-        ...(Array.isArray(recentReleases)
-          ? recentReleases
-          : Array.isArray(recentReleases?.events) ? recentReleases.events : [])
-      ];
-      const pairCalendar = getRelevantCalendarEvents(calendarRows, requestedPair);
-      const compactCalendar = pairCalendar
-        .slice(0, 20)
-        .map((event: any) => ({
-          currency: toText(event?.currency || event?.currencyCode),
-          event: toText(event?.event || event?.name || event?.title),
-          impact: toText(event?.impact),
-          time: toText(event?.time || event?.date),
-          status: toText(event?.status || (
-            event?.actual !== undefined &&
-            event?.actual !== null &&
-            String(event.actual).trim()
-              ? 'Released'
-              : 'Upcoming'
-          )),
-          actual: toText(event?.actual),
-          forecast: toText(event?.forecast),
-          previous: toText(event?.previous)
-        }));
-      const hasSuppliedNews = compactCalendar.length > 0;
-      const calendarPayload = hasSuppliedNews
-        ? JSON.stringify(compactCalendar)
-        : calendarFetchSucceeded
-          ? 'Live economic calendar checked. No relevant events were returned for this request. Do not invent events, headlines, or economic values.'
-          : 'Live economic calendar unavailable. Do not invent events, headlines, or economic values.';
-      const currentDate = new Date().toISOString().slice(0, 10);
-
-      const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer. You are an analysis assistant, not a guaranteed prediction engine.
-Today is ${currentDate} UTC.
-
-Analyze the attached trading-chart screenshot and the live economic-calendar data fetched by the application. The server-fetched calendar data is the source of news truth for this request. Do not browse the web, use Google Search, or invent any missing information.
-
-Screenshot rules:
-- First judge whether the screenshot is readable enough to analyze.
-- Identify the pair, timeframe, current price, chart type, visible indicators, market structure, trend, price action, support, and resistance only when visible.
-- Use only indicators actually visible in the screenshot.
-- Describe HH/HL, LH/LL, range, breakout, breakdown, retest, liquidity sweep, or change of character only when clearly supported.
-- Use higher timeframe information for trend and major levels, and lower timeframe information for entry when multiple timeframes are provided.
-- Do not invent prices, indicators, patterns, news, event values, or sources. Use "${notProvided}" for unavailable values.
-
-News rules:
-- Treat the server-fetched calendar as the source of truth. You are acting as an FX economic-news analysis engine: analyze only the provided verified calendar data. Do not invent events, dates, times, forecasts, previous values, or actual results.
-- Distinguish Upcoming from Released.
-- Compare Actual, Forecast, and Previous only when those values are supplied.
-- Identify affected currency, event, impact, news bias, and big-move risk without claiming certainty.
-- For Upcoming events where Actual is unavailable, use only conditional scenario language: "If stronger than expected...", "If weaker than expected...", "Could support USD...", "Could pressure EUR...". Never state a guaranteed direction such as "USD will rise" or a guaranteed price level. Your analysis is informational and must not claim certainty.
-- Classify volatilityRisk as LOW, MEDIUM, HIGH, or EXTREME based on event importance and timing. Classify pairRelevance as LOW, MEDIUM, or HIGH based on whether the event affects the analyzed pair's two currencies.
-- Provide bullishScenario and bearishScenario as short conditional sentences describing what could happen under each outcome, using only the supplied calendar data. Use "${notProvided}" when no relevant event is supplied.
-- Set tradingAction to CONFIRMED when the chart setup is clean with no material news warning, WAIT_FOR_CONFIRMATION when a nearby high-impact event or unclear structure means better confirmation is needed, or NONE when no trade is proposed.
-- If the live calendar was checked but no relevant event was returned, say that the live calendar was checked and no relevant event was found. Never say the customer failed to attach news.
-
-Decision rules:
-- Return exactly one final signal: BUY, SELL, or WAIT.
-- If the screenshot shows a meaningful bullish or bearish directional structure, return BUY or SELL only after selecting exact Entry, structural SL, TP1, TP2, and TP3 prices. Always attempt to identify all three valid structural or liquidity targets before deciding. If any required level cannot be reliably determined, return WAIT with an explanation. Do not use UNKNOWN or UNVERIFIED as the primary signal.
-- Use WAIT when the screenshot is unreadable, the structure is neutral or unclear, the price has no meaningful directional setup, no plausible structural invalidation can be identified, or a complete three-target plan cannot be validated.
-- Entry must be based on breakout confirmation, retest, support/resistance rejection, or continuation, not merely the current price.
-- BUY stop loss belongs below the most recent meaningful support/swing low plus a visible volatility buffer. SELL stop loss belongs above the most recent meaningful resistance/swing high plus a visible volatility buffer.
-- Never put SL at the entry, inside the recent candle wick, or inside normal consolidation noise. Do not use an arbitrary tiny distance just to make the R:R look attractive. A wider technically protected SL is better than a tight noise stop; position size should be reduced to keep risk controlled.
-- Use the next clear structural invalidation level when the nearest swing is too close. If no reliable invalidation level or buffer is visible, keep the existing signal behavior and mark the SL level "${notProvided}" rather than inventing a tight SL.
-- TP1 must provide at least 1:2 R:R using the actual selected entry and structural stop loss. For SELL, risk = SL - Entry and reward = Entry - TP. For BUY, risk = Entry - SL and reward = TP - Entry.
-- TP1 is the first realistic target, TP2 is the next meaningful target after TP1, and TP3 is the next major target after TP2. TP2 and TP3 are required for a valid BUY or SELL plan and should provide progressively better R:R.
-- If the nearest target is below 1:2, do not tighten or move the structural SL. Find the next valid visible structural or liquidity target and recalculate TP1. If no realistic 1:2 target exists, return WAIT.
-- Never invent or move a target only to manufacture 1:2. If three realistic visible targets cannot be identified, return WAIT rather than returning an incomplete trade plan.
-- Every Entry, SL, TP1, TP2, and TP3 value must be one exact numeric price, never a price range or prose. If an exact value cannot be selected, use "${notProvided}".
-- Calculate approximate R:R for each target only when the numbers are reliable. Prefer WAIT when TP1 risk/reward is below 1:2.
-- Confidence is setup quality, not a guaranteed win probability. Never artificially increase it.
-
-Return only valid JSON with this exact shape:
-{
-  "instrument": "${requestedPair || notProvided}",
-  "timeframe": "${toText(timeframe)}",
-  "currentPrice": "${toText(currentPrice)}",
-  "chartQuality": "Sufficient/Insufficient",
-  "marketStructure": "description",
-  "trend": "Strong bullish/Bullish/Neutral/Bearish/Strong bearish",
-  "technicalBias": "Bullish/Bearish/Neutral",
-  "support": "${notProvided}",
-  "resistance": "${notProvided}",
-  "priceAction": "description",
-  "indicators": ["only visible indicators and readings"],
-  "chartDecision": "BUY/SELL/WAIT",
-  "newsBias": "Bullish/Bearish/Neutral/UNKNOWN",
-  "affectedCurrency": "${notProvided}",
-  "importantEvent": "${notProvided}",
-  "eventStatus": "Upcoming/Released/${notProvided}",
-  "actual": "${notProvided}",
-  "forecast": "${notProvided}",
-  "previous": "${notProvided}",
-  "newsImpact": "Low/Medium/High/Extreme/UNKNOWN",
-  "bigMoveRisk": "Low/Medium/High/Extreme/UNKNOWN",
-  "volatilityRisk": "LOW/MEDIUM/HIGH/EXTREME/UNKNOWN",
-  "pairRelevance": "LOW/MEDIUM/HIGH/UNKNOWN",
-  "bullishScenario": "conditional scenario or ${notProvided}",
-  "bearishScenario": "conditional scenario or ${notProvided}",
-  "tradingAction": "CONFIRMED/WAIT_FOR_CONFIRMATION/NONE",
-  "newsDecision": "SUPPORTS BUY/SUPPORTS SELL/CONFLICTS/NO CLEAR EDGE/UNVERIFIED",
-  "newsSummary": "summary using only supplied data",
-  "fundamentalBias": "Bullish/Bearish/Neutral/UNKNOWN",
-  "alignment": "Strong/Moderate/Conflicting/Unverified",
-  "mainReasons": ["reason 1", "reason 2", "reason 3"],
-  "conflictingSignals": "description or ${notProvided}",
-  "signal": "BUY/SELL/WAIT",
-  "confidence": 0,
-  "entry": "${notProvided}",
-  "sl": "${notProvided}",
-  "stopLoss": "${notProvided}",
-  "stopLossBasis": "meaningful swing/support/resistance and volatility buffer used, or ${notProvided}",
-  "stopLossQuality": "Protected/Too tight/Unclear",
-  "tp1": "${notProvided}",
-  "tp2": "${notProvided}",
-  "tp3": "${notProvided}",
-  "riskReward": { "tp1": "${notProvided}", "tp2": "${notProvided}", "tp3": "${notProvided}" },
-  "invalidation": "what invalidates the setup",
-  "newsRisk": "relevant news risk",
-  "mainRisk": "biggest failure risk",
-  "reasoning": "concise explanation",
-  "decisionSummary": "why BUY, SELL, or WAIT was selected",
-  "warnings": "risks and educational disclaimer"
-}
-
-APPLICATION ECONOMIC CALENDAR DATA:
-${calendarPayload}`;
       
-      const chartAnalyzerModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
-      let response: any = null;
-      let lastAiError: any = null;
-      for (let modelAttempt = 0; modelAttempt < chartAnalyzerModels.length; modelAttempt++) {
-        const modelName = chartAnalyzerModels[modelAttempt];
-        try {
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: [{
-              role: 'user',
-              parts: [
-                { text: chartAnalyzerPrompt },
-                {
-                  inlineData: {
-                    mimeType: imageMimeType,
-                    data: base64Data
-                  }
-                }
-              ]
-            }],
-            config: {
-              temperature: 0.2,
-              maxOutputTokens: 4096,
-              responseMimeType: 'application/json',
-              responseSchema: chartAnalysisResponseSchema,
-              thinkingConfig: { thinkingBudget: 0 }
+      const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst specialized in generating actionable trading signals.
+
+Analyze this trading chart screenshot using professional price action methodology.
+
+Determine:
+1. Trend (Bullish/Bearish/Range)
+2. Market Structure (HH/HL/LH/LL or Neutral)
+3. Support & Resistance levels
+4. Momentum (Strong/Weak/Exhausted)
+5. Setup Quality (Breakout/Pullback/Rejection/Continuation)
+6. Trade Decision (BUY/SELL/WAIT)
+7. Entry Price
+8. Stop Loss (beyond nearest swing)
+9. TP1, TP2, TP3 (logical levels, TP1 min 1:1.5 RR)
+10. Risk:Reward ratio
+11. Confidence Score (0-100%)
+12. Reasoning (why this trade exists)
+13. Warnings (any risks to be aware of)
+
+CRITICAL RULES FOR SIGNAL GENERATION:
+- GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, higher timeframe structure, and confluence of price action
+- Only return WAIT if: (1) setup is genuinely unclear, (2) momentum is exhausted/reversal imminent, (3) price is in a true ranging market
+- For strong trends with higher highs/lows: Return BUY if trend is bullish and structure is clear (breakout or pullback both valid)
+- For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
+- Stop Loss must be beyond the nearest valid swing high/low
+- Never place SL inside market noise
+- Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
+- ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades
+- For WAIT trades, still show hypothetical levels based on nearest swing points
+- Never invent prices; only use what is clearly visible
+- Confidence should reflect: Strong clear setups = 75-95%, Decent setups = 60-75%, Ambiguous = 40-60%, Unclear = <40%
+
+Return the analysis in this exact JSON format:
+{
+  "instrument": "detected pair",
+  "timeframe": "detected TF",
+  "trend": "Bullish/Bearish/Range",
+  "marketStructure": "description",
+  "support": "price level",
+  "resistance": "price level",
+  "trade": "BUY/SELL/WAIT",
+  "entry": "price",
+  "stopLoss": "price",
+  "tp1": "price",
+  "tp2": "price",
+  "tp3": "price",
+  "riskReward": "ratio",
+  "confidence": number,
+  "reasoning": "explanation",
+  "warnings": "risks"
+}`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: chartAnalyzerPrompt },
+            {
+              inlineData: {
+                mimeType: 'image/png',
+                data: base64Data
+              }
             }
-          });
-          break;
-        } catch (aiError: any) {
-          lastAiError = aiError;
-          const status = aiError?.status;
-          const message = String(aiError?.message || '');
-          const retryable = status === 429 || status === 503 || status === 500 ||
-            /429|503|UNAVAILABLE|RESOURCE_EXHAUSTED|OVERLOADED|high demand|temporarily/i.test(message);
-          console.warn(`[CHART ANALYZER] Model ${modelName} failed (status=${status ?? 'n/a'}): ${message.slice(0, 120)}`);
-          if (!retryable || modelAttempt === chartAnalyzerModels.length - 1) break;
-          await new Promise((resolve) => setTimeout(resolve, 6000));
+          ]
+        }],
+        config: {
+          temperature: 0.3,
+          responseMimeType: 'application/json'
+        }
+      });
+      
+      const analysisText = response.text;
+      let analysis;
+      
+      try {
+        analysis = JSON.parse(analysisText);
+      } catch (e) {
+        // If Gemini didn't return pure JSON, extract it
+        const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysis = JSON.parse(jsonMatch[0]);
+        } else {
+          analysis = {
+            instrument: "Unknown",
+            timeframe: "Unknown",
+            trend: "Unable to determine",
+            marketStructure: "Analysis failed to parse",
+            support: "N/A",
+            resistance: "N/A",
+            trade: "WAIT",
+            entry: "N/A",
+            stopLoss: "N/A",
+            tp1: "N/A",
+            tp2: "N/A",
+            tp3: "N/A",
+            riskReward: "N/A",
+            confidence: 0,
+            reasoning: analysisText,
+            warnings: "Could not parse structured response"
+          };
         }
       }
-      if (!response) {
-        usageStore.set(usageKey, usedToday);
-        throw lastAiError || new Error('Chart analysis failed');
-      }
-      
-      const analysisText = response.text || response.candidates?.[0]?.content?.parts
-        ?.filter((part: any) => typeof part?.text === 'string')
-        .map((part: any) => part.text)
-        .join('') || '';
-      if (!analysisText.trim()) {
-        console.warn('[CHART ANALYZER] Gemini returned no text', {
-          finishReason: response.candidates?.[0]?.finishReason || null,
-          blockReason: response.promptFeedback?.blockReason || null
-        });
-      }
-      let analysis;
-      const analysisDefaults = {
-        instrument: requestedPair || notProvided,
-        timeframe: toText(timeframe),
-        currentPrice: toText(currentPrice),
-        chartQuality: 'Insufficient',
-        marketStructure: notProvided,
-        trend: 'Neutral',
-        technicalBias: 'Neutral',
-        support: notProvided,
-        resistance: notProvided,
-        priceAction: notProvided,
-        indicators: [],
-        chartDecision: 'WAIT',
-        newsBias: hasSuppliedNews ? 'UNKNOWN' : notProvided,
-        affectedCurrency: notProvided,
-        importantEvent: notProvided,
-        eventStatus: notProvided,
-        actual: notProvided,
-        forecast: notProvided,
-        previous: notProvided,
-        newsImpact: hasSuppliedNews ? 'UNKNOWN' : notProvided,
-        bigMoveRisk: hasSuppliedNews ? 'UNKNOWN' : notProvided,
-        volatilityRisk: hasSuppliedNews ? 'UNKNOWN' : notProvided,
-        pairRelevance: hasSuppliedNews ? 'UNKNOWN' : notProvided,
-        bullishScenario: notProvided,
-        bearishScenario: notProvided,
-        tradingAction: 'NONE',
-        newsDecision: 'UNVERIFIED',
-        newsSummary: hasSuppliedNews
-          ? 'No clear news edge was established from the live calendar data.'
-          : calendarFetchSucceeded
-            ? 'The live calendar was checked; no relevant event was returned.'
-            : 'The live economic calendar was unavailable for this scan.',
-        fundamentalBias: hasSuppliedNews ? 'UNKNOWN' : notProvided,
-        alignment: 'Unverified',
-        mainReasons: [],
-        conflictingSignals: notProvided,
-        signal: 'WAIT',
-        trade: 'WAIT',
-        confidence: 0,
-        entry: notProvided,
-        sl: notProvided,
-        stopLoss: notProvided,
-        stopLossBasis: notProvided,
-        stopLossQuality: 'Unclear',
-        tp1: notProvided,
-        tp2: notProvided,
-        tp3: notProvided,
-        riskReward: { tp1: notProvided, tp2: notProvided, tp3: notProvided },
-        invalidation: notProvided,
-        newsRisk: hasSuppliedNews ? 'Review the supplied calendar before entering.' : 'No verified calendar risk was found.',
-        mainRisk: notProvided,
-        reasoning: notProvided,
-        decisionSummary: notProvided,
-        warnings: 'Educational analysis only. Not financial advice.',
-      };
-      
-      analysis = parseStructuredJson(analysisText);
-      if (!analysis) {
-        console.warn(`[CHART ANALYZER] Invalid structured response (${analysisText.length} characters)`);
-        return res.status(502).json({
-          error: 'Chart analysis could not be completed. Please retry the screenshot analysis.'
-        });
-      }
-
-      const validDecisions = new Set(['BUY', 'SELL', 'WAIT']);
-      const chartDecision = String(analysis.chartDecision || analysis.signal || analysis.trade || 'WAIT').toUpperCase();
-      const normalizedChartDecision = validDecisions.has(chartDecision) ? chartDecision : 'WAIT';
-      const stopLossQuality = String(analysis.stopLossQuality || '').toUpperCase();
-      const stopLossIsTooTight = stopLossQuality.includes('TOO TIGHT') || stopLossQuality.includes('TIGHT');
-      const parseExactPrice = (value: unknown) => {
-        if (typeof value === 'number' && Number.isFinite(value)) return value;
-        const text = String(value || '').trim().replace(/,/g, '');
-        if (!/^-?\d+(?:\.\d+)?$/.test(text)) return null;
-        const parsed = Number(text);
-        return Number.isFinite(parsed) ? parsed : null;
-      };
-      const selectedEntry = parseExactPrice(analysis.entry);
-      const selectedStopLoss = parseExactPrice(analysis.sl || analysis.stopLoss);
-      const selectedTp1 = parseExactPrice(analysis.tp1);
-      const selectedTp2 = parseExactPrice(analysis.tp2);
-      const selectedTp3 = parseExactPrice(analysis.tp3);
-      const hasReliableLevels = selectedEntry !== null &&
-        selectedStopLoss !== null &&
-        selectedTp1 !== null &&
-        selectedTp2 !== null &&
-        selectedTp3 !== null;
-      const direction = normalizedChartDecision;
-      const targetsAreDirectional = direction === 'SELL'
-        ? selectedEntry !== null &&
-          selectedTp1 !== null &&
-          selectedTp2 !== null &&
-          selectedTp3 !== null &&
-          selectedEntry > selectedTp1 &&
-          selectedTp1 > selectedTp2 &&
-          selectedTp2 > selectedTp3
-        : direction === 'BUY'
-          ? selectedEntry !== null &&
-            selectedTp1 !== null &&
-            selectedTp2 !== null &&
-            selectedTp3 !== null &&
-            selectedEntry < selectedTp1 &&
-            selectedTp1 < selectedTp2 &&
-            selectedTp2 < selectedTp3
-          : false;
-      const risk = selectedEntry !== null && selectedStopLoss !== null && direction === 'SELL'
-        ? selectedStopLoss - selectedEntry
-        : selectedEntry !== null && selectedStopLoss !== null && direction === 'BUY'
-          ? selectedEntry - selectedStopLoss
-          : null;
-      const tp1Reward = selectedEntry !== null && selectedTp1 !== null && direction === 'SELL'
-        ? selectedEntry - selectedTp1
-        : selectedEntry !== null && selectedTp1 !== null && direction === 'BUY'
-          ? selectedTp1 - selectedEntry
-          : null;
-      const tp1RiskReward = risk !== null && tp1Reward !== null && risk > 0
-        ? tp1Reward / risk
-        : null;
-      const tp1MeetsMinimumRiskReward = tp1RiskReward !== null && tp1RiskReward >= 2;
-      const calculateRiskReward = (target: number | null) => {
-        if (risk === null || target === null || risk <= 0) return notProvided;
-        const reward = direction === 'SELL'
-          ? selectedEntry! - target
-          : direction === 'BUY'
-            ? target - selectedEntry!
-            : null;
-        return reward !== null && reward > 0
-          ? `1:${(reward / risk).toFixed(2)}`
-          : notProvided;
-      };
-      const newsDecision = String(analysis.newsDecision || 'UNVERIFIED').toUpperCase();
-      const newsConflictsWithChart = newsDecision.includes('CONFLICT');
-      const eventStatus = String(analysis.eventStatus || '').toUpperCase();
-      const bigMoveRisk = String(analysis.bigMoveRisk || '').toUpperCase();
-      const imminentHighImpactNews = hasSuppliedNews &&
-        ['HIGH', 'EXTREME'].includes(bigMoveRisk) &&
-        ['UPCOMING', 'RECENTLY RELEASED'].some((status) => eventStatus.includes(status));
-      // Deterministic pre-news protection: this cannot be bypassed by the model's own output.
-      const newsBlockCheck = getNewsBlockStatus(pairCalendar, new Date());
-      const newsBlockReason = newsBlockCheck.blocked
-        ? (() => {
-            const blockedEvent = newsBlockCheck.event;
-            const eventName = toText(blockedEvent?.event || blockedEvent?.name || blockedEvent?.title, 'A high-impact event');
-            const eventCurrency = toText(blockedEvent?.currency || blockedEvent?.currencyCode || blockedEvent?.country, '');
-            const minuteLabel = `${newsBlockCheck.minutes} minute${newsBlockCheck.minutes === 1 ? '' : 's'}`;
-            const currencySuffix = eventCurrency && eventCurrency !== notProvided ? ` (${eventCurrency})` : '';
-            return newsBlockCheck.direction === 'before'
-              ? `${eventName}${currencySuffix} is due in ${minuteLabel} — new entries are paused ${NEWS_BLOCK_BEFORE_MIN} minutes before high-impact news.`
-              : `${eventName}${currencySuffix} was released ${minuteLabel} ago — entries stay paused for ${NEWS_BLOCK_AFTER_MIN} minutes after high-impact news.`;
-          })()
-        : notProvided;
-      const chartSetupIsActionable = normalizedChartDecision !== 'WAIT' &&
-        hasReliableLevels &&
-        targetsAreDirectional &&
-        !stopLossIsTooTight &&
-        tp1MeetsMinimumRiskReward &&
-        !newsBlockCheck.blocked;
-      const finalDecision = normalizedChartDecision !== 'WAIT'
-        && hasReliableLevels
-        && targetsAreDirectional
-        && !stopLossIsTooTight
-        && tp1MeetsMinimumRiskReward
-        && !newsBlockCheck.blocked
-        ? normalizedChartDecision
-        : 'WAIT';
-      const confidenceValue = Number(analysis.confidence);
-      const confidence = Number.isFinite(confidenceValue)
-        ? Math.max(0, Math.min(100, Math.round(confidenceValue)))
-        : 0;
-      const newsRiskAdjustment = newsConflictsWithChart || imminentHighImpactNews || newsBlockCheck.blocked;
-      const chartOnlyDecision = finalDecision !== 'WAIT' &&
-        (!hasSuppliedNews || newsDecision === 'UNVERIFIED' || newsDecision === 'NO CLEAR EDGE');
-      const riskReward = {
-        tp1: tp1MeetsMinimumRiskReward ? calculateRiskReward(selectedTp1) : notProvided,
-        tp2: calculateRiskReward(selectedTp2),
-        tp3: calculateRiskReward(selectedTp3)
-      };
-      const shouldExposeTradePlan = finalDecision !== 'WAIT' &&
-        tp1MeetsMinimumRiskReward &&
-        targetsAreDirectional;
-      const outputTradeLevel = (value: unknown) => {
-        if (!shouldExposeTradePlan) return notProvided;
-        const exactPrice = parseExactPrice(value);
-        return exactPrice === null ? notProvided : String(exactPrice);
-      };
-
-      analysis = {
-        ...analysisDefaults,
-        ...analysis,
-        instrument: toText(analysis.instrument, requestedPair || notProvided),
-        timeframe: toText(analysis.timeframe, toText(timeframe)),
-        currentPrice: toText(analysis.currentPrice, toText(currentPrice)),
-        chartQuality: toText(analysis.chartQuality, 'Insufficient'),
-        indicators: Array.isArray(analysis.indicators) ? analysis.indicators : [],
-        chartDecision: normalizedChartDecision,
-        finalDecision,
-        signal: finalDecision,
-        trade: finalDecision,
-        signalType: finalDecision === 'WAIT'
-          ? 'WAIT'
-          : chartSetupIsActionable ? 'CONFIRMED' : 'CONDITIONAL',
-        confidence: finalDecision === 'WAIT'
-          ? Math.min(confidence, 69)
-          : Math.max(0, Math.min(confidence, chartOnlyDecision ? 79 : newsRiskAdjustment ? 69 : 100)),
-        signalSource: chartOnlyDecision
-          ? 'Chart-only'
-          : newsRiskAdjustment ? 'Chart signal with news risk warning' : 'Chart + economic calendar',
-        entry: outputTradeLevel(analysis.entry),
-        sl: outputTradeLevel(analysis.sl || analysis.stopLoss),
-        stopLoss: outputTradeLevel(analysis.stopLoss || analysis.sl),
-        stopLossBasis: toText(analysis.stopLossBasis),
-        stopLossQuality: toText(analysis.stopLossQuality, 'Unclear'),
-        tp1: outputTradeLevel(analysis.tp1),
-        tp2: outputTradeLevel(analysis.tp2),
-        tp3: outputTradeLevel(analysis.tp3),
-        riskReward,
-        mainReasons: Array.isArray(analysis.mainReasons) ? analysis.mainReasons : [toText(analysis.reasoning)],
-        affectedCurrency: toText(analysis.affectedCurrency),
-        importantEvent: toText(analysis.importantEvent),
-        eventStatus: toText(analysis.eventStatus),
-        actual: toText(analysis.actual),
-        forecast: toText(analysis.forecast),
-        previous: toText(analysis.previous),
-        newsDecision: hasSuppliedNews ? newsDecision : 'UNVERIFIED',
-        newsSummary: toText(
-          analysis.newsSummary,
-          hasSuppliedNews
-            ? 'No clear news edge was established from the live calendar data.'
-            : calendarFetchSucceeded
-              ? 'The live calendar was checked; no relevant event was returned for this request.'
-              : 'The live economic calendar was unavailable for this scan.'
-        ),
-        newsGrounded: hasSuppliedNews,
-        newsSource: hasSuppliedNews ? calendarSource : 'Live economic calendar unavailable',
-        newsStatus: hasSuppliedNews
-          ? 'Live calendar checked'
-          : calendarFetchSucceeded
-            ? 'Live calendar checked — no relevant event found'
-            : 'Live calendar unavailable',
-        newsSources: [],
-        newsCheckedAt: currentDate,
-        volatilityRisk: toText(analysis.volatilityRisk, hasSuppliedNews ? 'UNKNOWN' : notProvided),
-        pairRelevance: toText(analysis.pairRelevance, hasSuppliedNews ? 'UNKNOWN' : notProvided),
-        bullishScenario: toText(analysis.bullishScenario),
-        bearishScenario: toText(analysis.bearishScenario),
-        tradingAction: newsBlockCheck.blocked
-          ? 'WAIT_FOR_CONFIRMATION'
-          : toText(analysis.tradingAction, finalDecision === 'WAIT' ? 'WAIT_FOR_CONFIRMATION' : 'CONFIRMED'),
-        eventTiming: getNearestRelevantEventTiming(pairCalendar, new Date(), notProvided),
-        newsBlockReason,
-        decisionSummary: finalDecision === 'WAIT'
-          ? newsBlockCheck.blocked
-            ? newsBlockReason
-            : tp1RiskReward !== null && tp1RiskReward < 2
-              ? 'WAIT was selected because the realistic TP1 target did not provide the required minimum 1:2 R:R. The structural Stop Loss was not tightened.'
-              : !targetsAreDirectional
-                ? 'WAIT was selected because a complete directional TP1, TP2, and TP3 structure could not be validated from the visible chart.'
-              : 'WAIT was selected because the chart did not provide a reliable actionable setup.'
-          : newsConflictsWithChart
-            ? 'The chart provides the signal, but supplied news conflicts with the direction. Confidence is reduced; use caution.'
-            : imminentHighImpactNews
-              ? 'The chart provides the signal, but nearby high-impact news increases big-move risk. Confidence is reduced; use caution.'
-          : chartOnlyDecision
-            ? 'The chart provides an actionable setup. News was unavailable or unverified, so treat this as chart-only analysis and use extra caution.'
-            : toText(analysis.decisionSummary, 'The chart and supplied calendar data provide aligned confirmation.'),
-        warnings: toText(analysis.warnings, 'Educational analysis only. Not financial advice.')
-      };
       
       res.json({ success: true, analysis });
     } catch (e: any) {

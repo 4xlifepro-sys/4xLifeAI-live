@@ -120,7 +120,7 @@ export function adaptCtraderData(raw: RawPricesResponse, overrides: AdapterOverr
   };
 
   return {
-    brand: "4xLifeAI",
+    brand: "4xFiveAI",
     tagline: "Premium Signal Intelligence",
     session: overrides.session ?? "LIVE SESSION",
     pairCount: raw.prices.length,

@@ -1,6 +1,6 @@
 {
-  "name": "4xLifeAI",
-  "short_name": "4xLifeAI",
+  "name": "4xFiveAI",
+  "short_name": "4xFiveAI",
   "description": "Premium live signal intelligence",
   "start_url": "/dashboard",
   "display": "standalone",

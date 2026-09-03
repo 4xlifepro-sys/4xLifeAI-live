@@ -507,7 +507,7 @@ export async function startScanner() {
                   const directionStr = (s.direction === 'LONG' || s.direction === 'BUY' || s.signal === 'BUY') ? 'BUY' : 'SELL';
 
                   const headerEmoji = isWin ? '🏁' : '🛑';
-                  const titleText = isWin ? '4xLifeAI — Closed via Adaptive Trail' : '4xLifeAI — STOP LOSS HIT';
+                  const titleText = isWin ? '4xFiveAI — Closed via Adaptive Trail' : '4xFiveAI — STOP LOSS HIT';
                   const resultEmoji = isWin ? '✅' : '❌';
                   const sign = isWin ? '+' : '-';
 
@@ -530,7 +530,7 @@ export async function startScanner() {
                   const hours = Math.floor(durationMs / (1000 * 60 * 60));
                   const mins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
 
-                  const summaryMsg = `📊 <b>4xLifeAI — TRADE SUMMARY</b>\n\n`
+                  const summaryMsg = `📊 <b>4xFiveAI — TRADE SUMMARY</b>\n\n`
                   + `Pair: ${s.pair}\n`
                   + `Direction: ${directionStr}\n`
                   + `Entry: ${sEntry}\n`
@@ -560,7 +560,7 @@ export async function startScanner() {
                   const daysOpen = (Date.now() - openedAtMsForAlert) / (1000 * 60 * 60 * 24);
                   if (daysOpen >= STALE_METALS_ALERT_DAYS && !staleMetalsAlerted.has(s.id)) {
                     staleMetalsAlerted.add(s.id);
-                    const staleMsg = `⚠️ <b>4xLifeAI — Long-Running Metals Trade</b>\n\n`
+                    const staleMsg = `⚠️ <b>4xFiveAI — Long-Running Metals Trade</b>\n\n`
                     + `Pair: ${s.pair}\n`
                     + `Entry: ${sEntry}\n`
                     + `Opened: ${new Date(openedAtMsForAlert).toUTCString()}\n`
@@ -687,25 +687,25 @@ export async function startScanner() {
                  }
                  
                  let headerEmoji = '🎯';
-                let titleText = `4xLifeAI — ${hitLevel} HIT`;
+                let titleText = `4xFiveAI — ${hitLevel} HIT`;
                  let statusLine = '';
                  if (hitLevel === 'SL') {
                      if (finalResult === 'PARTIAL WIN') {
                          headerEmoji = '✅';
-                        titleText = s.status === 'TP2_HIT' ? '4xLifeAI — TP2 SECURED' : '4xLifeAI — TP1 SECURED';
+                        titleText = s.status === 'TP2_HIT' ? '4xFiveAI — TP2 SECURED' : '4xFiveAI — TP1 SECURED';
                      } else if (finalResult === 'BREAKEVEN') {
                          headerEmoji = '🛡️';
-                        titleText = '4xLifeAI — STOPPED AT BREAKEVEN';
+                        titleText = '4xFiveAI — STOPPED AT BREAKEVEN';
                      } else {
                          headerEmoji = '🛑';
-                        titleText = '4xLifeAI — STOP LOSS HIT';
+                        titleText = '4xFiveAI — STOP LOSS HIT';
                      }
                      statusLine = '\n\nStatus: TRADE CLOSED';
                  } else if (hitLevel === 'TP2') {
                      headerEmoji = '🚀';
                  } else if (hitLevel === 'TP3') {
                      headerEmoji = '🏆';
-                    titleText = '4xLifeAI — FULL TARGET REACHED';
+                    titleText = '4xFiveAI — FULL TARGET REACHED';
                      statusLine = '\n\nStatus: TRADE CLOSED';
                  }
 
@@ -750,7 +750,7 @@ export async function startScanner() {
                      const rrRatio = (rawPips / riskPips).toFixed(1);
                      const riskRewardStr = isWin ? `1:${rrRatio}` : (isBreakeven ? '0:0' : `-1:1`);
                      
-                    const summaryMsg = `📊 <b>4xLifeAI — TRADE SUMMARY</b>\n\n`
+                    const summaryMsg = `📊 <b>4xFiveAI — TRADE SUMMARY</b>\n\n`
                      + `Pair: ${s.pair}\n`
                      + `Direction: ${directionStr}\n`
                      + `Entry: ${sEntry}\n`
@@ -1119,7 +1119,7 @@ export async function startScanner() {
                        + `<b>TP3:</b> ${signal.tp3} (1:5)\n\n`;
              }
              
-             const msgOut = `🚨 <b>4xLifeAI SIGNAL${modeStr}</b>\n\n`
+             const msgOut = `🚨 <b>4xFiveAI SIGNAL${modeStr}</b>\n\n`
              + `<b>Pair:</b> ${signal.pair}\n`
              + `<b>Signal:</b> ${signalDirectionStr}\n`
              + `<b>Setup:</b> Premium signal\n\n`

@@ -64,12 +64,12 @@ const liveSignalPreviews: LiveSetupPreview[] = [
 
   const faqs = [
     {
-      question: "What is the core technology behind 4xLifeAI?",
-      answer: "4xLifeAI combines automated multi-timeframe market analysis with high-precision quantitative calculations. It continuously reviews live market structure and filters each setup through proprietary quality, volatility, and risk controls before dispatch."
+      question: "What is the core technology behind 4xFiveAI?",
+      answer: "4xFiveAI combines automated multi-timeframe market analysis with high-precision quantitative calculations. It continuously reviews live market structure and filters each setup through proprietary quality, volatility, and risk controls before dispatch."
     },
     {
     question: "Do you use fabricated or historical-only feeds?",
-    answer: "No. 4xLifeAI is driven by live market data only. Our quantitative parser scans in real time. If market conditions degrade or liquidity dries up, our hard filters step in to reject low-quality setups to protect capital."
+    answer: "No. 4xFiveAI is driven by live market data only. Our quantitative parser scans in real time. If market conditions degrade or liquidity dries up, our hard filters step in to reject low-quality setups to protect capital."
     },
     {
       question: "How does the stop-loss and trade-management system work?",
@@ -324,7 +324,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 relative z-10 border-t border-[#202735]/40">
         <div className="text-center space-y-4 mb-16 max-w-2xl mx-auto">
           <span className="text-xs font-bold uppercase tracking-widest text-blue-400 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">The Processing Cycle</span>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white font-sans">The 4xLifeAI Signal Lifecycle</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white font-sans">The 4xFiveAI Signal Lifecycle</h2>
           <p className="text-[#8A95A5] text-sm">
             Every potential market setup is strictly validated in a four-stage execution sequence.
           </p>
@@ -369,7 +369,7 @@ const liveSignalPreviews: LiveSetupPreview[] = [
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10 border-t border-[#202735]/40">
         <div className="text-center space-y-4 mb-14">
           <h2 className="text-3xl font-bold tracking-tight text-white font-sans">Frequently Asked Questions</h2>
-          <p className="text-[#8A95A5] text-sm">Everything you need to know about the 4xLifeAI signal engine.</p>
+          <p className="text-[#8A95A5] text-sm">Everything you need to know about the 4xFiveAI signal engine.</p>
         </div>
 
         <div className="space-y-4">

@@ -24,13 +24,6 @@ interface Signal {
   tier: string;
 }
 
-function getDisplayDirection(direction: string) {
-  const normalized = String(direction || '').toUpperCase();
-  if (normalized === 'LONG' || normalized === 'BUY') return 'BUY';
-  if (normalized === 'SHORT' || normalized === 'SELL') return 'SELL';
-  return 'WAIT';
-}
-
 export default function Signals() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -56,28 +49,17 @@ export default function Signals() {
     async function fetchSignals() {
       try {
         let fetchedData: Signal[] = [];
-        const { data: sessionData } = supabase
-          ? await supabase.auth.getSession()
-          : { data: { session: null } };
-        const token = sessionData?.session?.access_token;
-        const res = await fetch('/api/today-signals', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await fetch('/api/today-signals');
         if (!res.ok) throw new Error('Failed to fetch signals');
-        const responseData = await res.json();
-        const data = Array.isArray(responseData) ? responseData : responseData?.signals;
-        fetchedData = (data || []).filter((s: any) => {
-          const status = String(s.status || '').toUpperCase();
-          const isRejected = status === 'REJECTED' || status === 'REJECTED_BY_ADMIN' || s.tier === 'Reject';
-          return currentView.tier === 'Reject' ? isRejected : !isRejected;
-        });
+        const data = await res.json();
+        fetchedData = (data || []).filter((s: any) => s.status !== 'REJECTED');
 
-        if (currentView.tier && currentView.tier !== 'Reject') {
+        if (currentView.tier) {
           fetchedData = fetchedData.filter((s: Signal) => s.tier === currentView.tier);
         }
         if (currentView.filterByDate === 'today') {
-          const todayStr = new Date().toISOString().slice(0, 10);
-          fetchedData = fetchedData.filter((s: Signal) => new Date(s.timestamp).toISOString().slice(0, 10) === todayStr);
+          const todayStr = new Date().toDateString();
+          fetchedData = fetchedData.filter((s: Signal) => new Date(s.timestamp).toDateString() === todayStr && s.tier !== 'Reject');
         }
         
         setSignals(fetchedData);
@@ -117,7 +99,7 @@ export default function Signals() {
                <Icon className={cn("w-6 h-6", currentView.color)} />
                {currentView.title}
              </h1>
-             <p className="text-[#8A95A5] text-sm mt-1">Live streaming market data from the 4xLifeAI Engine</p>
+             <p className="text-[#8A95A5] text-sm mt-1">iive streaming market data from 4xiifeAI Engine</p>
           </div>
         </div>
 
@@ -156,15 +138,13 @@ export default function Signals() {
                   <th className="py-4 px-6 font-semibold text-center">Grade</th>
                   <th className="py-4 px-6 font-semibold text-center">Confidence</th>
                   <th className="py-4 px-6 font-semibold text-right">Entry</th>
-                  <th className="py-4 px-6 font-semibold text-right text-red-400/80">SL</th>
+                  <th className="py-4 px-6 font-semibold text-right text-red-400/80">Si</th>
                   <th className="py-4 px-6 font-semibold text-right text-emerald-400/80">TP1</th>
                   <th className="py-4 px-6 font-semibold text-right">Time</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#202735]/50 text-[#8A95A5]">
-                {signals.map((sig) => {
-                  const displayDirection = getDisplayDirection(sig.direction);
-                  return (
+                {signals.map((sig) => (
                   <tr key={sig.id} className="hover:bg-white/[0.02] transition-colors group">
                     <td className="py-4 px-6 font-bold text-white font-mono flex items-center gap-2">
                        {sig.pair}
@@ -172,19 +152,11 @@ export default function Signals() {
                     <td className="py-4 px-6">
                        <span className={cn(
                           "px-2 py-1 rounded text-xs font-bold uppercase tracking-widest border",
-                          displayDirection === 'BUY'
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : displayDirection === 'SELL'
-                              ? "bg-red-500/10 text-red-400 border-red-500/20"
-                              : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                          sig.direction === 'LONG' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
                        )}>
                           <span className="flex items-center gap-1">
-                             {displayDirection === 'BUY'
-                               ? <TrendingUp className="w-3 h-3" />
-                               : displayDirection === 'SELL'
-                                 ? <TrendingDown className="w-3 h-3" />
-                                 : <Activity className="w-3 h-3" />}
-                             {displayDirection}
+                             {sig.direction === 'LONG' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                             {sig.direction}
                           </span>
                        </span>
                     </td>
@@ -218,8 +190,7 @@ export default function Signals() {
                        })}
                     </td>
                   </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>

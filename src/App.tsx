@@ -154,7 +154,7 @@ function GlobalLayout() {
           </span>
           <span className="font-semibold text-slate-300">Secure Signal Network</span>
           <span className="text-white font-black text-sm tracking-widest uppercase hover:text-blue-400 transition-colors drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-            4xLifeAI
+            4xFiveAI
           </span>
         </p>
       </div>
@@ -341,7 +341,7 @@ function GlobalLayout() {
                   }}
                   className="w-full flex items-center justify-center gap-3 px-4 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all uppercase text-sm tracking-wide border border-emerald-500/30 cursor-pointer"
                 >
-                  <span>Install 4xLifeAI App</span>
+                  <span>Install 4xFiveAI App</span>
                 </button>
               )}
 
@@ -395,7 +395,7 @@ function GlobalLayout() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3">
               <Logo size={24} />
-              <span className="font-bold text-sm tracking-tight text-white font-sans">4xLifeAI</span>
+              <span className="font-bold text-sm tracking-tight text-white font-sans">4xFiveAI</span>
               <span className="text-xs text-[#5D6B80] border-l border-[#202735] pl-3">Premium Signal Intelligence</span>
             </div>
             
@@ -410,7 +410,7 @@ function GlobalLayout() {
             </div>
 
             <div className="text-xs text-[#5D6B80]">
-              &copy; 2026 4xLifeAI. All rights reserved.
+              &copy; 2026 4xFiveAI. All rights reserved.
             </div>
           </div>
         </div>

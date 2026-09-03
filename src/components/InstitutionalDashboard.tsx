@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 
 /**
  * ============================================================================
- * 4xLifeAI — Professional Trading Terminal Dashboard
+ * 4xFiveAI — Professional Trading Terminal Dashboard
  * ============================================================================
  *
  * DESIGN DIRECTION: Institutional trading terminal (Bloomberg/Reuters-inspired),
@@ -92,7 +92,7 @@ interface DashboardData {
 // ---------------------------------------------------------------------------
 
 const sampleData: DashboardData = {
-  brand: "4xLifeAI",
+  brand: "4xFiveAI",
   tagline: "Premium Signal Intelligence",
   session: "LONDON SESSION",
   pairCount: 10,
