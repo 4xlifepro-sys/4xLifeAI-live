@@ -268,6 +268,23 @@ function savePrompts(prompts: any) {
   fs.writeFileSync(path.join(process.cwd(), 'prompts.json'), JSON.stringify(prompts, null, 2), 'utf8');
 }
 
+function getLimits() {
+  try {
+    const data = fs.readFileSync(path.join(process.cwd(), 'limits.json'), 'utf8');
+    const parsed = JSON.parse(data);
+    return {
+      freeDaily: Math.max(1, Number(parsed.freeDaily) || 4),
+      proDaily: Math.max(1, Number(parsed.proDaily) || 30),
+    };
+  } catch (e) {
+    return { freeDaily: 4, proDaily: 30 };
+  }
+}
+
+function saveLimits(limits: { freeDaily: number; proDaily: number }) {
+  fs.writeFileSync(path.join(process.cwd(), 'limits.json'), JSON.stringify(limits, null, 2), 'utf8');
+}
+
 async function ensureAdminUser() {
   if (!supabase) {
     console.warn('[AUTH] Admin bootstrap skipped: Supabase client is not configured.');
@@ -1330,6 +1347,25 @@ async function startServer() {
   });
 
   app.use("/api/admin", requireAdmin);
+
+  app.get("/api/limits", (req, res) => {
+    res.json(getLimits());
+  });
+
+  app.get("/api/admin/limits", async (req, res) => {
+    res.json(getLimits());
+  });
+
+  app.post("/api/admin/limits", async (req, res) => {
+    try {
+      const freeDaily = Math.max(1, Math.min(9999, Math.round(Number(req.body?.freeDaily)) || 4));
+      const proDaily = Math.max(1, Math.min(9999, Math.round(Number(req.body?.proDaily)) || 30));
+      saveLimits({ freeDaily, proDaily });
+      res.json({ success: true, ...getLimits() });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   app.get("/api/admin/prompts", async (req, res) => {
     try {

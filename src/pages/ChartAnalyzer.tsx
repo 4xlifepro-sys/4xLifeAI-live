@@ -55,6 +55,7 @@ export default function ChartAnalyzer() {
   const [isPro, setIsPro] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const [showNewsDetail, setShowNewsDetail] = useState(false);
+  const [limits, setLimits] = useState({ freeDaily: 4, proDaily: 30 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -100,6 +101,17 @@ export default function ChartAnalyzer() {
   }, []);
 
   useEffect(() => {
+    fetch('/api/limits')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d && Number(d.freeDaily) > 0 && Number(d.proDaily) > 0) {
+          setLimits({ freeDaily: Number(d.freeDaily), proDaily: Number(d.proDaily) });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (isAnalyzing) {
       const interval = setInterval(() => {
         setAnalysisStep(prev => {
@@ -131,9 +143,9 @@ export default function ChartAnalyzer() {
   const handleAnalyze = async () => {
     if (!selectedImage) return;
     if (isPro) {
-      if (usage >= 30) { setError('Daily Pro limit reached (30/30). Reset at UTC 00:00.'); return; }
+      if (usage >= limits.proDaily) { setError(`Daily Pro limit reached (${limits.proDaily}/${limits.proDaily}). Reset at UTC 00:00.`); return; }
     } else {
-      if (usage >= 4) { setError('Daily free limit reached (4/4). Upgrade to Pro for 30 daily analyses!'); return; }
+      if (usage >= limits.freeDaily) { setError(`Daily free limit reached (${limits.freeDaily}/${limits.freeDaily}). Upgrade to Pro for ${limits.proDaily} daily analyses!`); return; }
     }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError(''); setShowNewsDetail(false);
     try {
@@ -224,12 +236,12 @@ export default function ChartAnalyzer() {
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> 4xLifeAI Engine
             </span>
             <span className="text-slate-600">•</span>
-            <span className="text-slate-400 font-medium">{isPro ? `${usage}/30 Pro Daily` : `${usage}/4 Free Daily`}</span>
+            <span className="text-slate-400 font-medium">{isPro ? `${usage}/${limits.proDaily} Pro Daily` : `${usage}/${limits.freeDaily} Free Daily`}</span>
             {!isPro && (
               <>
                 <span className="text-slate-600">•</span>
                 <Link to="/plans" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
-                  Upgrade Pro → 30 Daily ✨
+                  Upgrade Pro → {limits.proDaily} Daily ✨
                 </Link>
               </>
             )}
@@ -281,11 +293,11 @@ export default function ChartAnalyzer() {
         )}
 
         {/* Daily Limit Warning */}
-        {usage >= 4 && !isPro && !error && !result && (
+        {usage >= limits.freeDaily && !isPro && !error && !result && (
           <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30 rounded-2xl p-6 text-center backdrop-blur-sm">
             <Shield className="w-6 h-6 text-cyan-400 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-cyan-300 mb-2">Daily Analysis Limit Reached</h3>
-            <p className="text-sm text-slate-400 mb-4">Upgrade to Pro for unlimited daily analyses and priority support.</p>
+            <p className="text-sm text-slate-400 mb-4">Upgrade to Pro for {limits.proDaily} daily analyses and priority support.</p>
             <Link to="/plans" className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-all shadow-lg hover:shadow-xl">
               <Zap className="w-4 h-4" />
               Upgrade to Pro
@@ -297,10 +309,10 @@ export default function ChartAnalyzer() {
         <div className="flex items-center gap-3">
           <button 
             onClick={handleAnalyze} 
-            disabled={!selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4)} 
+            disabled={!selectedImage || isAnalyzing || (isPro ? usage >= limits.proDaily : usage >= limits.freeDaily)} 
             className={cn(
               "flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-bold text-sm tracking-wide transition-all",
-              !selectedImage || isAnalyzing || (isPro ? usage >= 30 : usage >= 4) 
+              !selectedImage || isAnalyzing || (isPro ? usage >= limits.proDaily : usage >= limits.freeDaily) 
                 ? "bg-slate-700 text-slate-500 cursor-not-allowed" 
                 : "bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white shadow-[0_0_30px_rgba(34,211,238,0.4)] hover:shadow-[0_0_40px_rgba(34,211,238,0.5)]"
             )}

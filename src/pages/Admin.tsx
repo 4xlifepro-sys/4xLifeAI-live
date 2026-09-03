@@ -47,6 +47,7 @@ const TABS = [
   { id: 'broadcast', label: 'BROADCAST', icon: Send },
   { id: 'referrals', label: 'REFERRALS', icon: Award },
   { id: 'prompts', label: 'AI PROMPTS', icon: Cpu },
+  { id: 'limits', label: 'DAILY LIMITS', icon: Database },
   { id: 'history', label: 'HISTORY MGMT', icon: ShieldAlert },
 ];
 
@@ -86,6 +87,11 @@ export default function Admin() {
   });
   const [isSavingPrompts, setIsSavingPrompts] = useState(false);
   const [promptsStatus, setPromptsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  // Daily limits config states
+  const [limitsConfig, setLimitsConfig] = useState({ freeDaily: 4, proDaily: 30 });
+  const [isSavingLimits, setIsSavingLimits] = useState(false);
+  const [limitsStatus, setLimitsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const fetchPrompts = async () => {
     try {
@@ -131,9 +137,57 @@ export default function Admin() {
     }
   };
 
+  const fetchLimits = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/limits', {
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLimitsConfig({
+          freeDaily: Number(data.freeDaily) || 4,
+          proDaily: Number(data.proDaily) || 30
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch limits", e);
+    }
+  };
+
+  const handleSaveLimits = async () => {
+    setIsSavingLimits(true);
+    setLimitsStatus('loading');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/limits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify(limitsConfig)
+      });
+      if (res.ok) {
+        setLimitsStatus('success');
+        setTimeout(() => setLimitsStatus('idle'), 3000);
+      } else {
+        setLimitsStatus('error');
+      }
+    } catch (e) {
+      console.error(e);
+      setLimitsStatus('error');
+    } finally {
+      setIsSavingLimits(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'prompts') {
       fetchPrompts();
+    }
+    if (activeTab === 'limits') {
+      fetchLimits();
     }
   }, [activeTab]);
 
@@ -1175,6 +1229,78 @@ export default function Admin() {
     </div>
   );
 
+  const renderLimitsTab = () => (
+    <div className="space-y-6">
+      <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
+        <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Daily Analysis Limits</h2>
+            <p className="text-sm text-[#8A95A5] mt-1">Change how many Chart Analyzer analyses each customer gets per day. Applies instantly to all users.</p>
+          </div>
+          <button
+            onClick={fetchLimits}
+            className="p-2 text-[#5D6B80] hover:text-white transition-colors border border-transparent hover:border-[#202735] rounded-lg"
+            title="Refresh Limits"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-white tracking-wider uppercase">Free Users / Day</label>
+              <p className="text-xs text-[#8A95A5]">Chart analyses a free account can run per day.</p>
+              <input
+                type="number"
+                min={1}
+                max={9999}
+                className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-4 text-lg text-white font-mono focus:outline-none focus:border-cyan-500/50"
+                value={limitsConfig.freeDaily}
+                onChange={(e) => setLimitsConfig(prev => ({ ...prev, freeDaily: Math.max(1, Math.min(9999, Math.round(Number(e.target.value)) || 1)) }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-white tracking-wider uppercase">Pro Users / Day</label>
+              <p className="text-xs text-[#8A95A5]">Chart analyses a Pro account can run per day.</p>
+              <input
+                type="number"
+                min={1}
+                max={9999}
+                className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-4 text-lg text-white font-mono focus:outline-none focus:border-cyan-500/50"
+                value={limitsConfig.proDaily}
+                onChange={(e) => setLimitsConfig(prev => ({ ...prev, proDaily: Math.max(1, Math.min(9999, Math.round(Number(e.target.value)) || 1)) }))}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t border-[#202735]">
+            <div className="flex items-center gap-2">
+              {limitsStatus === 'success' && (
+                <span className="text-xs text-emerald-400 font-mono tracking-wider flex items-center gap-1">
+                  <Check className="w-3.5 h-3.5" /> LIMITS SAVED — LIVE NOW
+                </span>
+              )}
+              {limitsStatus === 'error' && (
+                <span className="text-xs text-rose-400 font-mono tracking-wider flex items-center gap-1">
+                  <X className="w-3.5 h-3.5" /> ERROR SAVING LIMITS
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={isSavingLimits}
+              onClick={handleSaveLimits}
+              className="px-6 py-2.5 bg-cyan-400 text-[#0A0D12] rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-cyan-300 disabled:opacity-50 transition-all flex items-center gap-2"
+            >
+              {isSavingLimits ? 'Saving...' : 'Apply & Save Limits'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex-1 w-full flex flex-col bg-[#0A0D12]">
       {/* Top Header / Title */}
@@ -1239,9 +1365,10 @@ export default function Admin() {
             {activeTab === 'tickets' && renderTicketsTab()}
             {activeTab === 'history' && renderHistoryTab()}
             {activeTab === 'prompts' && renderPromptsTab()}
+            {activeTab === 'limits' && renderLimitsTab()}
             
             {/* Placeholder for un-implemented tabs */}
-            {!['analytics', 'users', 'plans', 'payments', 'signals', 'referrals', 'tickets', 'history', 'prompts'].includes(activeTab) && (
+            {!['analytics', 'users', 'plans', 'payments', 'signals', 'referrals', 'tickets', 'history', 'prompts', 'limits'].includes(activeTab) && (
               <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-12 text-center shadow-sm">
                 <ShieldAlert className="w-12 h-12 text-[#202735] mx-auto mb-4" />
                 <h3 className="text-white text-lg font-bold tracking-widest uppercase mb-2">{TABS.find(t=>t.id === activeTab)?.label} Module</h3>
