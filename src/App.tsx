@@ -159,6 +159,10 @@ function GlobalLayout() {
         </p>
       </div>
 
+      <div className="bg-[#070A0F] border-b border-[#202735] py-1 text-center">
+        <span className="text-[10px] uppercase tracking-widest text-[#5D6B80]">Developed by <span className="text-cyan-400 font-semibold">Tofik Mohammed</span></span>
+      </div>
+
       <nav className="relative border-b border-[#202735] bg-[#11141A]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex min-w-0 h-16 items-center justify-between gap-3">
