@@ -13,6 +13,59 @@ import { GoogleGenAI } from "@google/genai";
 const adminAlertCooldown = new Map<string, number>();
 let notificationsTableAvailable = true;
 
+// ---- Forex Factory economic calendar (free public feed, no API key) ----
+type FFEvent = {
+  title: string;
+  country: string; // currency code e.g. USD
+  date: string;    // ISO datetime
+  impact: string;  // Low | Medium | High | Holiday
+  forecast: string;
+  previous: string;
+  actual?: string;
+};
+let ffCache: { at: number; events: FFEvent[] } | null = null;
+const FF_CACHE_MS = 15 * 60 * 1000; // 15 minutes
+
+async function getEconomicCalendar(): Promise<FFEvent[]> {
+  if (ffCache && Date.now() - ffCache.at < FF_CACHE_MS) return ffCache.events;
+  try {
+    const resp = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (4xLifeAI Chart Analyzer)' },
+    });
+    if (!resp.ok) throw new Error(`FF feed ${resp.status}`);
+    const data = (await resp.json()) as FFEvent[];
+    ffCache = { at: Date.now(), events: Array.isArray(data) ? data : [] };
+    return ffCache.events;
+  } catch (e) {
+    console.error('[calendar] fetch failed:', (e as any)?.message || e);
+    return ffCache?.events || [];
+  }
+}
+
+// Build a compact, high-impact-only calendar string for the Gemini prompt.
+// We include the currency so Gemini can match it to the detected pair.
+function buildCalendarPromptBlock(events: FFEvent[]): string {
+  const now = Date.now();
+  const highImpact = events.filter((e) => {
+    const impact = (e.impact || '').toLowerCase();
+    if (impact !== 'high') return false;
+    const t = new Date(e.date).getTime();
+    if (isNaN(t)) return false;
+    // Keep events from 12h ago (just-released) up to 5 days ahead
+    return t > now - 12 * 60 * 60 * 1000 && t < now + 5 * 24 * 60 * 60 * 1000;
+  });
+  if (highImpact.length === 0) return 'NONE (no high-impact red-folder events this week).';
+  return highImpact
+    .slice(0, 20)
+    .map((e) => {
+      const d = new Date(e.date);
+      const when = isNaN(d.getTime()) ? e.date : d.toUTCString().replace(':00 GMT', ' GMT');
+      const actual = e.actual && e.actual !== '' ? e.actual : 'PENDING';
+      return `- ${when} | ${e.country} | ${e.title} | forecast: ${e.forecast || 'n/a'} | previous: ${e.previous || 'n/a'} | actual: ${actual}`;
+    })
+    .join('\n');
+}
+
 function escapeTelegramHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -1451,8 +1504,15 @@ async function startServer() {
 
       // Strip data URL prefix if present
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+
+      // Fetch the free Forex Factory high-impact calendar for the news bias
+      const calendarEvents = await getEconomicCalendar();
+      const calendarBlock = buildCalendarPromptBlock(calendarEvents);
       
       const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst specialized in generating actionable trading signals.
+
+HIGH-IMPACT ECONOMIC CALENDAR (red-folder events only, times in GMT/UTC):
+${calendarBlock}
 
 Analyze this trading chart screenshot using professional price action methodology.
 
@@ -1470,6 +1530,19 @@ Determine:
 11. Confidence Score (0-100%)
 12. Reasoning (why this trade exists)
 13. Warnings (any risks to be aware of)
+14. News Bias — using ONLY the high-impact calendar above, for the currencies in the detected instrument
+
+NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the detected pair):
+- First detect the instrument's currencies (e.g. EURUSD → EUR + USD; XAUUSD/Gold → USD only).
+- Pick the single most important upcoming or just-released high-impact event for those currencies. If none match, set newsHasEvent=false.
+- Direction logic (how the number moves the currency, then the pair):
+  * Actual BEATS forecast → that currency stronger. Actual MISSES forecast → that currency weaker.
+  * If not yet released (actual PENDING), lean on Forecast vs Previous (much higher forecast = market expects a strong number = currency-positive bias).
+  * Convert the currency effect into a pair direction (base up or quote up), then output BUY or SELL for the pair. Use NEUTRAL only when the calendar clearly implies no directional edge.
+- newsProbability: 50-75 integer. Bigger forecast-vs-previous gap or a released beat/miss = higher number. Never above 75 (news is a lean, not a certainty).
+- newsReason: ONE short sentence, plain English, scenario/lean language (e.g. "NFP forecast far above previous — a strong number would lift USD and pressure Gold"). Never promise ("will rise"). Never invent numbers not in the calendar.
+- newsBigMove: true if the chosen event is still PENDING (not released) and within the next ~48h; otherwise false.
+- newsEvent: short label like "NFP · Fri 3:30pm" (event name + day + time from the calendar).
 
 CRITICAL RULES FOR SIGNAL GENERATION:
 - GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, higher timeframe structure, and confluence of price action
@@ -1501,7 +1574,13 @@ Return the analysis in this exact JSON format:
   "riskReward": "ratio",
   "confidence": number,
   "reasoning": "explanation",
-  "warnings": "risks"
+  "warnings": "risks",
+  "newsHasEvent": true/false,
+  "newsEvent": "short event label with day and time, or empty string",
+  "newsPrediction": "BUY/SELL/NEUTRAL",
+  "newsProbability": number,
+  "newsReason": "one short scenario sentence, or empty string",
+  "newsBigMove": true/false
 }`;
       
       const response = await ai.models.generateContent({
@@ -1556,6 +1635,19 @@ Return the analysis in this exact JSON format:
         }
       }
       
+      // Normalize news-bias fields so Gemini can never show a misleading value
+      if (analysis && typeof analysis === 'object') {
+        analysis.newsHasEvent = analysis.newsHasEvent === true;
+        const pred = String(analysis.newsPrediction || '').toUpperCase();
+        analysis.newsPrediction = pred === 'BUY' || pred === 'SELL' ? pred : 'NEUTRAL';
+        const prob = Number(analysis.newsProbability);
+        analysis.newsProbability = analysis.newsHasEvent && isFinite(prob)
+          ? Math.max(50, Math.min(75, Math.round(prob)))
+          : undefined;
+        analysis.newsBigMove = analysis.newsBigMove === true;
+        if (!analysis.newsEvent) analysis.newsHasEvent = false;
+      }
+
       res.json({ success: true, analysis });
     } catch (e: any) {
       let errorMessage = 'Failed to analyze chart';

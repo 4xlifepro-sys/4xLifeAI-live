@@ -26,6 +26,12 @@ interface AnalysisResult {
   confidence: number;
   reasoning: string;
   warnings: string;
+  newsHasEvent?: boolean;
+  newsEvent?: string;
+  newsPrediction?: string;
+  newsProbability?: number;
+  newsReason?: string;
+  newsBigMove?: boolean;
 }
 
 const ANALYSIS_STEPS = [
@@ -48,6 +54,7 @@ export default function ChartAnalyzer() {
   const [usage, setUsage] = useState(0);
   const [isPro, setIsPro] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [showNewsDetail, setShowNewsDetail] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -128,7 +135,7 @@ export default function ChartAnalyzer() {
     } else {
       if (usage >= 4) { setError('Daily free limit reached (4/4). Upgrade to Pro for 30 daily analyses!'); return; }
     }
-    setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError('');
+    setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError(''); setShowNewsDetail(false);
     try {
       let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
       
@@ -475,6 +482,38 @@ export default function ChartAnalyzer() {
                 </div>
               </div>
             </div>
+
+            {/* News Bias strip — one line, tap to expand */}
+            {result.newsHasEvent && result.newsEvent && (
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl px-5 py-3.5 backdrop-blur-sm">
+                <button
+                  onClick={() => setShowNewsDetail(v => !v)}
+                  className="w-full flex items-center justify-between gap-3 text-left"
+                  title="Tap for the reason"
+                >
+                  <p className="text-sm font-bold truncate">
+                    <span className="text-slate-200">📰 {result.newsEvent}</span>
+                    <span className="mx-2 text-slate-500">→</span>
+                    <span className={cn(
+                      result.newsPrediction === 'BUY' ? 'text-emerald-400' :
+                      result.newsPrediction === 'SELL' ? 'text-red-400' : 'text-slate-300'
+                    )}>
+                      {result.newsPrediction === 'BUY' ? 'BUY 🐂' : result.newsPrediction === 'SELL' ? 'SELL 🐻' : 'NEUTRAL ⚖️'}
+                    </span>
+                    <span className={cn('ml-2', (result.newsProbability || 0) >= 65 ? 'text-emerald-400' : 'text-amber-400')}>
+                      {result.newsProbability}%
+                    </span>
+                    {result.newsBigMove && <span className="ml-2 text-amber-400">· ⚠️ big move</span>}
+                  </p>
+                  <span className="text-xs text-slate-500 shrink-0">{showNewsDetail ? '▾' : '▸'}</span>
+                </button>
+                {showNewsDetail && result.newsReason && (
+                  <p className="text-xs text-slate-400 leading-relaxed mt-2 pt-2 border-t border-slate-700/50">
+                    {result.newsReason} <span className="text-slate-500">(news lean, not a promise)</span>
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Reasoning & Warnings */}
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
