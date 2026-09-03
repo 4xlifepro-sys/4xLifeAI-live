@@ -1910,28 +1910,50 @@ Return only valid JSON with this exact shape:
 APPLICATION ECONOMIC CALENDAR DATA:
 ${calendarPayload}`;
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{
-          role: 'user',
-          parts: [
-            { text: chartAnalyzerPrompt },
-            {
-              inlineData: {
-                mimeType: imageMimeType,
-                data: base64Data
-              }
+      const chartAnalyzerModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+      let response: any = null;
+      let lastAiError: any = null;
+      for (let modelAttempt = 0; modelAttempt < chartAnalyzerModels.length; modelAttempt++) {
+        const modelName = chartAnalyzerModels[modelAttempt];
+        try {
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents: [{
+              role: 'user',
+              parts: [
+                { text: chartAnalyzerPrompt },
+                {
+                  inlineData: {
+                    mimeType: imageMimeType,
+                    data: base64Data
+                  }
+                }
+              ]
+            }],
+            config: {
+              temperature: 0.2,
+              maxOutputTokens: 4096,
+              responseMimeType: 'application/json',
+              responseSchema: chartAnalysisResponseSchema,
+              thinkingConfig: { thinkingBudget: 0 }
             }
-          ]
-        }],
-        config: {
-          temperature: 0.2,
-          maxOutputTokens: 4096,
-          responseMimeType: 'application/json',
-          responseSchema: chartAnalysisResponseSchema,
-          thinkingConfig: { thinkingBudget: 0 }
+          });
+          break;
+        } catch (aiError: any) {
+          lastAiError = aiError;
+          const status = aiError?.status;
+          const message = String(aiError?.message || '');
+          const retryable = status === 429 || status === 503 || status === 500 ||
+            /429|503|UNAVAILABLE|RESOURCE_EXHAUSTED|OVERLOADED|high demand|temporarily/i.test(message);
+          console.warn(`[CHART ANALYZER] Model ${modelName} failed (status=${status ?? 'n/a'}): ${message.slice(0, 120)}`);
+          if (!retryable || modelAttempt === chartAnalyzerModels.length - 1) break;
+          await new Promise((resolve) => setTimeout(resolve, 6000));
         }
-      });
+      }
+      if (!response) {
+        usageStore.set(usageKey, usedToday);
+        throw lastAiError || new Error('Chart analysis failed');
+      }
       
       const analysisText = response.text || response.candidates?.[0]?.content?.parts
         ?.filter((part: any) => typeof part?.text === 'string')

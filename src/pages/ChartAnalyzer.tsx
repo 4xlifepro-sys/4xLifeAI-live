@@ -274,11 +274,6 @@ export default function ChartAnalyzer() {
     return text && !['UNKNOWN', 'UNVERIFIED'].includes(text.toUpperCase()) ? text : fallback;
   };
   const displayDecision = normalizeDecision(result?.finalDecision || result?.signal || result?.trade);
-  const riskRewardValues = displayDecision === 'WAIT'
-    ? { tp1: notProvided, tp2: notProvided, tp3: notProvided }
-    : result && typeof result.riskReward === 'object'
-      ? result.riskReward
-      : { tp1: result?.riskReward || notProvided, tp2: result?.riskReward || notProvided, tp3: result?.riskReward || notProvided };
   const analysisReasoning = result?.reasoning || 'Not visible / not provided';
   const chartDirection = normalizeDecision(result?.chartDecision || result?.trade);
   const hasNews = Boolean(
@@ -474,15 +469,7 @@ export default function ChartAnalyzer() {
               <p className="text-[11px] text-slate-500 mt-2">Setup quality is not a win probability.</p>
             </div>
 
-            {/* 2. WHY — one plain sentence */}
-            {plainReason && (
-              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Why this signal</p>
-                <p className="text-sm sm:text-base text-slate-200 leading-relaxed">{plainReason}</p>
-              </div>
-            )}
-
-            {/* 3. TRADE PLAN — only for BUY/SELL */}
+            {/* 2. TRADE PLAN — only for BUY/SELL */}
             {displayDecision !== 'WAIT' ? (
               <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
                 <div className="flex items-center gap-3">
@@ -512,18 +499,6 @@ export default function ChartAnalyzer() {
                     </button>
                   ))}
                 </div>
-                <div className="grid grid-cols-3 gap-2 pt-4 border-t border-slate-700/50">
-                  {[
-                    { label: 'Reward : Risk TP1', value: riskRewardValues.tp1 },
-                    { label: 'Reward : Risk TP2', value: riskRewardValues.tp2 },
-                    { label: 'Reward : Risk TP3', value: riskRewardValues.tp3 },
-                  ].map((target) => (
-                    <div key={target.label} className="rounded-lg bg-slate-900/40 border border-slate-700/50 p-2 text-center">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500">{target.label}</p>
-                      <p className="text-sm font-bold text-cyan-400 break-words">{String(target.value)}</p>
-                    </div>
-                  ))}
-                </div>
                 <div className="bg-slate-900/40 border border-cyan-500/20 rounded-xl p-4 text-center">
                   <p className="text-xs text-slate-400">Risk max 1% of your account. Set your lot size from the Stop Loss distance before entering.</p>
                 </div>
@@ -534,6 +509,14 @@ export default function ChartAnalyzer() {
                 <p className="text-sm text-blue-100/80 mt-2 max-w-xl mx-auto">
                   {result.invalidation || result.mainRisk || 'The setup is not confirmed. Waiting protects your money — a valid plan will show Entry, Stop Loss and Take Profits here.'}
                 </p>
+              </div>
+            )}
+
+            {/* 3. WHY — one plain sentence */}
+            {plainReason && (
+              <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 backdrop-blur-sm">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Why this signal</p>
+                <p className="text-sm sm:text-base text-slate-200 leading-relaxed">{plainReason}</p>
               </div>
             )}
 
