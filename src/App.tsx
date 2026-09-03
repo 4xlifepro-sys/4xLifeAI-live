@@ -409,8 +409,9 @@ function GlobalLayout() {
               </div>
             </div>
 
-            <div className="text-xs text-[#5D6B80]">
+            <div className="text-xs text-[#5D6B80] text-center">
               &copy; 2026 4xFiveAI. All rights reserved.
+              <div className="mt-1">Developed by <span className="text-cyan-400 font-semibold">Tofik Mohammed</span></div>
             </div>
           </div>
         </div>
