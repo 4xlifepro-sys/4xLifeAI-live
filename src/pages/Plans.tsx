@@ -5,6 +5,7 @@ import { twMerge } from 'tailwind-merge';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../components/ConfirmDialog';
+import { QRCodeSVG } from 'qrcode.react';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -285,21 +286,35 @@ export default function Plans() {
                 <div className="grid gap-4 mb-6">
                   <div className="bg-[#11141A] p-4 rounded-xl border border-[#202735]">
                     <div className="text-sm text-[#8A95A5] mb-2 font-medium">USDT (TRC-20)</div>
-                    <div className="flex items-center justify-between gap-2">
-                      <code className="text-white font-mono text-xs truncate select-all">{wallets.trc20 || "Loading..."}</code>
-                      <button onClick={() => handleCopy(wallets.trc20, 'trc20')} disabled={!wallets.trc20} className="p-2 hover:bg-[#202735] rounded-lg transition-colors group disabled:opacity-50">
-                        {copied === 'trc20' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#8A95A5] group-hover:text-white" />}
-                      </button>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <code className="text-white font-mono text-xs break-all select-all">{wallets.trc20 || "Loading..."}</code>
+                        <button onClick={() => handleCopy(wallets.trc20, 'trc20')} disabled={!wallets.trc20} className="mt-2 p-2 hover:bg-[#202735] rounded-lg transition-colors group disabled:opacity-50">
+                          {copied === 'trc20' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#8A95A5] group-hover:text-white" />}
+                        </button>
+                      </div>
+                      {wallets.trc20 && (
+                        <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (TRC-20)">
+                          <QRCodeSVG value={wallets.trc20} size={88} />
+                        </div>
+                      )}
                     </div>
                   </div>
                   
                   <div className="bg-[#11141A] p-4 rounded-xl border border-[#202735]">
                     <div className="text-sm text-[#8A95A5] mb-2 font-medium">USDT (BEP-20)</div>
-                    <div className="flex items-center justify-between gap-2">
-                      <code className="text-white font-mono text-xs truncate select-all">{wallets.bep20 || "Loading..."}</code>
-                      <button onClick={() => handleCopy(wallets.bep20, 'bep20')} disabled={!wallets.bep20} className="p-2 hover:bg-[#202735] rounded-lg transition-colors group disabled:opacity-50">
-                        {copied === 'bep20' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#8A95A5] group-hover:text-white" />}
-                      </button>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <code className="text-white font-mono text-xs break-all select-all">{wallets.bep20 || "Loading..."}</code>
+                        <button onClick={() => handleCopy(wallets.bep20, 'bep20')} disabled={!wallets.bep20} className="mt-2 p-2 hover:bg-[#202735] rounded-lg transition-colors group disabled:opacity-50">
+                          {copied === 'bep20' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[#8A95A5] group-hover:text-white" />}
+                        </button>
+                      </div>
+                      {wallets.bep20 && (
+                        <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (BEP-20)">
+                          <QRCodeSVG value={wallets.bep20} size={88} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
