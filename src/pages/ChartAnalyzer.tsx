@@ -437,6 +437,15 @@ export default function ChartAnalyzer() {
                 {result.trade.toUpperCase() === 'WAIT' && '⏸️ Wait for a better setup - do NOT trade now'}
               </p>
 
+              {result.trade.toUpperCase() === 'WAIT' && (
+                <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5">
+                  <span className="text-base leading-none mt-0.5">⏸️</span>
+                  <p className="text-xs sm:text-sm text-amber-200 leading-relaxed">
+                    <span className="font-bold text-amber-300">PLANNED — not active.</span> Do NOT trade now. This plan triggers only if price reaches the Entry level below.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {[
                   { label: 'Entry', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
