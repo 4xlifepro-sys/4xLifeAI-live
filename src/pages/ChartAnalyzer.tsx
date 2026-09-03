@@ -303,46 +303,43 @@ export default function ChartAnalyzer() {
         <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl opacity-20"></div>
       </div>
 
-      {/* Header */}
-      <div className="relative bg-gradient-to-b from-slate-800/80 to-slate-900/40 border-b border-cyan-500/20 backdrop-blur-md py-8 px-4 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="w-14 h-14 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 border border-cyan-400/50 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(34,211,238,0.3)]">
-              <Sparkles className="w-7 h-7 text-cyan-400" />
+      {/* Header — compact */}
+      <div className="relative bg-gradient-to-b from-slate-800/80 to-slate-900/40 border-b border-cyan-500/20 backdrop-blur-md py-3 px-4 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 border border-cyan-400/50 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.25)]">
+              <Sparkles className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
-                Professional Chart Scanner
+              <h1 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 leading-tight">
+                Chart Scanner
               </h1>
-              <p className="text-sm text-slate-400 mt-0.5">Real-time institutional-grade price action analysis</p>
+              <p className="text-[11px] text-slate-500 leading-tight">AI price-action analysis</p>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs mt-4 flex-wrap">
-            <span className="flex items-center gap-1.5 text-cyan-400 font-semibold bg-cyan-500/10 px-3 py-1 rounded-lg border border-cyan-400/30">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> 4xLifeAI Engine
+          <div className="flex items-center gap-3 text-xs flex-wrap">
+            <span className="flex items-center gap-1.5 text-cyan-400 font-semibold bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-400/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span> Live
             </span>
-            <span className="text-slate-600">•</span>
-            <span className="text-slate-400 font-medium">{isPro ? `${usage}/30 Pro Daily` : `${usage}/4 Free Daily`}</span>
+            <span className="text-slate-400 font-medium">{isPro ? `${usage}/30 Pro` : `${usage}/4 Free`}</span>
             {!isPro && (
-              <>
-                <span className="text-slate-600">•</span>
-                <Link to="/plans" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
-                  Upgrade Pro → 30 Daily ✨
-                </Link>
-              </>
+              <Link to="/plans" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
+                Upgrade ✨
+              </Link>
             )}
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="relative max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <div className="relative max-w-6xl mx-auto px-4 py-5 space-y-4">
         {/* Upload Area */}
         <div 
           onDrop={handleDrop} 
           onDragOver={handleDragOver} 
           className={cn(
-            "border-2 border-dashed rounded-3xl p-12 text-center transition-all cursor-pointer backdrop-blur-sm",
+            "border-2 border-dashed rounded-3xl text-center transition-all cursor-pointer backdrop-blur-sm",
+            result ? "p-4" : "p-12",
             selectedImage 
               ? "border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_30px_rgba(34,211,238,0.2)]" 
               : "border-blue-500/30 bg-blue-500/5 hover:border-cyan-400/40 hover:bg-cyan-500/8 hover:shadow-[0_0_25px_rgba(34,211,238,0.15)]"
@@ -351,11 +348,21 @@ export default function ChartAnalyzer() {
         >
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
           {selectedImage ? (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <img src={selectedImage} alt="Selected chart" className="max-h-96 max-w-full h-auto mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
-              <p className="text-sm text-slate-400 font-medium">{selectedFileName}</p>
-              <p className="text-xs text-slate-600">Click or drop to replace</p>
-            </div>
+            result ? (
+              <div className="flex items-center gap-3 text-left">
+                <img src={selectedImage} alt="Selected chart" className="h-14 w-24 object-cover rounded-lg border border-cyan-400/30" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-slate-300 font-medium truncate">{selectedFileName}</p>
+                  <p className="text-xs text-slate-500">Click to analyze a different chart</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <img src={selectedImage} alt="Selected chart" className="max-h-96 max-w-full h-auto mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
+                <p className="text-sm text-slate-400 font-medium">{selectedFileName}</p>
+                <p className="text-xs text-slate-600">Click or drop to replace</p>
+              </div>
+            )
           ) : (
             <div className="space-y-4">
               <div className="w-20 h-20 mx-auto bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/40 rounded-2xl flex items-center justify-center">
