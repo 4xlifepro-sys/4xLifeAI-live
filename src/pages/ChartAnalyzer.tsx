@@ -165,12 +165,12 @@ export default function ChartAnalyzer() {
     }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError(''); setShowNewsDetail(false);
     try {
-      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined }) });
+      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
       
       if (res.status === 503) {
         setAnalysisStep(analysisStep);
         await new Promise(r => setTimeout(r, 3000));
-        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined }) });
+        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
       }
       
       const data = await res.json();

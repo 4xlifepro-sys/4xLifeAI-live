@@ -44,7 +44,8 @@ async function getEconomicCalendar(): Promise<FFEvent[]> {
 
 // Build a compact, high-impact-only calendar string for the Gemini prompt.
 // We include the currency so Gemini can match it to the detected pair.
-function buildCalendarPromptBlock(events: FFEvent[]): string {
+// Times are shown in the viewer's local timezone when provided (like Forex Factory).
+function buildCalendarPromptBlock(events: FFEvent[], timeZone?: string): string {
   const now = Date.now();
   const highImpact = events.filter((e) => {
     const impact = (e.impact || '').toLowerCase();
@@ -59,7 +60,17 @@ function buildCalendarPromptBlock(events: FFEvent[]): string {
     .slice(0, 20)
     .map((e) => {
       const d = new Date(e.date);
-      const when = isNaN(d.getTime()) ? e.date : d.toUTCString().replace(':00 GMT', ' GMT');
+      let when: string;
+      if (isNaN(d.getTime())) when = e.date;
+      else if (timeZone) {
+        try {
+          when = d.toLocaleString('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (user local time)';
+        } catch {
+          when = d.toUTCString().replace(':00 GMT', ' GMT') + ' (GMT)';
+        }
+      } else {
+        when = d.toUTCString().replace(':00 GMT', ' GMT') + ' (GMT)';
+      }
       const actual = e.actual && e.actual !== '' ? e.actual : 'PENDING';
       return `- ${when} | ${e.country} | ${e.title} | forecast: ${e.forecast || 'n/a'} | previous: ${e.previous || 'n/a'} | actual: ${actual}`;
     })
@@ -1532,7 +1543,7 @@ async function startServer() {
   // AI Chart Analyzer Endpoint
   app.post("/api/chart-analyzer", async (req, res) => {
     try {
-      const { imageBase64, chartType, imageBase64_2 } = req.body;
+      const { imageBase64, chartType, imageBase64_2, timezone } = req.body;
       
       if (!imageBase64) {
         return res.status(400).json({ error: "No image provided" });
@@ -1544,11 +1555,12 @@ async function startServer() {
 
       // Fetch the free Forex Factory high-impact calendar for the news bias
       const calendarEvents = await getEconomicCalendar();
-      const calendarBlock = buildCalendarPromptBlock(calendarEvents);
+      const tz = typeof timezone === 'string' && timezone ? timezone : undefined;
+      const calendarBlock = buildCalendarPromptBlock(calendarEvents, tz);
       
       const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst specialized in generating actionable trading signals.
 
-HIGH-IMPACT ECONOMIC CALENDAR (red-folder events only, times in GMT/UTC):
+HIGH-IMPACT ECONOMIC CALENDAR (red-folder events only, ${tz ? "times in the USER'S LOCAL time" : 'times in GMT/UTC'}):
 ${calendarBlock}
 
 ${base64Data2 ? `DUAL-TIMEFRAME MODE — TWO charts of the SAME pair are attached:
@@ -1583,7 +1595,7 @@ NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the d
 - newsProbability: 50-75 integer. Bigger forecast-vs-previous gap or a released beat/miss = higher number. Never above 75 (news is a lean, not a certainty).
 - newsReason: ONE short sentence, plain English, scenario/lean language (e.g. "NFP forecast far above previous — a strong number would lift USD and pressure Gold"). Never promise ("will rise"). Never invent numbers not in the calendar.
 - newsBigMove: true if the chosen event is still PENDING (not released) and within the next ~48h; otherwise false.
-- newsEvent: short label like "NFP · Fri 3:30pm" (event name + day + time from the calendar).
+- newsEvent: short label like "NFP · Fri 3:30pm" (event name + day + time EXACTLY as shown in the calendar above — the time is already in the user's local time).
 
 DUAL-TIMEFRAME RULES (apply ONLY when two charts are attached):
 - Read the directional bias of each chart (bullish / bearish / range).
