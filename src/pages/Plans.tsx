@@ -300,8 +300,14 @@ export default function Plans() {
                 </h4>
                 
                 <div className="grid gap-4 mb-6">
-                  <div className="bg-[#11141A] p-4 rounded-xl border border-[#202735]">
-                    <div className="text-sm text-[#8A95A5] mb-2 font-medium">USDT (TRC-20)</div>
+                  <div className="bg-[#11141A] p-4 rounded-xl border border-[#EB0029]/40">
+                    <div className="flex items-center gap-3 mb-3">
+                      <img src="/icons/trx.svg" alt="TRX" className="w-8 h-8" />
+                      <div>
+                        <div className="text-sm font-bold text-white">TRX <span className="text-[#8A95A5] font-medium">Tron (TRC20)</span></div>
+                        <div className="text-[11px] text-[#ff4d5e] font-semibold tracking-wide">USDT · TRC-20 NETWORK</div>
+                      </div>
+                    </div>
                     <div className="flex items-start justify-between gap-3">
                       <code
                         onClick={() => handleCopy(wallets.trc20, 'trc20')}
@@ -311,7 +317,7 @@ export default function Plans() {
                         {wallets.trc20}
                       </code>
                       <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (TRC-20)">
-                        <QRCodeSVG value={wallets.trc20} size={88} />
+                        <QRCodeSVG value={wallets.trc20} size={96} level="H" imageSettings={{ src: '/icons/usdt.svg', width: 22, height: 22, excavate: true }} />
                       </div>
                     </div>
                     <button
@@ -324,8 +330,14 @@ export default function Plans() {
                     </button>
                   </div>
 
-                  <div className="bg-[#11141A] p-4 rounded-xl border border-[#202735]">
-                    <div className="text-sm text-[#8A95A5] mb-2 font-medium">USDT (BEP-20)</div>
+                  <div className="bg-[#11141A] p-4 rounded-xl border border-[#F3BA2F]/40">
+                    <div className="flex items-center gap-3 mb-3">
+                      <img src="/icons/bnb.svg" alt="BSC" className="w-8 h-8" />
+                      <div>
+                        <div className="text-sm font-bold text-white">BSC <span className="text-[#8A95A5] font-medium">BNB Smart Chain (BEP20)</span></div>
+                        <div className="text-[11px] text-[#F3BA2F] font-semibold tracking-wide">USDT · BEP-20 NETWORK</div>
+                      </div>
+                    </div>
                     <div className="flex items-start justify-between gap-3">
                       <code
                         onClick={() => handleCopy(wallets.bep20, 'bep20')}
@@ -335,7 +347,7 @@ export default function Plans() {
                         {wallets.bep20}
                       </code>
                       <div className="bg-white p-2 rounded-lg shrink-0" title="Scan to pay (BEP-20)">
-                        <QRCodeSVG value={wallets.bep20} size={88} />
+                        <QRCodeSVG value={wallets.bep20} size={96} level="H" imageSettings={{ src: '/icons/usdt.svg', width: 22, height: 22, excavate: true }} />
                       </div>
                     </div>
                     <button
