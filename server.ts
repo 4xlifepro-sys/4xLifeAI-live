@@ -1532,7 +1532,7 @@ async function startServer() {
   // AI Chart Analyzer Endpoint
   app.post("/api/chart-analyzer", async (req, res) => {
     try {
-      const { imageBase64, chartType } = req.body;
+      const { imageBase64, chartType, imageBase64_2 } = req.body;
       
       if (!imageBase64) {
         return res.status(400).json({ error: "No image provided" });
@@ -1540,6 +1540,7 @@ async function startServer() {
 
       // Strip data URL prefix if present
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const base64Data2 = imageBase64_2 ? String(imageBase64_2).replace(/^data:image\/\w+;base64,/, '') : '';
 
       // Fetch the free Forex Factory high-impact calendar for the news bias
       const calendarEvents = await getEconomicCalendar();
@@ -1550,7 +1551,10 @@ async function startServer() {
 HIGH-IMPACT ECONOMIC CALENDAR (red-folder events only, times in GMT/UTC):
 ${calendarBlock}
 
-Analyze this trading chart screenshot using professional price action methodology.
+${base64Data2 ? `DUAL-TIMEFRAME MODE — TWO charts of the SAME pair are attached:
+IMAGE #1 (first image) = HIGHER TIMEFRAME chart (sets the direction).
+IMAGE #2 (second image) = ENTRY TIMEFRAME chart (sets the timing).
+` : ''}Analyze this trading chart screenshot using professional price action methodology.
 
 Determine:
 1. Trend (Bullish/Bearish/Range)
@@ -1567,6 +1571,7 @@ Determine:
 12. Reasoning (why this trade exists)
 13. Warnings (any risks to be aware of)
 14. News Bias — using ONLY the high-impact calendar above, for the currencies in the detected instrument
+15. Timeframe Alignment (ONLY when two charts are attached; otherwise tfStatus = "SINGLE")
 
 NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the detected pair):
 - First detect the instrument's currencies (e.g. EURUSD → EUR + USD; XAUUSD/Gold → USD only).
@@ -1579,6 +1584,14 @@ NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the d
 - newsReason: ONE short sentence, plain English, scenario/lean language (e.g. "NFP forecast far above previous — a strong number would lift USD and pressure Gold"). Never promise ("will rise"). Never invent numbers not in the calendar.
 - newsBigMove: true if the chosen event is still PENDING (not released) and within the next ~48h; otherwise false.
 - newsEvent: short label like "NFP · Fri 3:30pm" (event name + day + time from the calendar).
+
+DUAL-TIMEFRAME RULES (apply ONLY when two charts are attached):
+- Read the directional bias of each chart (bullish / bearish / range).
+- tfStatus = "ALIGNED" if both charts lean the same direction; "CONFLICT" if they disagree (one bullish vs the other bearish, or one strongly trending vs the other reversing).
+- If tfStatus = "CONFLICT": trade MUST be "WAIT", and warnings must state that the two timeframes disagree.
+- If tfStatus = "ALIGNED" and trade is BUY/SELL in that same direction: raise confidence by 10 points (max 95).
+- tfNote: ONE short sentence, e.g. "H1 trend up and M5 pullback also up — aligned for BUY." Never promise outcomes.
+- When only one chart is attached: tfStatus = "SINGLE", tfNote = "".
 
 CRITICAL RULES FOR SIGNAL GENERATION:
 - GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, higher timeframe structure, and confluence of price action
@@ -1616,22 +1629,22 @@ Return the analysis in this exact JSON format:
   "newsPrediction": "BUY/SELL/NEUTRAL",
   "newsProbability": number,
   "newsReason": "one short scenario sentence, or empty string",
-  "newsBigMove": true/false
+  "newsBigMove": true/false,
+  "tfStatus": "ALIGNED/CONFLICT/SINGLE",
+  "tfNote": "one short sentence, or empty string"
 }`;
       
+      const parts: any[] = [
+        { text: chartAnalyzerPrompt },
+        { inlineData: { mimeType: 'image/png', data: base64Data } }
+      ];
+      if (base64Data2) parts.push({ inlineData: { mimeType: 'image/png', data: base64Data2 } });
+
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{
           role: 'user',
-          parts: [
-            { text: chartAnalyzerPrompt },
-            {
-              inlineData: {
-                mimeType: 'image/png',
-                data: base64Data
-              }
-            }
-          ]
+          parts
         }],
         config: {
           temperature: 0.3,
@@ -1682,6 +1695,17 @@ Return the analysis in this exact JSON format:
           : undefined;
         analysis.newsBigMove = analysis.newsBigMove === true;
         if (!analysis.newsEvent) analysis.newsHasEvent = false;
+
+        // Dual-timeframe safety: a conflict always blocks entry, whatever Gemini says
+        const tf = String(analysis.tfStatus || '').toUpperCase();
+        analysis.tfStatus = (tf === 'ALIGNED' || tf === 'CONFLICT') && base64Data2 ? tf : 'SINGLE';
+        if (analysis.tfStatus === 'CONFLICT') {
+          if (String(analysis.trade || '').toUpperCase() !== 'WAIT') analysis.trade = 'WAIT';
+          analysis.warnings = `The two timeframes disagree — entry blocked. ${analysis.warnings || ''}`;
+        }
+        if (analysis.tfStatus === 'ALIGNED') {
+          analysis.confidence = Math.min(95, Number(analysis.confidence) || 0);
+        }
       }
 
       res.json({ success: true, analysis });

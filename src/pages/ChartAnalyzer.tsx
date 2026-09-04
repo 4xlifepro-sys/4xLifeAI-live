@@ -32,6 +32,8 @@ interface AnalysisResult {
   newsProbability?: number;
   newsReason?: string;
   newsBigMove?: boolean;
+  tfStatus?: string;
+  tfNote?: string;
 }
 
 const ANALYSIS_STEPS = [
@@ -47,6 +49,8 @@ const ANALYSIS_STEPS = [
 export default function ChartAnalyzer() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
+  const [selectedImage2, setSelectedImage2] = useState<string | null>(null);
+  const [selectedFileName2, setSelectedFileName2] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -57,6 +61,7 @@ export default function ChartAnalyzer() {
   const [showNewsDetail, setShowNewsDetail] = useState(false);
   const [limits, setLimits] = useState({ freeDaily: 4, proDaily: 30 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInput2Ref = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -140,6 +145,17 @@ export default function ChartAnalyzer() {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); const file = e.dataTransfer.files?.[0]; if (file) processFile(file); };
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
 
+  const processFile2 = (file: File) => {
+    if (!file.type.startsWith('image/')) { setError('Chart 2: please upload an image file (PNG, JPG, JPEG)'); return; }
+    if (file.size > 10 * 1024 * 1024) { setError('Chart 2: image must be under 10MB'); return; }
+    setError(''); setResult(null); setSelectedFileName2(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => setSelectedImage2(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+  const handleImageSelect2 = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) processFile2(file); };
+  const handleDrop2 = (e: React.DragEvent) => { e.preventDefault(); const file = e.dataTransfer.files?.[0]; if (file) processFile2(file); };
+
   const handleAnalyze = async () => {
     if (!selectedImage) return;
     if (isPro) {
@@ -149,12 +165,12 @@ export default function ChartAnalyzer() {
     }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError(''); setShowNewsDetail(false);
     try {
-      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
+      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined }) });
       
       if (res.status === 503) {
         setAnalysisStep(analysisStep);
         await new Promise(r => setTimeout(r, 3000));
-        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage }) });
+        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined }) });
       }
       
       const data = await res.json();
@@ -181,7 +197,7 @@ export default function ChartAnalyzer() {
     finally { setIsAnalyzing(false); }
   };
 
-  const handleReset = () => { setSelectedImage(null); setSelectedFileName(''); setResult(null); setError(''); setAnalysisStep(0); if (fileInputRef.current) fileInputRef.current.value = ''; };
+  const handleReset = () => { setSelectedImage(null); setSelectedFileName(''); setSelectedImage2(null); setSelectedFileName2(''); setResult(null); setError(''); setAnalysisStep(0); if (fileInputRef.current) fileInputRef.current.value = ''; if (fileInput2Ref.current) fileInput2Ref.current.value = ''; };
 
   const getTradeBadge = (trade: string) => {
     switch (trade.toUpperCase()) {
@@ -267,6 +283,7 @@ export default function ChartAnalyzer() {
           {selectedImage ? (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <img src={selectedImage} alt="Selected chart" className="max-h-96 mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
+              <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Chart 1 — Higher Timeframe (H4 / H1)</p>
               <p className="text-sm text-slate-400 font-medium">{selectedFileName}</p>
               <p className="text-xs text-slate-600">Click or drop to replace</p>
             </div>
@@ -276,11 +293,40 @@ export default function ChartAnalyzer() {
                 <Upload className="w-10 h-10 text-cyan-400" />
               </div>
               <div>
-                <p className="text-lg font-bold text-white">Drop your trading chart here</p>
-                <p className="text-sm text-slate-400 mt-1">or click to select a file</p>
+                <p className="text-lg font-bold text-white">Chart 1 — Higher timeframe (H4 / H1)</p>
+                <p className="text-sm text-slate-400 mt-1">Drop or click to select your chart</p>
                 <p className="text-xs text-slate-600 mt-3">PNG, JPG, JPEG • Max 10MB • TradingView, MT4, MT5 supported</p>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Chart 2 — Entry timeframe (optional) */}
+        <div
+          onDrop={handleDrop2}
+          onDragOver={handleDragOver}
+          className={cn(
+            "border-2 border-dashed rounded-2xl p-5 text-center transition-all cursor-pointer backdrop-blur-sm",
+            selectedImage2
+              ? "border-cyan-400/50 bg-cyan-500/10"
+              : "border-slate-600/40 bg-slate-800/20 hover:border-cyan-400/40"
+          )}
+          onClick={() => fileInput2Ref.current?.click()}
+        >
+          <input ref={fileInput2Ref} type="file" accept="image/*" onChange={handleImageSelect2} className="hidden" />
+          {selectedImage2 ? (
+            <div className="flex items-center justify-center gap-4">
+              <img src={selectedImage2} alt="Entry timeframe chart" className="max-h-28 rounded-xl border border-cyan-400/30" />
+              <div className="text-left">
+                <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Chart 2 — Entry TF (M15 / M5)</p>
+                <p className="text-sm text-slate-400 font-medium mt-0.5">{selectedFileName2}</p>
+                <p className="text-[11px] text-slate-500 mt-1">Click to replace</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">
+              <span className="font-bold text-slate-200">+ Chart 2 (optional):</span> entry timeframe (M15 / M5) of the SAME pair — the AI checks if both timeframes agree for a stronger signal.
+            </p>
           )}
         </div>
 
@@ -524,6 +570,21 @@ export default function ChartAnalyzer() {
                     {result.newsReason} <span className="text-slate-500">(news lean, not a promise)</span>
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Dual-timeframe alignment strip */}
+            {result.tfStatus && result.tfStatus !== 'SINGLE' && (
+              <div className={cn(
+                "rounded-2xl px-5 py-3.5 backdrop-blur-sm border",
+                result.tfStatus === 'ALIGNED' ? "bg-emerald-500/10 border-emerald-500/40" : "bg-amber-500/10 border-amber-500/40"
+              )}>
+                <p className="text-sm font-bold">
+                  {result.tfStatus === 'ALIGNED'
+                    ? <span className="text-emerald-300">🔄 Timeframes aligned ✅ — stronger signal</span>
+                    : <span className="text-amber-300">🔄 Timeframes disagree ⚠️ — WAIT recommended</span>}
+                </p>
+                {result.tfNote && <p className="text-xs text-slate-400 mt-1">{result.tfNote}</p>}
               </div>
             )}
 
