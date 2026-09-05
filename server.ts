@@ -401,6 +401,19 @@ async function startServer() {
   // Start session-based motivational messaging (every 4-6 hours during trading sessions)
   startSessionMessaging();
 
+  app.disable('x-powered-by');
+
+  // Security headers (browser protections; improves securityheaders.com grade)
+  app.use((req, res, next) => {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('Content-Security-Policy', "default-src 'self' https: wss: data: blob: 'unsafe-inline'");
+    next();
+  });
+
   app.use(express.json({ limit: '10mb' }));
   app.use((req, res, next) => {
     res.on('finish', () => {
