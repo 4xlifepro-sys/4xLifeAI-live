@@ -1321,8 +1321,8 @@ export default function Admin() {
                </div>
             </div>
 
-            <div className="bg-[#11141A] border border-[#202735] rounded-xl p-2 flex items-center justify-between w-full shadow-sm">
-              <div className="flex items-center flex-wrap gap-2">
+            <div className="bg-[#11141A] border border-[#202735] rounded-xl p-2 flex items-center gap-2 w-full shadow-sm">
+              <div className="flex items-center gap-2 overflow-x-auto flex-1 pb-1 sm:pb-0 sm:flex-wrap sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {TABS.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -1333,7 +1333,7 @@ export default function Admin() {
                       key={tab.id}
                       onClick={() => handleTabChange(tab.id)}
                       className={cn(
-                        "relative flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold tracking-widest uppercase transition-all",
+                        "relative flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold tracking-widest uppercase transition-all whitespace-nowrap shrink-0",
                         isActive 
                           ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" 
                           : "text-[#8A95A5] hover:text-white hover:bg-white/5 border border-transparent"
@@ -1348,7 +1348,7 @@ export default function Admin() {
                   );
                 })}
               </div>
-              <button className="p-2 text-[#5D6B80] hover:text-white transition-colors border border-transparent hover:border-[#202735] rounded-lg">
+              <button className="p-2 text-[#5D6B80] hover:text-white transition-colors border border-transparent hover:border-[#202735] rounded-lg shrink-0">
                 <RefreshCw className="w-4 h-4" />
               </button>
             </div>
