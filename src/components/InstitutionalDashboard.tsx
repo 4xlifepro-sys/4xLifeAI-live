@@ -1080,7 +1080,7 @@ const CSS = `
   background: var(--x4-panel);
   border: 1px solid var(--x4-line);
   border-radius: 6px;
-  overflow: hidden;
+  overflow-x: auto;
 }
 .x4-table__head, .x4-table__row {
   display: grid;
@@ -1088,6 +1088,7 @@ const CSS = `
   gap: 8px;
   padding: 10px 16px;
   align-items: center;
+  min-width: 640px;
 }
 .x4-table__head {
   font-family: var(--x4-font-mono);
@@ -1165,7 +1166,5 @@ const CSS = `
 @media (max-width: 640px) {
   .x4-signals { grid-template-columns: 1fr; }
   .x4-signal__levels { grid-template-columns: repeat(2, 1fr); }
-  .x4-table__head, .x4-table__row { grid-template-columns: 1fr 1fr; }
-  .x4-table__head span:nth-child(n+3), .x4-table__row span:nth-child(n+3) { display: none; }
 }
 `;
