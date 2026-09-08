@@ -1588,7 +1588,7 @@ Determine:
 4. Momentum (Strong/Weak/Exhausted)
 5. Setup Quality (Breakout/Pullback/Rejection/Continuation)
 6. Trade Decision (BUY/SELL/WAIT)
-7. Entry Price
+7. Entry Price (see IMMEDIATE ENTRY RULE below)
 8. Stop Loss (beyond nearest swing)
 9. TP1, TP2, TP3 (logical levels, TP1 min 1:1.5 RR)
 10. Risk:Reward ratio
@@ -1625,6 +1625,7 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
+- IMMEDIATE ENTRY RULE: when trade is BUY or SELL, the signal is meant to be executed NOW — entry MUST be the current market price (the last traded price at the right edge of the chart), NOT a future pullback or resistance level. Set SL and TPs relative to that current price. Only quote a pullback/zone entry when the trade decision is WAIT (e.g. "sell limit at resistance if price returns").
 - Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
 - ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades
 - For WAIT trades, still show hypothetical levels based on nearest swing points
