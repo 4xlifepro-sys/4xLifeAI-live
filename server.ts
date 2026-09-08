@@ -42,7 +42,7 @@ async function getEconomicCalendar(): Promise<FFEvent[]> {
   }
 }
 
-// Build a compact, high-impact-only calendar string for the Gemini prompt.
+// Build a compact, high-impact-only calendar string for the analysis engine.
 // We include the currency so Gemini can match it to the detected pair.
 // Times are shown in the viewer's local timezone when provided (like Forex Factory).
 function buildCalendarPromptBlock(events: FFEvent[], timeZone?: string): string {
@@ -390,7 +390,7 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-  // Initialize Gemini
+  // Initialize the internal analysis provider
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   await ensureAdminUser();
@@ -1683,7 +1683,7 @@ Return the analysis in this exact JSON format:
       try {
         analysis = JSON.parse(analysisText);
       } catch (e) {
-        // If Gemini didn't return pure JSON, extract it
+        // If the analysis provider didn't return pure JSON, extract it
         const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           analysis = JSON.parse(jsonMatch[0]);
@@ -1709,7 +1709,7 @@ Return the analysis in this exact JSON format:
         }
       }
       
-      // Normalize news-bias fields so Gemini can never show a misleading value
+      // Normalize news-bias fields so the analysis engine can never show a misleading value
       if (analysis && typeof analysis === 'object') {
         analysis.newsHasEvent = analysis.newsHasEvent === true;
         const pred = String(analysis.newsPrediction || '').toUpperCase();
@@ -1721,7 +1721,7 @@ Return the analysis in this exact JSON format:
         analysis.newsBigMove = analysis.newsBigMove === true;
         if (!analysis.newsEvent) analysis.newsHasEvent = false;
 
-        // Dual-timeframe safety: a conflict always blocks entry, whatever Gemini says
+        // Dual-timeframe safety: a conflict always blocks entry, whatever the analysis returns
         const tf = String(analysis.tfStatus || '').toUpperCase();
         analysis.tfStatus = (tf === 'ALIGNED' || tf === 'CONFLICT') && base64Data2 ? tf : 'SINGLE';
         if (analysis.tfStatus === 'CONFLICT') {

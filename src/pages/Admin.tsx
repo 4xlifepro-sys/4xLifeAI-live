@@ -1125,7 +1125,7 @@ export default function Admin() {
         <div className="p-4 sm:p-6 border-b border-[#202735] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div>
             <h2 className="text-xl font-semibold text-white">AI Prompts Configuration</h2>
-            <p className="text-sm text-[#8A95A5] mt-1">Customize the core behavioral instructions of your platform's AI models.</p>
+            <p className="text-sm text-[#8A95A5] mt-1">Customize the core behavioral instructions of your 4xFiveAI analysis engine.</p>
           </div>
           <button 
             onClick={fetchPrompts}
