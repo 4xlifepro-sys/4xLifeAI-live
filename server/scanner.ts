@@ -155,9 +155,7 @@ function getSignalConfirmPrompt(): string {
     const prompts = JSON.parse(data);
     if (prompts.signal_confirm_prompt) return prompts.signal_confirm_prompt;
   } catch (e) { /* fall through to default */ }
-  return `You are a strict senior price-action trader reviewing an automated signal as the FINAL gate before it is published to customers.
-
-You receive recent chart data as candle lists: the M5 entry timeframe and the 4H higher timeframe. Each candle line is "O{open} H{high} L{low} C{close}". Read this data exactly like you would read a chart screenshot.
+  return `You are 4xLifeAI Engine Analyst — the same institutional price-action brain as the Chart Analyzer, now reviewing an automated candidate signal using real chart data. Read the candle data exactly like you would read a chart screenshot.
 
 Signal under review:
 Pair: {pair}
@@ -168,23 +166,80 @@ TP1/TP2/TP3: {tp1} / {tp2} / {tp3}
 Engine confidence: {confidence}%
 Market regime reported by engine: {regime}
 
-READ THE CHART (screenshot strategy):
-1. TREND: are the M5 swings making Higher Highs + Higher Lows (bullish), Lower Highs + Lower Lows (bearish), or overlapping sideways (chop)?
-2. CHOP TEST: if the recent M5 candles overlap heavily with no clean swing structure, REJECT — this engine loses money in sideways chop. Skip the trade like a human pro would.
-3. ENTRY ZONE: for SELL, entry should sit in the premium zone (upper half of the recent range); for BUY, in the discount zone (lower half). Selling at range lows or buying at range highs into opposing structure = poor entry, REJECT.
-4. SL SANITY: the SL must sit beyond a real swing point, not inside noise. TPs must be realistically reachable within the recent volatility.
-5. TIMEFRAME AGREEMENT: the 4H structure should not violently oppose the signal direction (e.g. strong 4H uptrend against a M5 SELL). Strong disagreement = REJECT.
+APPLY THE FULL PRICE-ACTION STRATEGY:
+1. TREND (Bullish/Bearish/Range): read the M5 swings — Higher Highs + Higher Lows = bullish, Lower Highs + Lower Lows = bearish, overlapping = range.
+2. MARKET STRUCTURE + 4H AGREEMENT: the 4H structure must not violently oppose the signal direction. Strong opposition = REJECT.
+3. MOMENTUM (Strong/Weak/Exhausted): exhausted momentum or reversal imminent = REJECT.
+4. SETUP QUALITY (Breakout/Pullback/Rejection/Continuation).
+5. CHOP TEST: heavy overlapping candles with no clean swing structure = REJECT. Skip chop like a human pro would.
+6. ENTRY ZONE: for SELL, entry must sit in the premium zone (upper half of the recent range); for BUY, in the discount zone (lower half). Selling at range lows or buying at range highs into opposing structure = REJECT.
 
-REJECT if any rule fails. CONFIRM only if this reads like a clean, trending, well-structured chart worth sending to paying customers.
+DECISION RULES:
+- If the chart confirms a clean, trending, well-structured setup in the SAME direction as the candidate → decision "CONFIRM" and refine the levels to institutional standards:
+  * entry = the current market price (the CLOSE of the LAST M5 candle) — NEVER a future pullback level
+  * sl = beyond the nearest valid M5 swing high/low — NEVER inside market noise
+  * tp1/tp2/tp3 = logical levels ahead, with tp1 at least 1.5x the SL distance
+- If chop, unclear, exhausted, poor entry zone, or 4H strongly opposes → decision "REJECT".
+- NEVER flip the direction. Only CONFIRM (with refined levels) or REJECT.
+- Only use prices present in the data; never invent values.
 
 Answer with STRICT JSON only, no markdown:
-{"decision":"CONFIRM" or "REJECT","reason":"one short sentence, plain English"}`;
+{"decision":"CONFIRM" or "REJECT","entry":number,"sl":number,"tp1":number,"tp2":number,"tp3":number,"confidence":0-100,"reason":"one short sentence, plain English"}`;
 }
 
 // Compact candle text for the Gemini chart-reading prompt ("screenshot strategy" in data form)
 function compactCandles(candles: any[], count: number): string {
   const slice = (candles || []).slice(-count);
   return slice.map((c: any) => `O${c.open} H${c.high} L${c.low} C${c.close}`).join('\n');
+}
+
+// Validate and apply Gemini-refined levels onto the signal.
+// Every field is checked independently; anything invalid keeps the engine's value.
+function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void {
+  const num = (v: any): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const isLong = signal.direction === 'LONG' || signal.direction === 'BUY' || signal.signal === 'BUY';
+
+  const lastClose = m5Candles && m5Candles.length > 0 ? Number(m5Candles[m5Candles.length - 1].close) : null;
+  const gEntry = num(gemini.entry);
+  const gSl = num(gemini.sl);
+  const gTp1 = num(gemini.tp1);
+  const gTp2 = num(gemini.tp2);
+  const gTp3 = num(gemini.tp3);
+
+  // Entry: must be within 0.5% of the live last close (IMMEDIATE ENTRY RULE)
+  if (gEntry !== null && lastClose !== null && Math.abs(gEntry - lastClose) / lastClose < 0.005) {
+    signal.entry = gEntry;
+  }
+
+  // SL must sit on the correct side of entry
+  if (gSl !== null) {
+    const slOk = isLong ? gSl < signal.entry : gSl > signal.entry;
+    if (slOk) signal.sl = gSl;
+  }
+
+  // TPs must each sit on the correct side of entry, and TP1 must keep >= 1:1.5 RR
+  const risk = Math.abs(signal.entry - signal.sl);
+  const applyTp = (gTp: number | null, current: number): number => {
+    if (gTp === null) return current;
+    const sideOk = isLong ? gTp > signal.entry : gTp < signal.entry;
+    if (!sideOk) return current;
+    return gTp;
+  };
+  const newTp1 = applyTp(gTp1, signal.tp1);
+  if (risk > 0 && Math.abs(signal.entry - newTp1) / risk >= 1.5) {
+    signal.tp1 = newTp1;
+  }
+  signal.tp2 = applyTp(gTp2, signal.tp2);
+  signal.tp3 = applyTp(gTp3, signal.tp3);
+
+  // Confidence: accept Gemini's read, clamped to a sane band
+  const gConf = Number(gemini.confidence);
+  if (Number.isFinite(gConf) && gConf >= 40 && gConf <= 95) {
+    signal.aiConfidence = Math.round(gConf);
+  }
 }
 
 async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCandles?: any[]): Promise<{ confirmed: boolean, reason: string }> {
@@ -234,6 +289,11 @@ async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCan
     const reason = String(parsed.reason || 'no reason given').slice(0, 200);
 
     const confirmed = decision !== 'REJECT';
+    if (confirmed && m5Candles && m5Candles.length > 0) {
+      // Full-strategy mode: apply Gemini's analyzer-grade levels (validated field-by-field)
+      applyGeminiLevels(signal, parsed, m5Candles);
+      signal.aiReason = `GEMINI_STRATEGY: ${reason}`;
+    }
     geminiVetoCache.set(cacheKey, { confirmed, reason, timestamp: Date.now() });
     return { confirmed, reason };
   } catch (e: any) {
