@@ -143,11 +143,10 @@ const sampleData: DashboardData = {
       code: "FX",
       items: [
         { pair: "EURUSD", price: 1.1436, trend: "NEUTRAL", changePct: 0.02 },
+        { pair: "GBPUSD", price: 1.2721, trend: "NEUTRAL", changePct: 0.05 },
         { pair: "USDJPY", price: 161.368, trend: "NEUTRAL", changePct: -0.11 },
+        { pair: "AUDUSD", price: 0.6614, trend: "NEUTRAL", changePct: 0.03 },
         { pair: "USDCAD", price: 1.4203, trend: "NEUTRAL", changePct: 0.04 },
-        { pair: "NZDUSD", price: 0.57072, trend: "NEUTRAL", changePct: -0.03 },
-        { pair: "EURJPY", price: 184.576, trend: "NEUTRAL", changePct: 0.07 },
-        { pair: "GBPJPY", price: 215.466, trend: "NEUTRAL", changePct: 0.01 },
       ],
     },
     {
@@ -155,7 +154,6 @@ const sampleData: DashboardData = {
       code: "MT",
       items: [
         { pair: "XAUUSD", price: 4175.07, trend: "BULL", changePct: 0.68 },
-        { pair: "XAGUSD", price: 62.369, trend: "BULL", changePct: 0.41 },
       ],
     },
     {
@@ -164,6 +162,7 @@ const sampleData: DashboardData = {
       items: [
         { pair: "BTCUSD", price: 62849.55, trend: "BULL", changePct: 1.12 },
         { pair: "ETHUSD", price: 1763.49, trend: "BULL", changePct: 0.87 },
+        { pair: "SOLUSD", price: 143.82, trend: "BULL", changePct: 1.24 },
       ],
     },
   ],

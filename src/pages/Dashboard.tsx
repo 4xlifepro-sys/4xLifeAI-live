@@ -95,13 +95,14 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Kept in sync with server/scanner.ts APPROVED_PAIRS (6-pair roster:
-  // metals + crypto only; forex removed - no proven edge after costs).
+  // Kept in sync with server/scanner.ts APPROVED_PAIRS (9-pair roster:
+  // XAUUSD + 5 forex majors + 3 crypto; Oil excluded, Silver/BNB dropped).
   // If this list is stale, Today Signal / Recent History silently drop
   // the new pairs' signals.
   const PAIRS = [
-    'XAUUSD', 'XAGUSD',
-    'ETHUSD', 'BNBUSD', 'SOLUSD', 'BTCUSD',
+    'XAUUSD',
+    'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
+    'BTCUSD', 'ETHUSD', 'SOLUSD',
   ];
 
   const dashboardData = useMemo(() => {
@@ -136,6 +137,7 @@ export default function Dashboard() {
       if (pair.includes('ETH')) return Math.round(diff * 10);
       if (pair.includes('SOL') || pair.includes('BNB') || pair.includes('LTC')) return Math.round(diff * 10);
       if (pair.includes('JPY')) return Math.round(diff * 100);
+      if (['EURUSD', 'GBPUSD', 'AUDUSD', 'USDCAD'].includes(pair)) return Math.round(diff * 10000);
       if (pair.includes('XAU') || pair.includes('XAG')) return Math.round(diff * 10);
       return Math.round(diff * 10000);
     };

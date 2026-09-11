@@ -820,11 +820,12 @@ async function startServer() {
 
     try {
       const liveModule: any = await import('./server/live-market-feed.js');
-      // Kept in sync with server/scanner.ts APPROVED_PAIRS (6-pair roster:
-      // metals + crypto only; forex removed - no proven edge after costs).
+      // Kept in sync with server/scanner.ts APPROVED_PAIRS (9-pair roster:
+      // XAUUSD + 5 forex majors + 3 crypto; Oil excluded, Silver/BNB dropped).
       const approved = [
-        'XAUUSD', 'XAGUSD',
-        'ETHUSD', 'BNBUSD', 'SOLUSD', 'BTCUSD',
+        'XAUUSD',
+        'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
+        'BTCUSD', 'ETHUSD', 'SOLUSD',
       ];
       const results: any[] = [];
       for (const [index, pair] of approved.entries()) {
