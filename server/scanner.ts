@@ -242,6 +242,34 @@ function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void 
   }
 }
 
+// ============================================================
+// DAILY SIGNAL CAP — publish at most DAILY_SIGNAL_LIMIT trades
+// per UTC day. Checked BEFORE the Gemini gate so capped signals
+// never spend AI tokens.
+// ============================================================
+const DAILY_SIGNAL_LIMIT = Number(process.env.DAILY_SIGNAL_LIMIT || 4);
+
+async function countSignalsPublishedToday(): Promise<number> {
+  const startIso = new Date();
+  startIso.setUTCHours(0, 0, 0, 0);
+  if (supabase) {
+    try {
+      const { count, error } = await supabase
+        .from('signals')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', startIso.toISOString()) as any;
+      if (error) throw error;
+      return count || 0;
+    } catch (e: any) {
+      console.error("Daily cap DB count failed (memory fallback):", e.message);
+    }
+  }
+  // Memory fallback: signals array holds the most recent 100 published signals
+  return scannerState.signals.filter(s =>
+    s.tier !== 'Reject' && new Date(s.timestamp).getTime() >= startIso.getTime()
+  ).length;
+}
+
 async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCandles?: any[]): Promise<{ confirmed: boolean, reason: string }> {
   const failOpen = { confirmed: true, reason: 'GEMINI_UNAVAILABLE' };
   if (!ai) return failOpen;
@@ -1203,6 +1231,18 @@ export async function startScanner() {
         }
 
         if (!isDuplicate) {
+          // DAILY SIGNAL CAP: max DAILY_SIGNAL_LIMIT published trades per UTC day
+          if (signal.tier !== 'Reject') {
+            const publishedToday = await countSignalsPublishedToday();
+            if (publishedToday >= DAILY_SIGNAL_LIMIT) {
+              console.log(`DAILY_LIMIT: ${pair} ${signal.direction} blocked — ${publishedToday}/${DAILY_SIGNAL_LIMIT} signals already published today`);
+              signal.tier = 'Reject';
+              signal.status = 'REJECTED';
+              signal.rejection_reason = 'DAILY_LIMIT';
+              signal.aiReason = `Daily limit reached (${DAILY_SIGNAL_LIMIT} signals/day). Signal withheld.`;
+            }
+          }
+
           // GEMINI CONFIRMATION GATE (final quality veto before publish)
           if (signal.tier !== 'Reject') {
             const confirmation = await confirmSignalWithGemini(signal, setup as any[], htf as any[]);
