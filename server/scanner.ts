@@ -173,6 +173,7 @@ APPLY THE FULL PRICE-ACTION STRATEGY:
 4. SETUP QUALITY (Breakout/Pullback/Rejection/Continuation).
 5. CHOP TEST: heavy overlapping candles with no clean swing structure = REJECT. Skip chop like a human pro would.
 6. ENTRY ZONE: for SELL, entry must sit in the premium zone (upper half of the recent range); for BUY, in the discount zone (lower half). Selling at range lows or buying at range highs into opposing structure = REJECT.
+7. NEWS (High-impact calendar below): an event for the pair's currencies that is PENDING and lands within ~2 hours makes any entry a coin-flip — REJECT (the deterministic block already handles the final 30 minutes; you handle the 2-hour approach window). Use scenario language only ("a strong CPI would lift USD"), never promise outcomes.
 
 DECISION RULES:
 - If the chart confirms a clean, trending, well-structured setup in the SAME direction as the candidate → decision "CONFIRM" and refine the levels to institutional standards:
@@ -270,6 +271,96 @@ async function countSignalsPublishedToday(): Promise<number> {
   ).length;
 }
 
+// ============================================================
+// FOREX FACTORY NEWS (engine-side, same feed as the Chart Analyzer)
+// High-impact events are filtered to the pair's currencies and used by
+// the Gemini analyzer gate: a deterministic block window pauses entries
+// around red-folder events (no AI tokens spent), and the events are
+// passed to Gemini as context.
+// ============================================================
+interface FFEvent {
+  title: string;
+  country: string; // currency code e.g. USD
+  date: string;    // ISO datetime
+  impact: string;  // Low | Medium | High | Holiday
+  forecast: string;
+  previous: string;
+  actual?: string;
+}
+let engineFfCache: { at: number; events: FFEvent[] } | null = null;
+const ENGINE_FF_CACHE_MS = 15 * 60 * 1000; // 15 minutes
+
+async function getEngineEconomicCalendar(): Promise<FFEvent[]> {
+  if (engineFfCache && Date.now() - engineFfCache.at < ENGINE_FF_CACHE_MS) return engineFfCache.events;
+  try {
+    const resp = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (4xLifeAI Engine)' },
+    });
+    if (!resp.ok) throw new Error(`FF feed ${resp.status}`);
+    const data = (await resp.json()) as FFEvent[];
+    engineFfCache = { at: Date.now(), events: Array.isArray(data) ? data : [] };
+    return engineFfCache.events;
+  } catch (e: any) {
+    console.error('[engine calendar] fetch failed:', e?.message || e);
+    return engineFfCache?.events || [];
+  }
+}
+
+// Currencies relevant to a pair (like the Chart Analyzer: XAUUSD -> USD only)
+function pairCurrencies(pair: string): string[] {
+  if (pair === 'XAUUSD') return ['USD'];
+  if (pair === 'BTCUSD' || pair === 'ETHUSD' || pair === 'SOLUSD') return ['USD'];
+  // Forex: base + quote (e.g. EURUSD -> EUR, USD; USDJPY -> USD, JPY)
+  const base = pair.slice(0, 3);
+  const quote = pair.slice(3, 6);
+  return [base, quote].filter(c => c.length === 3);
+}
+
+// Deterministic high-impact news block (mirrors the Chart Analyzer rules):
+// no new entries 30 min before or 15 min after a HIGH-impact event for the pair's currencies.
+const NEWS_BLOCK_BEFORE_MIN = 30;
+const NEWS_BLOCK_AFTER_MIN = 15;
+
+function findNewsBlockEvent(pair: string, now: number): { event: FFEvent, minutesToEvent: number } | null {
+  const currencies = pairCurrencies(pair);
+  const events = engineFfCache?.events || [];
+  for (const e of events) {
+    const impact = (e.impact || '').toLowerCase();
+    if (impact !== 'high') continue;
+    if (!currencies.includes((e.country || '').toUpperCase())) continue;
+    const t = new Date(e.date).getTime();
+    if (isNaN(t)) continue;
+    const minutesToEvent = Math.round((t - now) / 60000);
+    if (minutesToEvent <= NEWS_BLOCK_BEFORE_MIN && minutesToEvent >= -NEWS_BLOCK_AFTER_MIN) {
+      return { event: e, minutesToEvent };
+    }
+  }
+  return null;
+}
+
+// Compact high-impact context for the Gemini prompt (upcoming/just-released only)
+function buildEngineNewsBlock(pair: string, now: number): string {
+  const currencies = pairCurrencies(pair);
+  const rows = (engineFfCache?.events || [])
+    .map((e) => ({ e, t: new Date(e.date).getTime() }))
+    .filter(({ e, t }) => {
+      const impact = (e.impact || '').toLowerCase();
+      if (impact !== 'high') return false;
+      if (!currencies.includes((e.country || '').toUpperCase())) return false;
+      if (isNaN(t)) return false;
+      return t > now - 2 * 60 * 60 * 1000 && t < now + 48 * 60 * 60 * 1000;
+    })
+    .sort((a, b) => a.t - b.t)
+    .slice(0, 6)
+    .map(({ e, t }) => {
+      const minutesToEvent = Math.round((t - now) / 60000);
+      const when = minutesToEvent >= 0 ? `in ${minutesToEvent}m` : `${Math.abs(minutesToEvent)}m ago`;
+      const actual = e.actual && e.actual !== '' ? e.actual : 'PENDING';
+      return `- ${e.title} (${e.country}) ${when} | forecast: ${e.forecast || 'n/a'} | previous: ${e.previous || 'n/a'} | actual: ${actual}`;
+    });
+  return rows.length ? rows.join('\n') : 'NONE (no high-impact events for this pair within 48h).';
+}
+
 async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCandles?: any[]): Promise<{ confirmed: boolean, reason: string }> {
   const failOpen = { confirmed: true, reason: 'GEMINI_UNAVAILABLE' };
   if (!ai) return failOpen;
@@ -278,6 +369,25 @@ async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCan
   const cached = geminiVetoCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp) < GEMINI_VETO_CACHE_TTL_MS) {
     return { confirmed: cached.confirmed, reason: cached.reason };
+  }
+
+  const nowMs = Date.now();
+
+  // Refresh the Forex Factory calendar (cached 15 min, fail-open)
+  await getEngineEconomicCalendar();
+
+  // DETERMINISTIC NEWS BLOCK: entries are paused 30 min before / 15 min after
+  // a HIGH-impact event for the pair's currencies. Runs in code, never bypassed
+  // by the model, and costs zero AI tokens.
+  const block = findNewsBlockEvent(signal.pair, nowMs);
+  if (block) {
+    const rel = block.minutesToEvent >= 0
+      ? `in ${block.minutesToEvent} minutes`
+      : `${Math.abs(block.minutesToEvent)} minutes ago`;
+    const reason = `${block.event.title} (${block.event.country}) ${rel} — entries paused around high-impact news.`;
+    console.log(`NEWS_BLOCK: ${signal.pair} ${signal.direction} — ${reason}`);
+    geminiVetoCache.set(cacheKey, { confirmed: false, reason, timestamp: Date.now() });
+    return { confirmed: false, reason };
   }
 
   try {
@@ -302,6 +412,8 @@ async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCan
     if (htfCandles && htfCandles.length > 0) {
       prompt += `\n\n4H CHART DATA (most recent last):\n${compactCandles(htfCandles, 30)}`;
     }
+    // Forex Factory context (high-impact events for this pair, ±48h window)
+    prompt += `\n\nHIGH-IMPACT ECONOMIC CALENDAR for this pair (times relative to now):\n${buildEngineNewsBlock(signal.pair, nowMs)}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
