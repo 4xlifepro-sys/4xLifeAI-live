@@ -155,7 +155,9 @@ function getSignalConfirmPrompt(): string {
     const prompts = JSON.parse(data);
     if (prompts.signal_confirm_prompt) return prompts.signal_confirm_prompt;
   } catch (e) { /* fall through to default */ }
-  return `You are a strict senior forex/crypto trader reviewing an automated signal as the FINAL gate before it is published to customers.
+  return `You are a strict senior price-action trader reviewing an automated signal as the FINAL gate before it is published to customers.
+
+You receive recent chart data as candle lists: the M5 entry timeframe and the 4H higher timeframe. Each candle line is "O{open} H{high} L{low} C{close}". Read this data exactly like you would read a chart screenshot.
 
 Signal under review:
 Pair: {pair}
@@ -165,21 +167,27 @@ Stop Loss: {sl} ({riskPips} pips)
 TP1/TP2/TP3: {tp1} / {tp2} / {tp3}
 Engine confidence: {confidence}%
 Market regime reported by engine: {regime}
-Engine diagnostics: {diagnostics}
 
-Your job is to say NO when a human pro would skip this trade.
-REJECT if any of these apply:
-- The setup smells like chop/range (the engine is known to lose in sideways markets)
-- Risk (SL distance) is oversized relative to the realistic move to TP1
-- The regime/diagnostics look mixed, exhausted, or low-quality
-- The levels look incoherent (SL inside noise, TPs unrealistic for the pair's volatility)
-CONFIRM only if this looks like a clean, trending, well-structured setup worth sending to paying customers.
+READ THE CHART (screenshot strategy):
+1. TREND: are the M5 swings making Higher Highs + Higher Lows (bullish), Lower Highs + Lower Lows (bearish), or overlapping sideways (chop)?
+2. CHOP TEST: if the recent M5 candles overlap heavily with no clean swing structure, REJECT — this engine loses money in sideways chop. Skip the trade like a human pro would.
+3. ENTRY ZONE: for SELL, entry should sit in the premium zone (upper half of the recent range); for BUY, in the discount zone (lower half). Selling at range lows or buying at range highs into opposing structure = poor entry, REJECT.
+4. SL SANITY: the SL must sit beyond a real swing point, not inside noise. TPs must be realistically reachable within the recent volatility.
+5. TIMEFRAME AGREEMENT: the 4H structure should not violently oppose the signal direction (e.g. strong 4H uptrend against a M5 SELL). Strong disagreement = REJECT.
+
+REJECT if any rule fails. CONFIRM only if this reads like a clean, trending, well-structured chart worth sending to paying customers.
 
 Answer with STRICT JSON only, no markdown:
 {"decision":"CONFIRM" or "REJECT","reason":"one short sentence, plain English"}`;
 }
 
-async function confirmSignalWithGemini(signal: Signal): Promise<{ confirmed: boolean, reason: string }> {
+// Compact candle text for the Gemini chart-reading prompt ("screenshot strategy" in data form)
+function compactCandles(candles: any[], count: number): string {
+  const slice = (candles || []).slice(-count);
+  return slice.map((c: any) => `O${c.open} H${c.high} L${c.low} C${c.close}`).join('\n');
+}
+
+async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCandles?: any[]): Promise<{ confirmed: boolean, reason: string }> {
   const failOpen = { confirmed: true, reason: 'GEMINI_UNAVAILABLE' };
   if (!ai) return failOpen;
 
@@ -191,7 +199,7 @@ async function confirmSignalWithGemini(signal: Signal): Promise<{ confirmed: boo
 
   try {
     const riskPips = (Math.abs(signal.entry - signal.sl) / getPipMultiplier(signal.pair)).toFixed(1);
-    const prompt = getSignalConfirmPrompt()
+    let prompt = getSignalConfirmPrompt()
       .replace(/{pair}/g, signal.pair)
       .replace(/{direction}/g, signal.direction)
       .replace(/{entry}/g, String(signal.entry))
@@ -203,6 +211,14 @@ async function confirmSignalWithGemini(signal: Signal): Promise<{ confirmed: boo
       .replace(/{confidence}/g, String(signal.aiConfidence))
       .replace(/{regime}/g, String(signal.diagnostics?.regimeState || 'UNKNOWN'))
       .replace(/{diagnostics}/g, String(signal.diagnostics?.confidenceBreakdown || 'none'));
+
+    // Attach the chart data so Gemini reads the actual market, not just the setup numbers
+    if (m5Candles && m5Candles.length > 0) {
+      prompt += `\n\nM5 CHART DATA (most recent last):\n${compactCandles(m5Candles, 60)}`;
+    }
+    if (htfCandles && htfCandles.length > 0) {
+      prompt += `\n\n4H CHART DATA (most recent last):\n${compactCandles(htfCandles, 30)}`;
+    }
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -1129,7 +1145,7 @@ export async function startScanner() {
         if (!isDuplicate) {
           // GEMINI CONFIRMATION GATE (final quality veto before publish)
           if (signal.tier !== 'Reject') {
-            const confirmation = await confirmSignalWithGemini(signal);
+            const confirmation = await confirmSignalWithGemini(signal, setup as any[], htf as any[]);
             if (!confirmation.confirmed) {
               console.log(`GEMINI_VETO: ${pair} ${signal.direction} @ ${signal.entry} — ${confirmation.reason}`);
               signal.tier = 'Reject';
