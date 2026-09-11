@@ -265,6 +265,16 @@ function GlobalLayout() {
 
             {/* Mobile Navigation controls */}
             <div className="flex xl:hidden items-center gap-1 shrink-0">
+              {user && (
+                <button
+                  onClick={signOut}
+                  className="p-2 text-[#8A95A5] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors focus:outline-none"
+                  title="Logout"
+                  aria-label="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
               {user && <NotificationDropdown />}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}

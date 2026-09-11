@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { User, CreditCard, Bell, Shield, Check, Settings2, Copy, Wallet, ArrowRight, X } from 'lucide-react';
+import { User, CreditCard, Bell, Shield, Check, Settings2, Copy, Wallet, ArrowRight, X, LogOut } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAuth } from '../context/AuthContext';
@@ -13,7 +13,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export default function Account() {
   const dialog = useDialog();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
   const [telegramAlerts, setTelegramAlerts] = useState(true);
   const [eliteOnly, setEliteOnly] = useState(false);
@@ -243,6 +243,35 @@ export default function Account() {
                 )} />
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Account Actions */}
+        <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
+          <div className="p-5 sm:p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex gap-4">
+              <div className="mt-1 w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                <LogOut className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h4 className="text-base font-medium text-white mb-1">Sign Out</h4>
+                <p className="text-sm text-[#8A95A5]">Log out of your 4xFiveAI account on this device.</p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                const ok = await dialog.confirm({
+                  title: 'Sign Out',
+                  message: 'Are you sure you want to log out?',
+                  confirmText: 'Log Out',
+                  cancelText: 'Cancel',
+                });
+                if (ok) await signOut();
+              }}
+              className="px-5 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2 shrink-0"
+            >
+              <LogOut className="w-4 h-4" /> Log Out
+            </button>
           </div>
         </div>
 
