@@ -173,7 +173,7 @@ APPLY THE FULL PRICE-ACTION STRATEGY:
 4. SETUP QUALITY (Breakout/Pullback/Rejection/Continuation).
 5. CHOP TEST: heavy overlapping candles with no clean swing structure = REJECT. Skip chop like a human pro would.
 6. ENTRY ZONE: for SELL, entry must sit in the premium zone (upper half of the recent range); for BUY, in the discount zone (lower half). Selling at range lows or buying at range highs into opposing structure = REJECT.
-7. NEWS (High-impact calendar below): an event for the pair's currencies that is PENDING and lands within ~2 hours makes any entry a coin-flip — REJECT (the deterministic block already handles the final 30 minutes; you handle the 2-hour approach window). Use scenario language only ("a strong CPI would lift USD"), never promise outcomes.
+7. NEWS (High-impact calendar below): news NEVER blocks or rejects a trade by itself. Use it only to judge whether the entry moment makes sense — e.g. an entry seconds before a pending event is a coin-flip on execution quality, which you may weigh in. Primarily, news feeds the NEWS PREDICTION section below.
 
 DECISION RULES:
 - If the chart confirms a clean, trending, well-structured setup in the SAME direction as the candidate → decision "CONFIRM" and refine the levels to institutional standards:
@@ -402,22 +402,10 @@ async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCan
 
   const nowMs = Date.now();
 
-  // Refresh the Forex Factory calendar (cached 15 min, fail-open)
+  // NEWS = PREDICTION ONLY (no blocking, user decision): the Forex Factory
+  // calendar is refreshed (cached 15 min, fail-open) for context and
+  // prediction, but entries are never withheld because of upcoming news.
   await getEngineEconomicCalendar();
-
-  // DETERMINISTIC NEWS BLOCK: entries are paused 30 min before / 15 min after
-  // a HIGH-impact event for the pair's currencies. Runs in code, never bypassed
-  // by the model, and costs zero AI tokens.
-  const block = findNewsBlockEvent(signal.pair, nowMs);
-  if (block) {
-    const rel = block.minutesToEvent >= 0
-      ? `in ${block.minutesToEvent} minutes`
-      : `${Math.abs(block.minutesToEvent)} minutes ago`;
-    const reason = `${block.event.title} (${block.event.country}) ${rel} — entries paused around high-impact news.`;
-    console.log(`NEWS_BLOCK: ${signal.pair} ${signal.direction} — ${reason}`);
-    geminiVetoCache.set(cacheKey, { confirmed: false, reason, timestamp: Date.now() });
-    return { confirmed: false, reason };
-  }
 
   try {
     const riskPips = (Math.abs(signal.entry - signal.sl) / getPipMultiplier(signal.pair)).toFixed(1);
