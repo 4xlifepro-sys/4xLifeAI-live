@@ -343,16 +343,19 @@ export const WEEKEND_PAIRS = ['SOLUSD', 'LTCUSD', 'ETHUSD', 'ADAUSD', 'DOGEUSD',
 // SOLUSD, XRPUSD, BNBUSD, ADAUSD, LTCUSD, DOGEUSD) are routed through
 // detectCryptoTrendBreakoutLive() via CURATED_LIVE_CRYPTO_PAIRS below instead
 // of detectTrendMomentumScannerV5.
-// FINAL 6-PAIR ROSTER (user-selected, backtest-ranked)
-//   Tier 1 (real edge):   XAUUSD (+0.169 avgR), ETHUSD (+0.195 avgR)
-//   Daily volume:         XAGUSD (+0.046 avgR)
-//   Coverage:             BNBUSD (+0.053), SOLUSD (~0), BTCUSD (~0)
-//   Forex removed: no proven edge after real costs (all M5/H1 forex failed).
+// USER-SELECTED ROSTER (9 pairs): 5 forex majors + 3 crypto + 1 metal.
+// Forex majors re-added by user request; the Gemini analyzer gate
+// (trend/structure/chop review) protects publication quality and the
+// daily cap (max 4/day) limits exposure. XAGUSD/BNBUSD removed (no edge /
+// chop bleed); open trades on removed pairs keep being tracked via DB.
+// NOTE: Oil/WTI intentionally excluded (user decision).
 export const APPROVED_PAIRS = [
-  // Metals
-  'XAUUSD', 'XAGUSD',
+  // Commodities
+  'XAUUSD',
+  // Forex majors
+  'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD',
   // Crypto
-  'ETHUSD', 'BNBUSD', 'SOLUSD', 'BTCUSD',
+  'BTCUSD', 'ETHUSD', 'SOLUSD',
 ];
 
 export const PAIRS = [...APPROVED_PAIRS]; // Initialized, mutable by mode switch
