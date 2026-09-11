@@ -155,7 +155,7 @@ function getSignalConfirmPrompt(): string {
     const prompts = JSON.parse(data);
     if (prompts.signal_confirm_prompt) return prompts.signal_confirm_prompt;
   } catch (e) { /* fall through to default */ }
-  return `You are 4xLifeAI Engine Analyst — the same institutional price-action brain as the Chart Analyzer, now reviewing an automated candidate signal using real chart data. Read the candle data exactly like you would read a chart screenshot.
+  return `You are 4xLifeAI Engine Analyst — an institutional price-action brain reviewing an automated candidate signal using real chart data. Read the candle data exactly like you would read a chart screenshot. TIMEFRAME ROLES: M5 = entry timing, M15 = directional bias (user spec: 15-min bias / 5-min entry).
 
 Signal under review:
 Pair: {pair}
@@ -168,7 +168,7 @@ Market regime reported by engine: {regime}
 
 APPLY THE FULL PRICE-ACTION STRATEGY:
 1. TREND (Bullish/Bearish/Range): read the M5 swings — Higher Highs + Higher Lows = bullish, Lower Highs + Lower Lows = bearish, overlapping = range.
-2. MARKET STRUCTURE + 4H AGREEMENT: the 4H structure must not violently oppose the signal direction. Strong opposition = REJECT.
+2. MARKET STRUCTURE + M15 BIAS AGREEMENT: the M15 bias chart must not violently oppose the signal direction. Strong opposition = REJECT.
 3. MOMENTUM (Strong/Weak/Exhausted): exhausted momentum or reversal imminent = REJECT.
 4. SETUP QUALITY (Breakout/Pullback/Rejection/Continuation).
 5. CHOP TEST: heavy overlapping candles with no clean swing structure = REJECT. Skip chop like a human pro would.
@@ -427,7 +427,7 @@ async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCan
       prompt += `\n\nM5 CHART DATA (most recent last):\n${compactCandles(m5Candles, 60)}`;
     }
     if (htfCandles && htfCandles.length > 0) {
-      prompt += `\n\n4H CHART DATA (most recent last):\n${compactCandles(htfCandles, 30)}`;
+      prompt += `\n\nM15 BIAS CHART DATA (most recent last):\n${compactCandles(htfCandles, 60)}`;
     }
     // Forex Factory context (high-impact events for this pair, ±48h window)
     prompt += `\n\nHIGH-IMPACT ECONOMIC CALENDAR for this pair (times relative to now):\n${buildEngineNewsBlock(signal.pair, nowMs)}`;
@@ -547,6 +547,8 @@ function updatePairStatus(pair: string, status: 'scanning' | 'success' | 'error'
 }
 
 const htfCache = new Map<string, { data: any, timestamp: number }>();
+// M15 bias candles for the Gemini analyzer gate (user spec: 15-min bias / 5-min entry)
+const m15BiasCache = new Map<string, { data: any, timestamp: number }>();
 
 // Alert-only tracking for metals trades that stay open unusually long
 // (EMA20 trail has no fixed time exit by design). Does NOT close trades,
@@ -1382,8 +1384,18 @@ export async function startScanner() {
           }
 
           // GEMINI CONFIRMATION GATE (final quality veto before publish)
+          // Bias timeframe = M15 (user spec), entry timeframe = M5.
           if (signal.tier !== 'Reject') {
-            const confirmation = await confirmSignalWithGemini(signal, setup as any[], htf as any[]);
+            let m15Bias = m15BiasCache.get(pair);
+            if (!m15Bias || Date.now() - m15Bias.timestamp > 5 * 60 * 1000) {
+              const fetched = await fetchCandles(pair, '15m').catch(() => null);
+              if (fetched && (fetched as any[]).length > 0) {
+                m15Bias = { data: fetched, timestamp: Date.now() };
+                m15BiasCache.set(pair, m15Bias);
+              }
+            }
+            const biasCandles = m15Bias?.data ?? htf;
+            const confirmation = await confirmSignalWithGemini(signal, setup as any[], biasCandles as any[]);
             if (!confirmation.confirmed) {
               console.log(`GEMINI_VETO: ${pair} ${signal.direction} @ ${signal.entry} — ${confirmation.reason}`);
               signal.tier = 'Reject';
