@@ -184,8 +184,37 @@ DECISION RULES:
 - NEVER flip the direction. Only CONFIRM (with refined levels) or REJECT.
 - Only use prices present in the data; never invent values.
 
+NEWS PREDICTION (always required, CONFIRM or REJECT):
+Using the High-impact calendar above, predict the news bias for this pair:
+- lean: "BUY" or "SELL" = the direction the pair leans if the upcoming event surprises in that direction; "NEUTRAL" if no pending event or the outcome is too balanced to lean.
+- probability: 50-75 ONLY (news is a lean, never a certainty).
+- eventSummary: the pending event + role, e.g. "US CPI PENDING in ~3h" or "NONE PENDING".
+- bullishScenario / bearishScenario: ONE sentence each, scenario language ONLY — "IF stronger CPI, THEN USD lifts and gold drops". NEVER "will rise/will fall".
+
 Answer with STRICT JSON only, no markdown:
-{"decision":"CONFIRM" or "REJECT","entry":number,"sl":number,"tp1":number,"tp2":number,"tp3":number,"confidence":0-100,"reason":"one short sentence, plain English"}`;
+{"decision":"CONFIRM" or "REJECT","entry":number,"sl":number,"tp1":number,"tp2":number,"tp3":number,"confidence":0-100,"reason":"one short sentence, plain English","newsBias":{"lean":"BUY" or "SELL" or "NEUTRAL","probability":50-75,"eventSummary":"...","bullishScenario":"...","bearishScenario":"..."}}`;
+}
+
+// Validate and attach Gemini's news prediction onto the signal.
+// Clamps probability to 50-75 and sanitizes scenario language ("will" -> "would").
+function applyGeminiNewsBias(signal: Signal, gemini: any): void {
+  try {
+    const nb = gemini?.newsBias;
+    if (!nb || typeof nb !== 'object') return;
+    const lean = String(nb.lean || '').toUpperCase();
+    const prob = Number(nb.probability);
+    const clean = (s: any): string | undefined => {
+      if (typeof s !== 'string' || s.trim() === '') return undefined;
+      return s.replace(/\bwill\b/gi, 'would').trim().slice(0, 220);
+    };
+    signal.newsBias = {
+      lean: lean === 'BUY' ? 'BUY' : lean === 'SELL' ? 'SELL' : 'NEUTRAL',
+      probability: Number.isFinite(prob) ? Math.min(75, Math.max(50, Math.round(prob))) : 60,
+      eventSummary: clean(nb.eventSummary),
+      bullishScenario: clean(nb.bullishScenario),
+      bearishScenario: clean(nb.bearishScenario),
+    };
+  } catch (e) { /* never block a signal on news-bias formatting */ }
 }
 
 // Compact candle text for the Gemini chart-reading prompt ("screenshot strategy" in data form)
@@ -432,7 +461,13 @@ async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCan
     if (confirmed && m5Candles && m5Candles.length > 0) {
       // Full-strategy mode: apply Gemini's analyzer-grade levels (validated field-by-field)
       applyGeminiLevels(signal, parsed, m5Candles);
-      signal.aiReason = `GEMINI_STRATEGY: ${reason}`;
+      // News prediction: attach validated bias (lean + probability + scenarios)
+      applyGeminiNewsBias(signal, parsed);
+      const nb = signal.newsBias;
+      const newsLine = nb && nb.lean !== 'NEUTRAL'
+        ? ` | News bias: ${nb.lean} (${nb.probability}%) — ${nb.eventSummary || ''}`
+        : '';
+      signal.aiReason = `GEMINI_STRATEGY: ${reason}${newsLine}`;
     }
     geminiVetoCache.set(cacheKey, { confirmed, reason, timestamp: Date.now() });
     return { confirmed, reason };

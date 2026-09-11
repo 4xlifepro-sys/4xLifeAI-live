@@ -38,6 +38,13 @@ export interface Signal {
   aiConfidence?: number;
   aiConfidenceIsFallback?: boolean;
   aiReason?: string;
+  newsBias?: {
+    lean: 'BUY' | 'SELL' | 'NEUTRAL';
+    probability: number;      // clamped 50-75 (news is a lean, never a certainty)
+    eventSummary?: string;    // e.g. "US CPI PENDING in ~3h"
+    bullishScenario?: string; // "IF beats, THEN USD stronger..."
+    bearishScenario?: string; // "IF misses, THEN USD weaker..."
+  };
   entry: number;
   sl: number;
   tp1: number;
