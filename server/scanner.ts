@@ -1488,7 +1488,19 @@ export async function startScanner() {
                        + `<b>TP3:</b> ${signal.tp3} (1:5)\n\n`;
              }
              
-             const msgOut = `🚨 <b>4xFiveAI SIGNAL${modeStr}</b>\n\n`
+             // News prediction block (prediction only — never blocks the signal)
+            let newsBlock = '';
+            const nb = (signal as any).newsBias;
+            if (nb && nb.lean && nb.lean !== 'NEUTRAL') {
+              const leanEmoji = nb.lean === 'BUY' ? '📈' : '📉';
+              newsBlock = `📰 <b>News Forecast:</b> ${nb.eventSummary || 'Event pending'}\n`
+                        + `${leanEmoji} <b>Bias:</b> ${nb.lean} (${nb.probability}%)\n`
+                        + (nb.bullishScenario ? `<b>IF beats:</b> ${nb.bullishScenario}\n` : '')
+                        + (nb.bearishScenario ? `<b>IF misses:</b> ${nb.bearishScenario}\n` : '')
+                        + `\n`;
+            }
+
+            const msgOut = `🚨 <b>4xFiveAI SIGNAL${modeStr}</b>\n\n`
              + `<b>Pair:</b> ${signal.pair}\n`
              + `<b>Signal:</b> ${signalDirectionStr}\n`
              + `<b>Setup:</b> Premium signal\n\n`
@@ -1497,6 +1509,7 @@ export async function startScanner() {
             + tpBlock
              + `<b>Confidence:</b> ${signal.aiConfidence}% (${signal.tier})\n`
             + riskLine
+            + newsBlock
             + `<b>Timestamp:</b> ${dt}\n\n`
             + `🛡️ <b>Risk Management:</b> Every signal includes an SL calculated using real-time market volatility with pair-specific safety ranges — never too tight, never too wide. This is a signal service only — you place and manage your own trades based on our levels.`;
              
