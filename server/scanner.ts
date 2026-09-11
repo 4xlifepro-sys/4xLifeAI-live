@@ -124,7 +124,7 @@ async function updateSignalReason(dbId: string, signalId: string, text: string) 
         await supabase.from('signals')
             .update({ ai_reason: text })
             .eq('id', dbId);
-            
+
         // Also update memory state if present
         const memSignal = scannerState.signals.find(s => s.id === signalId);
         if (memSignal) {
@@ -137,6 +137,93 @@ async function updateSignalReason(dbId: string, signalId: string, text: string) 
     } catch (e) {
         console.error("Failed to update AI reason in DB", e);
     }
+}
+
+// ============================================================
+// GEMINI CONFIRMATION LAYER (engine-only)
+// A signal that passes all engine gates gets one final "senior
+// trader" review: confirm the setup or veto it as chop/unclear.
+// Fail-open: if Gemini is unavailable or errors, the signal is
+// published (engine reliability is never reduced by AI downtime).
+// ============================================================
+const geminiVetoCache = new Map<string, { confirmed: boolean, reason: string, timestamp: number }>();
+const GEMINI_VETO_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min per pair+direction
+
+function getSignalConfirmPrompt(): string {
+  try {
+    const data = fs.readFileSync(path.join(process.cwd(), 'prompts.json'), 'utf8');
+    const prompts = JSON.parse(data);
+    if (prompts.signal_confirm_prompt) return prompts.signal_confirm_prompt;
+  } catch (e) { /* fall through to default */ }
+  return `You are a strict senior forex/crypto trader reviewing an automated signal as the FINAL gate before it is published to customers.
+
+Signal under review:
+Pair: {pair}
+Direction: {direction}
+Entry: {entry}
+Stop Loss: {sl} ({riskPips} pips)
+TP1/TP2/TP3: {tp1} / {tp2} / {tp3}
+Engine confidence: {confidence}%
+Market regime reported by engine: {regime}
+Engine diagnostics: {diagnostics}
+
+Your job is to say NO when a human pro would skip this trade.
+REJECT if any of these apply:
+- The setup smells like chop/range (the engine is known to lose in sideways markets)
+- Risk (SL distance) is oversized relative to the realistic move to TP1
+- The regime/diagnostics look mixed, exhausted, or low-quality
+- The levels look incoherent (SL inside noise, TPs unrealistic for the pair's volatility)
+CONFIRM only if this looks like a clean, trending, well-structured setup worth sending to paying customers.
+
+Answer with STRICT JSON only, no markdown:
+{"decision":"CONFIRM" or "REJECT","reason":"one short sentence, plain English"}`;
+}
+
+async function confirmSignalWithGemini(signal: Signal): Promise<{ confirmed: boolean, reason: string }> {
+  const failOpen = { confirmed: true, reason: 'GEMINI_UNAVAILABLE' };
+  if (!ai) return failOpen;
+
+  const cacheKey = `${signal.pair}_${signal.direction}`;
+  const cached = geminiVetoCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < GEMINI_VETO_CACHE_TTL_MS) {
+    return { confirmed: cached.confirmed, reason: cached.reason };
+  }
+
+  try {
+    const riskPips = (Math.abs(signal.entry - signal.sl) / getPipMultiplier(signal.pair)).toFixed(1);
+    const prompt = getSignalConfirmPrompt()
+      .replace(/{pair}/g, signal.pair)
+      .replace(/{direction}/g, signal.direction)
+      .replace(/{entry}/g, String(signal.entry))
+      .replace(/{sl}/g, String(signal.sl))
+      .replace(/{riskPips}/g, riskPips)
+      .replace(/{tp1}/g, String(signal.tp1))
+      .replace(/{tp2}/g, String(signal.tp2))
+      .replace(/{tp3}/g, String(signal.tp3))
+      .replace(/{confidence}/g, String(signal.aiConfidence))
+      .replace(/{regime}/g, String(signal.diagnostics?.regimeState || 'UNKNOWN'))
+      .replace(/{diagnostics}/g, String(signal.diagnostics?.confidenceBreakdown || 'none'));
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+
+    let text = response.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) text = jsonMatch[0];
+    const parsed = JSON.parse(text);
+    const decision = String(parsed.decision || '').toUpperCase();
+    const reason = String(parsed.reason || 'no reason given').slice(0, 200);
+
+    const confirmed = decision !== 'REJECT';
+    geminiVetoCache.set(cacheKey, { confirmed, reason, timestamp: Date.now() });
+    return { confirmed, reason };
+  } catch (e: any) {
+    console.error("Gemini confirmation failed (fail-open):", e.message);
+    return failOpen;
+  }
 }
 
 export const isWeekend = () => {
@@ -1040,6 +1127,22 @@ export async function startScanner() {
         }
 
         if (!isDuplicate) {
+          // GEMINI CONFIRMATION GATE (final quality veto before publish)
+          if (signal.tier !== 'Reject') {
+            const confirmation = await confirmSignalWithGemini(signal);
+            if (!confirmation.confirmed) {
+              console.log(`GEMINI_VETO: ${pair} ${signal.direction} @ ${signal.entry} — ${confirmation.reason}`);
+              signal.tier = 'Reject';
+              signal.status = 'REJECTED';
+              signal.aiReason = `GEMINI_CHOP_VETO: ${confirmation.reason}`;
+              signal.rejection_reason = 'GEMINI_CHOP_VETO';
+              rejectionStats.LOW_CONFIDENCE++;
+              if (signal.diagnostics) {
+                signal.diagnostics.confidenceBreakdown = 'GEMINI_CHOP_VETO';
+              }
+            }
+          }
+
           // Update confidence history
           scannerState.confidenceHistory.unshift(signal.aiConfidence);
           if (scannerState.confidenceHistory.length > 4) {
