@@ -48,6 +48,7 @@ import { GoogleGenAI } from "@google/genai";
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
+import JSON5 from 'json5';
 
 function getSignalExplainerPrompt(): string {
   try {
@@ -332,6 +333,55 @@ function getEngineGeneratorPrompt(): string {
 const geminiNoSignalCache = new Map<string, { at: number; price: number }>();
 const GEMINI_NO_SIGNAL_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// Robust JSON parser for Gemini output. Tries native JSON, then JSON5,
+// then a heuristic repair pass that strips control chars and fixes common
+// unescaped quotes/newlines inside string values.
+function parseGeminiJson(raw: string): any | null {
+  if (!raw || raw.trim().length < 2) return null;
+
+  // 1. Native JSON
+  try {
+    return JSON.parse(raw);
+  } catch { /* continue */ }
+
+  // 2. JSON5 (handles trailing commas, unquoted keys, single quotes, etc.)
+  try {
+    return JSON5.parse(raw);
+  } catch { /* continue */ }
+
+  // 3. Aggressive repair: remove control characters, normalize quotes,
+  //    collapse unescaped newlines inside strings.
+  let cleaned = raw
+    .replace(/\r\n/g, '\n')
+    .replace(/[\u0000-\u001F]/g, ' ')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2026]/g, '...')
+    .replace(/[\u2192]/g, '->')
+    .replace(/[\u2191\u2193]/g, '');
+
+  try {
+    return JSON.parse(cleaned);
+  } catch { /* continue */ }
+
+  try {
+    return JSON5.parse(cleaned);
+  } catch { /* continue */ }
+
+  // 4. Last resort: strip any character that is not valid inside a JSON string.
+  //    This is lossy but may still let us read the numbers and trade decision.
+  const stripped = cleaned.replace(/[^\x20-\x7E\s]/g, '');
+  try {
+    return JSON.parse(stripped);
+  } catch { /* continue */ }
+
+  try {
+    return JSON5.parse(stripped);
+  } catch { /* continue */ }
+
+  return null;
+}
+
 async function generateSignalWithGemini(
   pair: string,
   m15Candles: any[],
@@ -358,6 +408,36 @@ async function generateSignalWithGemini(
       contents: prompt,
       config: {
         responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            instrument: { type: "string" },
+            timeframe: { type: "string" },
+            trend: { type: "string" },
+            marketStructure: { type: "string" },
+            support: { type: "string" },
+            resistance: { type: "string" },
+            trade: { type: "string", enum: ["BUY", "SELL", "WAIT"] },
+            entry: { type: "string" },
+            stopLoss: { type: "string" },
+            tp1: { type: "string" },
+            tp2: { type: "string" },
+            tp3: { type: "string" },
+            riskReward: { type: "string" },
+            confidence: { type: "integer" },
+            reasoning: { type: "string" },
+            warnings: { type: "string" },
+            newsHasEvent: { type: "boolean" },
+            newsEvent: { type: "string" },
+            newsPrediction: { type: "string", enum: ["BUY", "SELL", "NEUTRAL"] },
+            newsProbability: { type: "integer" },
+            newsReason: { type: "string" },
+            newsBigMove: { type: "boolean" },
+            tfStatus: { type: "string", enum: ["ALIGNED", "CONFLICT", "SINGLE"] },
+            tfNote: { type: "string" },
+          },
+          required: ["instrument", "timeframe", "trend", "marketStructure", "support", "resistance", "trade", "entry", "stopLoss", "tp1", "tp2", "tp3", "riskReward", "confidence", "reasoning", "warnings", "newsHasEvent", "newsEvent", "newsPrediction", "newsProbability", "newsReason", "newsBigMove", "tfStatus", "tfNote"],
+        },
         temperature: 0.3,
         maxOutputTokens: 4000,
       }
@@ -369,17 +449,11 @@ async function generateSignalWithGemini(
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) text = jsonMatch[0];
 
-    // Gemini sometimes emits unescaped newlines / smart quotes inside strings.
-    // Basic repair: normalize line endings and replace common bad characters.
-    text = text
-      .replace(/\r\n/g, '\n')
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201C\u201D]/g, '"')
-      .replace(/[\u2026]/g, '...')
-      .replace(/[\u2192]/g, '->')
-      .replace(/[\u2191\u2193]/g, '');
-
-    const g = JSON.parse(text);
+    const g = parseGeminiJson(text);
+    if (!g) {
+      console.error(`Gemini generator failed for ${pair}: could not parse JSON. Raw snippet: ${text.slice(0, 400)}`);
+      return null;
+    }
 
     const trade = String(g.trade || '').toUpperCase();
     if (trade !== 'BUY' && trade !== 'SELL') {
