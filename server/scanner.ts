@@ -364,8 +364,21 @@ async function generateSignalWithGemini(
     });
 
     let text = response.text || '';
+    // Strip markdown fences, code blocks, and anything outside the outermost JSON object.
+    text = text.replace(/```json\s*|\s*```/gi, '').trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) text = jsonMatch[0];
+
+    // Gemini sometimes emits unescaped newlines / smart quotes inside strings.
+    // Basic repair: normalize line endings and replace common bad characters.
+    text = text
+      .replace(/\r\n/g, '\n')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2026]/g, '...')
+      .replace(/[\u2192]/g, '->')
+      .replace(/[\u2191\u2193]/g, '');
+
     const g = JSON.parse(text);
 
     const trade = String(g.trade || '').toUpperCase();
