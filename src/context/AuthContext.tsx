@@ -114,8 +114,21 @@ const AuthContext = createContext<AuthContextType>({
   }, []);
 
   const signOut = async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
+    // Clear the local auth state first so protected pages close immediately.
+    // A network failure must not leave the user looking logged in.
+    setUser(null);
+    setSession(null);
+    setIsAdmin(false);
+    setLoading(false);
+
+    if (!supabase) return;
+
+    try {
+      // Local scope removes the browser session without requiring the
+      // remote sign-out request to succeed.
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (error) {
+      console.error('Sign out cleanup failed:', error);
     }
   };
 
