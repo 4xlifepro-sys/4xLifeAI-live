@@ -21,7 +21,7 @@ function mapStatus(s: string | undefined): string {
 // Prevents the scanner from re-firing the same setup within seconds
 const PAIR_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours cooldown per pair
 const MAX_ACTIVE_TRADES = 2;
-const MIN_LIVE_SIGNAL_CONFIDENCE = 70;
+const MIN_LIVE_SIGNAL_CONFIDENCE = 75;
 const OPEN_SIGNAL_STATUSES = ['LIVE', 'TP1_HIT', 'TP2_HIT'];
 
 // EMERGENCY KILL SWITCH - set to true to pause ALL Telegram signals immediately
@@ -282,7 +282,7 @@ function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void 
     return gTp;
   };
   const newTp1 = applyTp(gTp1, signal.tp1);
-  if (risk > 0 && Math.abs(signal.entry - newTp1) / risk >= 1.5) {
+  if (risk > 0 && Math.abs(signal.entry - newTp1) / risk >= 2.0) {
     signal.tp1 = newTp1;
   }
   signal.tp2 = applyTp(gTp2, signal.tp2);
@@ -293,6 +293,29 @@ function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void 
   if (Number.isFinite(gConf) && gConf >= 40 && gConf <= 95) {
     signal.aiConfidence = Math.round(gConf);
   }
+}
+
+// A+ setup validator. Applies to both Gemini-generated and fallback-engine
+// signals so only high-quality, aligned trades get a live slot.
+function validateAPlusSetup(signal: Signal): { ok: boolean; reason: string } {
+  if (signal.aiConfidence < MIN_LIVE_SIGNAL_CONFIDENCE) {
+    return { ok: false, reason: `A_PLUS_CONFIDENCE: ${signal.aiConfidence}% < ${MIN_LIVE_SIGNAL_CONFIDENCE}%` };
+  }
+
+  const risk = Math.abs(signal.entry - signal.sl);
+  const tp1Dist = Math.abs(signal.entry - signal.tp1);
+  if (risk <= 0 || tp1Dist / risk < 2.0) {
+    return { ok: false, reason: `A_PLUS_RR: TP1 ${(tp1Dist / risk).toFixed(2)}R < 2.0R` };
+  }
+
+  // Gemini screenshot generator explicitly reports timeframe alignment.
+  // If it is present and not ALIGNED, the setup is not A+.
+  const tfStatus = String(signal.diagnostics?.tfStatus || '').toUpperCase();
+  if (tfStatus && tfStatus !== 'ALIGNED') {
+    return { ok: false, reason: `A_PLUS_ALIGNMENT: M15/M5 status = ${tfStatus}` };
+  }
+
+  return { ok: true, reason: 'A_PLUS_OK' };
 }
 
 function getEngineGeneratorPrompt(): string {
@@ -1299,15 +1322,16 @@ export async function startScanner() {
       }
 
       if (finalSignal && finalSignal.tier !== 'Reject') {
-        if (finalSignal.aiConfidence < MIN_LIVE_SIGNAL_CONFIDENCE) {
-          console.log(`LOW_CONFIDENCE_BLOCKED: ${pair} ${finalSignal.aiConfidence}% below ${MIN_LIVE_SIGNAL_CONFIDENCE}% live threshold`);
+        const aPlus = validateAPlusSetup(finalSignal);
+        if (!aPlus.ok) {
+          console.log(`A_PLUS_BLOCKED: ${pair} - ${aPlus.reason}`);
           finalSignal.tier = 'Reject';
           finalSignal.status = 'REJECTED';
-          finalSignal.aiReason = 'LOW_CONFIDENCE_FOR_LIVE_SLOT';
-          finalSignal.rejection_reason = 'LOW_CONFIDENCE_FOR_LIVE_SLOT';
+          finalSignal.aiReason = aPlus.reason;
+          finalSignal.rejection_reason = aPlus.reason;
           rejectionStats.LOW_CONFIDENCE++;
           if (finalSignal.diagnostics) {
-            finalSignal.diagnostics.confidenceBreakdown = 'LOW_CONFIDENCE_FOR_LIVE_SLOT';
+            finalSignal.diagnostics.confidenceBreakdown = aPlus.reason;
           }
         } else if (finalSignal.entry === finalSignal.sl || Math.abs(finalSignal.entry - finalSignal.sl) < 1e-12) {
           console.log(`INVALID_SL_BLOCKED: ${pair} entry ${finalSignal.entry} equals SL ${finalSignal.sl}`);
