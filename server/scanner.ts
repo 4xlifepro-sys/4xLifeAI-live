@@ -334,8 +334,8 @@ const geminiNoSignalCache = new Map<string, { at: number; price: number }>();
 const GEMINI_NO_SIGNAL_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // Robust JSON parser for Gemini output. Tries native JSON, then JSON5,
-// then a heuristic repair pass that strips control chars and fixes common
-// unescaped quotes/newlines inside string values.
+// then a heuristic repair pass, then partial field extraction if the
+// response was truncated.
 function parseGeminiJson(raw: string): any | null {
   if (!raw || raw.trim().length < 2) return null;
 
@@ -344,13 +344,12 @@ function parseGeminiJson(raw: string): any | null {
     return JSON.parse(raw);
   } catch { /* continue */ }
 
-  // 2. JSON5 (handles trailing commas, unquoted keys, single quotes, etc.)
+  // 2. JSON5
   try {
     return JSON5.parse(raw);
   } catch { /* continue */ }
 
-  // 3. Aggressive repair: remove control characters, normalize quotes,
-  //    collapse unescaped newlines inside strings.
+  // 3. Aggressive repair
   let cleaned = raw
     .replace(/\r\n/g, '\n')
     .replace(/[\u0000-\u001F]/g, ' ')
@@ -368,16 +367,28 @@ function parseGeminiJson(raw: string): any | null {
     return JSON5.parse(cleaned);
   } catch { /* continue */ }
 
-  // 4. Last resort: strip any character that is not valid inside a JSON string.
-  //    This is lossy but may still let us read the numbers and trade decision.
-  const stripped = cleaned.replace(/[^\x20-\x7E\s]/g, '');
-  try {
-    return JSON.parse(stripped);
-  } catch { /* continue */ }
+  // 4. Partial extraction: pull scalar fields from incomplete JSON
+  const partial: any = {};
+  const stringFields = ['instrument', 'timeframe', 'trend', 'marketStructure', 'support', 'resistance', 'trade', 'entry', 'stopLoss', 'tp1', 'tp2', 'tp3', 'riskReward', 'reasoning', 'warnings', 'newsEvent', 'newsPrediction', 'newsReason', 'tfStatus', 'tfNote'];
+  for (const key of stringFields) {
+    const match = cleaned.match(new RegExp(`"${key}"\\s*:\\s*"([^"\\]*(?:\\.[^"\\]*)*)"`));
+    if (match) partial[key] = match[1];
+  }
+  const boolFields = ['newsHasEvent', 'newsBigMove'];
+  for (const key of boolFields) {
+    const match = cleaned.match(new RegExp(`"${key}"\\s*:\\s*(true|false)`));
+    if (match) partial[key] = match[1] === 'true';
+  }
+  const numFields = ['confidence', 'newsProbability'];
+  for (const key of numFields) {
+    const match = cleaned.match(new RegExp(`"${key}"\\s*:\\s*([0-9]+)`));
+    if (match) partial[key] = Number(match[1]);
+  }
 
-  try {
-    return JSON5.parse(stripped);
-  } catch { /* continue */ }
+  if (partial.trade && (partial.entry || partial.stopLoss || partial.confidence !== undefined)) {
+    console.log(`PARTIAL_GEMINI_JSON_RECOVERED: extracted ${Object.keys(partial).length} fields`);
+    return partial;
+  }
 
   return null;
 }
@@ -399,8 +410,8 @@ async function generateSignalWithGemini(
   try {
     await getEngineEconomicCalendar();
     const prompt = getEngineGeneratorPrompt()
-      .replace(/{htfCandles}/g, compactCandles(m15Candles, 80))
-      .replace(/{entryCandles}/g, compactCandles(m5Candles, 80))
+      .replace(/{htfCandles}/g, compactCandles(m15Candles, 50))
+      .replace(/{entryCandles}/g, compactCandles(m5Candles, 50))
       .replace(/{newsBlock}/g, buildEngineNewsBlock(pair, nowMs));
 
     const response = await ai.models.generateContent({
@@ -439,7 +450,7 @@ async function generateSignalWithGemini(
           required: ["instrument", "timeframe", "trend", "marketStructure", "support", "resistance", "trade", "entry", "stopLoss", "tp1", "tp2", "tp3", "riskReward", "confidence", "reasoning", "warnings", "newsHasEvent", "newsEvent", "newsPrediction", "newsProbability", "newsReason", "newsBigMove", "tfStatus", "tfNote"],
         },
         temperature: 0.3,
-        maxOutputTokens: 4000,
+        maxOutputTokens: 6000,
       }
     });
 
@@ -451,7 +462,7 @@ async function generateSignalWithGemini(
 
     const g = parseGeminiJson(text);
     if (!g) {
-      console.error(`Gemini generator failed for ${pair}: could not parse JSON. Raw snippet: ${text.slice(0, 400)}`);
+      console.error(`Gemini generator failed for ${pair}: could not parse JSON. Raw text length ${text.length}. Snippet: ${text.slice(0, 500)}`);
       return null;
     }
 
