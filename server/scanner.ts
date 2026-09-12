@@ -851,83 +851,12 @@ export async function startScanner() {
                 }
               }
 
-              if (sIsMetals) {
-                const metalsExit = trackMetalsTrailingExit(s, signalCandles, pipMult);
-                if (metalsExit.exit) {
-                  staleMetalsAlerted.delete(s.id);
-                  const dt = new Date(metalsExit.exitTime || Date.now());
-                  const closedAt = dt.toISOString();
-                  const rawPipsMetals = Math.abs(metalsExit.exitPrice! - sEntry) / pipMult;
-                  const riskPipsMetals = Math.abs(sEntry - sSL) / pipMult || 1;
-                  const rMultiple = (rawPipsMetals / riskPipsMetals).toFixed(2);
-                  const isWin = metalsExit.reason === 'TRAIL_EMA';
-                  const directionStr = (s.direction === 'LONG' || s.direction === 'BUY' || s.signal === 'BUY') ? 'BUY' : 'SELL';
-
-                  const headerEmoji = isWin ? '🏁' : '🛑';
-                  const titleText = isWin ? '4xFiveAI — Closed via Adaptive Trail' : '4xFiveAI — STOP LOSS HIT';
-                  const resultEmoji = isWin ? '✅' : '❌';
-                  const sign = isWin ? '+' : '-';
-
-                  const hitMsg = `${headerEmoji} <b>${titleText}</b>\n\n`
-                  + `Pair: ${s.pair}\n`
-                  + `Signal: ${directionStr}\n\n`
-                  + `Entry: ${sEntry}\n\n`
-                  + `Exit: ${metalsExit.exitPrice}\n\n`
-                  + `Result: ${sign}${rawPipsMetals.toFixed(1)} pips (${sign}${rMultiple}R) ${resultEmoji}\n\n`
-                  + `Status: TRADE CLOSED\n\n`
-                  + `Timestamp: ${dt.toUTCString()}`;
-
-                  console.log(`[OUTCOME TRACKER][METALS] ${s.pair} ${metalsExit.reason} @ ${closedAt} (${sign}${rMultiple}R)`);
-                  if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(hitMsg); else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
-
-                  scannerState.stats.lastTradeTimestamp = closedAt;
-
-                  const openedAtDt = new Date(s.created_at || s.timestamp || dt);
-                  const durationMs = dt.getTime() - openedAtDt.getTime();
-                  const hours = Math.floor(durationMs / (1000 * 60 * 60));
-                  const mins = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-
-                  const summaryMsg = `📊 <b>4xFiveAI — TRADE SUMMARY</b>\n\n`
-                  + `Pair: ${s.pair}\n`
-                  + `Direction: ${directionStr}\n`
-                  + `Entry: ${sEntry}\n`
-                  + `Exit: ${metalsExit.exitPrice}\n\n`
-                  + `Exit type: ${isWin ? 'Adaptive Trail Level (no fixed TP)' : 'Stop Loss'}\n\n`
-                  + `Profit: ${sign}${rawPipsMetals.toFixed(1)} pips (${sign}${rMultiple}R)\n`
-                  + `Duration: ${hours}h ${mins}m\n`
-                  + `Outcome: ${isWin ? 'WIN 🟢' : 'LOSS 🔴'}\n\n`
-                  + `Timestamp: ${dt.toUTCString()}`;
-
-                  if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(summaryMsg); else console.log('[KILL SWITCH] Telegram summary msg BLOCKED');
-
-                  const updatePayload: any = {
-                    status: mapStatus('CLOSED'),
-                    is_active: false,
-                    closed_at: closedAt,
-                    result: isWin ? 'WIN' : 'LOSS',
-                  };
-                  if (isWin) updatePayload.pips_won = rawPipsMetals;
-                  else updatePayload.pips_lost = rawPipsMetals;
-
-                  const { error } = await supabase.from('signals').update(updatePayload).eq('id', s.id);
-                  if (error) console.error("Failed to update signals table (metals trail exit):", error.message);
-                } else {
-                  // Alert-only: flag metals trades open unusually long. Does not close the trade.
-                  const openedAtMsForAlert = new Date(s.created_at || s.timestamp || 0).getTime();
-                  const daysOpen = (Date.now() - openedAtMsForAlert) / (1000 * 60 * 60 * 24);
-                  if (daysOpen >= STALE_METALS_ALERT_DAYS && !staleMetalsAlerted.has(s.id)) {
-                    staleMetalsAlerted.add(s.id);
-                    const staleMsg = `⚠️ <b>4xFiveAI — Long-Running Metals Trade</b>\n\n`
-                    + `Pair: ${s.pair}\n`
-                    + `Entry: ${sEntry}\n`
-                    + `Opened: ${new Date(openedAtMsForAlert).toUTCString()}\n`
-                    + `Days open: ${daysOpen.toFixed(1)}\n\n`
-                    + `Still tracking via our adaptive trail system - no fixed time exit by design. This is a heads-up only, trade remains open.`;
-                    console.log(`[OUTCOME TRACKER][METALS] ${s.pair} stale alert - open ${daysOpen.toFixed(1)}d`);
-                    if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(staleMsg);
-                  }
-                }
-                continue; // metals only uses trailing-exit tracking - skip fixed TP1/TP2/TP3/SL block below
+              // Unified trade-management path: all pairs use the standard
+              // TP1/TP2/TP3/SL hit logic below. The old metals-only trailing
+              // exit block has been removed since all 9 pairs now share one
+              // engine and one management style.
+              if (false) {
+                // placeholder to preserve brace structure in this refactor pass
               }
 
               let isHit = false;
