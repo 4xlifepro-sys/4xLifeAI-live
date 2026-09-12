@@ -258,7 +258,7 @@ function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void 
 
   const lastClose = m5Candles && m5Candles.length > 0 ? Number(m5Candles[m5Candles.length - 1].close) : null;
   const gEntry = num(gemini.entry);
-  const gSl = num(gemini.sl);
+  const gSl = num(gemini.stopLoss ?? gemini.sl);
   const gTp1 = num(gemini.tp1);
   const gTp2 = num(gemini.tp2);
   const gTp3 = num(gemini.tp3);
@@ -369,7 +369,7 @@ function parseGeminiJson(raw: string): any | null {
 
   // 4. Partial extraction: pull scalar fields from incomplete JSON
   const partial: any = {};
-  const stringFields = ['instrument', 'timeframe', 'trend', 'marketStructure', 'support', 'resistance', 'trade', 'entry', 'stopLoss', 'tp1', 'tp2', 'tp3', 'riskReward', 'reasoning', 'warnings', 'newsEvent', 'newsPrediction', 'newsReason', 'tfStatus', 'tfNote'];
+  const stringFields = ['instrument', 'trade', 'entry', 'stopLoss', 'tp1', 'tp2', 'tp3', 'reasoning', 'warnings', 'newsEvent', 'newsPrediction', 'newsReason', 'tfStatus'];
   for (const key of stringFields) {
     const match = cleaned.match(new RegExp(`"${key}"\\s*:\\s*"([^"\\]*(?:\\.[^"\\]*)*)"`));
     if (match) partial[key] = match[1];
@@ -423,18 +423,12 @@ async function generateSignalWithGemini(
           type: "object",
           properties: {
             instrument: { type: "string" },
-            timeframe: { type: "string" },
-            trend: { type: "string" },
-            marketStructure: { type: "string" },
-            support: { type: "string" },
-            resistance: { type: "string" },
             trade: { type: "string", enum: ["BUY", "SELL", "WAIT"] },
             entry: { type: "string" },
             stopLoss: { type: "string" },
             tp1: { type: "string" },
             tp2: { type: "string" },
             tp3: { type: "string" },
-            riskReward: { type: "string" },
             confidence: { type: "integer" },
             reasoning: { type: "string" },
             warnings: { type: "string" },
@@ -445,12 +439,11 @@ async function generateSignalWithGemini(
             newsReason: { type: "string" },
             newsBigMove: { type: "boolean" },
             tfStatus: { type: "string", enum: ["ALIGNED", "CONFLICT", "SINGLE"] },
-            tfNote: { type: "string" },
           },
-          required: ["instrument", "timeframe", "trend", "marketStructure", "support", "resistance", "trade", "entry", "stopLoss", "tp1", "tp2", "tp3", "riskReward", "confidence", "reasoning", "warnings", "newsHasEvent", "newsEvent", "newsPrediction", "newsProbability", "newsReason", "newsBigMove", "tfStatus", "tfNote"],
+          required: ["instrument", "trade", "entry", "stopLoss", "tp1", "tp2", "tp3", "confidence", "reasoning", "warnings", "newsHasEvent", "newsEvent", "newsPrediction", "newsProbability", "newsReason", "newsBigMove", "tfStatus"],
         },
         temperature: 0.3,
-        maxOutputTokens: 6000,
+        maxOutputTokens: 3000,
       }
     });
 
@@ -496,13 +489,13 @@ async function generateSignalWithGemini(
       status: 'PENDING',
       diagnostics: {
         engine: 'GEMINI_GENERATOR',
-        trend: g.trend,
-        marketStructure: g.marketStructure,
-        support: g.support,
-        resistance: g.resistance,
+        trend: g.trend || bias,
+        marketStructure: g.marketStructure || '',
+        support: g.support || '',
+        resistance: g.resistance || '',
         warnings: g.warnings,
         tfStatus: g.tfStatus,
-        tfNote: g.tfNote,
+        tfNote: g.tfNote || '',
       },
     };
 
