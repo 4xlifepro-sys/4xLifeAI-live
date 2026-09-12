@@ -1,6 +1,6 @@
 import { fetchCandles, fetchHistoricalCandles } from './live-market-feed.js';
 import { detectTrendMomentumScannerV5, getPipMultiplier } from './engine2.js';
-import { CURATED_LIVE_CRYPTO_PAIRS, detectCryptoTrendBreakoutLive, detectMetalsTrendBreakoutLive, buildContext } from './engine-trend-breakout.js';
+import { buildContext } from './engine-trend-breakout.js';
 
 // Map internal status values to real DB check constraint values
 // DB allows: PENDING_APPROVAL, LIVE, TP1_HIT, TP2_HIT, TP3_HIT, STOP_LOSS_HIT, CLOSED, REJECTED_BY_ADMIN
@@ -517,17 +517,10 @@ export const isWeekend = () => {
 
 export const WEEKEND_PAIRS = ['SOLUSD', 'LTCUSD', 'ETHUSD', 'ADAUSD', 'DOGEUSD', 'BTCUSD', 'XRPUSD', 'BNBUSD', 'XAGUSD', 'XAUUSD'];
 
-// Full 25-pair backtested roster deployed live, plus 3 previously-live pairs
-// (GBPNZD, EURNZD, GBPAUD) that were never formally isolated-backtested but
-// have been running live successfully. All 8 crypto coins (BTCUSD, ETHUSD,
-// SOLUSD, XRPUSD, BNBUSD, ADAUSD, LTCUSD, DOGEUSD) are routed through
-// detectCryptoTrendBreakoutLive() via CURATED_LIVE_CRYPTO_PAIRS below instead
-// of detectTrendMomentumScannerV5.
 // USER-SELECTED ROSTER (9 pairs): 5 forex majors + 3 crypto + 1 metal.
-// Forex majors re-added by user request; the Gemini analyzer gate
-// (trend/structure/chop review) protects publication quality and the
-// daily cap (max 4/day) limits exposure. XAGUSD/BNBUSD removed (no edge /
-// chop bleed); open trades on removed pairs keep being tracked via DB.
+// All pairs route through the unified trend-pullback engine (engine2.ts)
+// and the Gemini analyzer gate. XAGUSD/BNBUSD removed (no edge / chop bleed);
+// open trades on removed pairs keep being tracked via DB.
 // NOTE: Oil/WTI intentionally excluded (user decision).
 export const APPROVED_PAIRS = [
   // Commodities
@@ -771,18 +764,9 @@ export async function startScanner() {
          await new Promise(r => setTimeout(r, 1500));
       }
       
-      // Curated crypto pairs (ETH/SOL/LTC/ADA/DOGE) run through the trend-breakout
-      // engine, which needs 250+ M5 candles for EMA200 + slope lookback -
-      // the standard fetchCandles() only pulls 100. Pull more history for these
-      // pairs only; every other pair keeps the existing lightweight fetch.
-      const isCuratedCrypto = CURATED_LIVE_CRYPTO_PAIRS.has(pair);
-      // Metals now route through the trend-breakout engine (walk-forward
-      // validated), which needs 250+ M5 candles for EMA200 + slope lookback -
-      // same treatment as curated crypto pairs above.
-      const isMetals = pair === 'XAUUSD' || pair === 'XAGUSD';
-      let setupPromise = (isCuratedCrypto || isMetals)
-        ? fetchHistoricalCandles(pair, '5min', 300)
-        : fetchCandles(pair, '5min');
+      // M5 entry candles + H4 trend candles for the unified trend-pullback engine.
+      // All 9 approved pairs (5 forex + 3 crypto + 1 metal) use the same engine.
+      let setupPromise = fetchCandles(pair, '5min');
       let activeSignalsPromise: any = null;
       
       if (supabase) {
@@ -817,12 +801,9 @@ export async function startScanner() {
             if (entryTf) candleCache.set(pair, entryTf as any[]);
 
             for (const s of activeSignals) {
-              const sIsMetals = s.pair === 'XAUUSD' || s.pair === 'XAGUSD';
               let signalCandles = candleCache.get(s.pair);
               if (!signalCandles) {
-                signalCandles = sIsMetals
-                  ? await fetchHistoricalCandles(s.pair, '5min', 300) as any[]
-                  : await fetchCandles(s.pair, '5min') as any[];
+                signalCandles = await fetchCandles(s.pair, '5min') as any[];
                 if (signalCandles && signalCandles.length > 0) {
                   candleCache.set(s.pair, signalCandles);
                 }
@@ -1223,11 +1204,12 @@ export async function startScanner() {
       }
       // ===========================================
 
-      const { signal, scores, regime, regimeReason } = isCuratedCrypto
-        ? detectCryptoTrendBreakoutLive(pair, entryTf)      // crypto trend-breakout routing
-        : isMetals
-        ? detectMetalsTrendBreakoutLive(pair, entryTf)       // walk-forward validated: 38.3% WR / +0.184R
-        : { signal: null, scores: {}, regime: 'UNKNOWN', regimeReason: 'PAIR_NOT_SUPPORTED' };  // 6-pair roster: metals + crypto only
+      const { signal, scores, regime, regimeReason } = detectTrendMomentumScannerV5(
+        pair,
+        htf,
+        entryTf,
+        entryTf
+      );
       
       let finalSignal = signal;
 
