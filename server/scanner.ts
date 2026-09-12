@@ -153,11 +153,18 @@ function getSignalConfirmPrompt(): string {
   try {
     const data = fs.readFileSync(path.join(process.cwd(), 'prompts.json'), 'utf8');
     const prompts = JSON.parse(data);
+    // Master analyzer prompt first (admin-editable without redeploy),
+    // then the legacy confirm prompt, then the in-code master default.
+    if (prompts.engine_master_prompt) return prompts.engine_master_prompt;
     if (prompts.signal_confirm_prompt) return prompts.signal_confirm_prompt;
   } catch (e) { /* fall through to default */ }
-  return `You are 4xLifeAI Engine Analyst — an institutional price-action brain reviewing an automated candidate signal using real chart data. Read the candle data exactly like you would read a chart screenshot. TIMEFRAME ROLES: M5 = entry timing, M15 = directional bias (user spec: 15-min bias / 5-min entry).
+  return `You are 4xLifeAI Trading Engine v2.0 — an expert institutional trading system performing the FINAL review of an automated candidate signal before publication.
 
-Signal under review:
+FUNCTION: Analyze price action (15-min bias + 5-min entry) + macro news → confirm or withhold the trade with institutional precision.
+
+TIMEFRAME ROLES: M15 = directional bias, M5 = entry timing and execution (user spec: 15-min bias / 5-min entry).
+
+CANDIDATE SIGNAL UNDER REVIEW:
 Pair: {pair}
 Direction: {direction}
 Entry: {entry}
@@ -165,34 +172,49 @@ Stop Loss: {sl} ({riskPips} pips)
 TP1/TP2/TP3: {tp1} / {tp2} / {tp3}
 Engine confidence: {confidence}%
 Market regime reported by engine: {regime}
+Engine diagnostics: {diagnostics}
 
-APPLY THE FULL PRICE-ACTION STRATEGY:
-1. TREND (Bullish/Bearish/Range): read the M5 swings — Higher Highs + Higher Lows = bullish, Lower Highs + Lower Lows = bearish, overlapping = range.
-2. MARKET STRUCTURE + M15 BIAS AGREEMENT: the M15 bias chart must not violently oppose the signal direction. Strong opposition = REJECT.
-3. MOMENTUM (Strong/Weak/Exhausted): exhausted momentum or reversal imminent = REJECT.
-4. SETUP QUALITY (Breakout/Pullback/Rejection/Continuation).
-5. CHOP TEST: heavy overlapping candles with no clean swing structure = REJECT. Skip chop like a human pro would.
-6. ENTRY ZONE: for SELL, entry must sit in the premium zone (upper half of the recent range); for BUY, in the discount zone (lower half). Selling at range lows or buying at range highs into opposing structure = REJECT.
-7. NEWS (High-impact calendar below): news NEVER blocks or rejects a trade by itself. Use it only to judge whether the entry moment makes sense — e.g. an entry seconds before a pending event is a coin-flip on execution quality, which you may weigh in. Primarily, news feeds the NEWS PREDICTION section below.
+The raw M5 chart data, the M15 bias chart data, and the HIGH-IMPACT ECONOMIC CALENDAR are attached below these rules. Read the candle data exactly like you would read a chart screenshot. Only use prices present in the data; never invent values.
 
-DECISION RULES:
-- If the chart confirms a clean, trending, well-structured setup in the SAME direction as the candidate → decision "CONFIRM" and refine the levels to institutional standards:
-  * entry = the current market price (the CLOSE of the LAST M5 candle) — NEVER a future pullback level
-  * sl = beyond the nearest valid M5 swing high/low — NEVER inside market noise
-  * tp1/tp2/tp3 = logical levels ahead, with tp1 at least 1.5x the SL distance
-- If chop, unclear, exhausted, poor entry zone, or 4H strongly opposes → decision "REJECT".
-- NEVER flip the direction. Only CONFIRM (with refined levels) or REJECT.
-- Only use prices present in the data; never invent values.
+OUTPUT: STRICT JSON only — no markdown, no text before or after. Use exactly this structure:
+{"pair":"{pair}","analysis_timestamp":"ISO timestamp",
+"price_action":{"htf_15min":{"trend":"Bullish|Bearish|Range","market_structure":"HH/HL|LH/LL|Neutral","support_resistance":["level1","level2"],"momentum":"Strong|Weak|Exhausted","setup_quality":"Breakout|Pullback|Rejection|Continuation|None"},
+"etf_5min":{"trend":"Bullish|Bearish|Range","market_structure":"HH/HL|LH/LL|Neutral","support_resistance":["level1","level2"],"momentum":"Strong|Weak|Exhausted","setup_quality":"Breakout|Pullback|Rejection|Continuation|None"},
+"timeframe_alignment":{"aligned":true,"conflict":false,"alignment_boost":0}},
+"news_today":{"today_summary":{"dominant_currency":"USD|EUR|GBP|JPY|Neutral","overall_bias":"BUY|SELL|NEUTRAL","confidence":0}},
+"future_news_bias":{"high_impact_events":[{"event_name":"...","release_date":"...","release_time_utc":"...","impact":"High|Critical","market_expectation":"...","base_case":"...","scenario_a_beats":{"hypothesis":"IF ...","currency_effect":"...","pair_direction":"...","probability":"35%"},"scenario_b_misses":{"hypothesis":"IF ...","currency_effect":"...","pair_direction":"...","probability":"65%"},"trading_bias":"...","danger_window":"..."}],
+"upcoming_summary":{"next_major_event":"Event name + date/time","strongest_bias":"[Currency] likely [direction]","trading_setup_opportunity":"If [scenario], [pair] likely [direction]"}},
+"combined_analysis":{"chart_bias":"BUY|SELL|WAIT","news_bias_today":"BUY|SELL|NEUTRAL","alignment_check":{"aligned":true,"conflict":false,"final_bias":"BUY|SELL|WAIT","confidence_adjustment":"+10 aligned | -20 conflict | +0 neutral"},"danger_zones":["..."]},
+"news_bias":{"lean":"BUY|SELL|NEUTRAL","probability":50,"eventSummary":"pending event + role, e.g. 'US CPI PENDING in ~3h' or 'NONE PENDING'","bullishScenario":"ONE sentence, scenario language ONLY","bearishScenario":"ONE sentence, scenario language ONLY"},
+"trade_signal":{"final_decision":"EXECUTE|WAIT|REJECT","direction":"BUY|SELL|NONE",
+"entry_details":{"entry_price":0,"stop_loss":0,"tp1":0,"tp2":0,"tp3":0,"risk_reward_ratio":"1:X.X"},
+"quality_score":{"confidence":0,"strength":"Strong (75-95)|Decent (60-75)|Ambiguous (40-60)|Weak (<40)","reasoning":"why this setup exists or why it is withheld (2-3 short sentences)"},
+"risk_assessment":["risk 1","risk 2","News event [X] at [time] could reverse this"]},
+"dashboard":{"alerts":["max 3 short alerts, e.g. 'ECB Press Conference in 45min - avoid new entries now'"],"suggested_action":"one short sentence"}}
 
-NEWS PREDICTION (always required, CONFIRM or REJECT):
-Using the High-impact calendar above, predict the news bias for this pair:
-- lean: "BUY" or "SELL" = the direction the pair leans if the upcoming event surprises in that direction; "NEUTRAL" if no pending event or the outcome is too balanced to lean.
-- probability: 50-75 ONLY (news is a lean, never a certainty).
-- eventSummary: the pending event + role, e.g. "US CPI PENDING in ~3h" or "NONE PENDING".
-- bullishScenario / bearishScenario: ONE sentence each, scenario language ONLY — "IF stronger CPI, THEN USD lifts and gold drops". NEVER "will rise/will fall".
+CRITICAL DECISION RULES:
+1. EXECUTE only if ALL are true:
+   - Clear trend on M15 that supports the candidate direction
+   - M5 confluence: clean swing structure, and the entry sits in the correct zone (BUY = discount zone / lower half of the recent range; SELL = premium zone / upper half). Selling at range lows or buying at range highs into opposing structure is NOT an EXECUTE.
+   - Momentum is not exhausted
+   - Final confidence >= 65
+   - Levels refined to institutional standards: entry_price = the CLOSE of the LAST M5 candle (the current market price — NEVER a future pullback level); stop_loss beyond the nearest valid M5 swing high/low — NEVER inside market noise; tp1 at least 1.5x the SL distance; tp2/tp3 logical extensions on the correct side of entry
+2. WAIT if: the two timeframes conflict, momentum is exhausted, confidence < 65, or the entry zone is poor but a setup may form later.
+3. REJECT if: no clear setup, heavy chop with overlapping candles and no clean swings, or M15 violently opposes the candidate direction.
+4. NEVER flip the direction. The only outcomes are EXECUTE (same direction, refined levels), WAIT, or REJECT.
+5. NEWS RULES (critical):
+   - News NEVER blocks, rejects, or waits a trade by itself. Never output WAIT or REJECT because of news.
+   - Use news ONLY to fill news_today, future_news_bias, news_bias and dashboard alerts.
+   - An entry seconds before a pending high-impact event: note it in dashboard.alerts, but the chart makes the decision.
+   - probability in news_bias: 50-75 ONLY (news is a lean, never a certainty).
+   - Scenario language ONLY: "IF stronger CPI, THEN USD lifts and gold drops". NEVER "USD will rise/will fall".
+   - Never fabricate Actual/forecast/previous values; use exactly what the attached calendar provides.
+6. CONFIDENCE: 0-95 max, even with perfect alignment.
 
-Answer with STRICT JSON only, no markdown:
-{"decision":"CONFIRM" or "REJECT","entry":number,"sl":number,"tp1":number,"tp2":number,"tp3":number,"confidence":0-100,"reason":"one short sentence, plain English","newsBias":{"lean":"BUY" or "SELL" or "NEUTRAL","probability":50-75,"eventSummary":"...","bullishScenario":"...","bearishScenario":"..."}}`;
+PROMPT ENGINEERING RULES:
+- Return JSON ONLY. No markdown fences, no commentary before or after.
+- All prices must come from the attached data only.
+- Keep sentences short and plain.`;
 }
 
 // Validate and attach Gemini's news prediction onto the signal.
@@ -435,20 +457,43 @@ async function confirmSignalWithGemini(signal: Signal, m5Candles?: any[], htfCan
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: {
+        responseMimeType: "application/json",
+        temperature: 0.3,
+        maxOutputTokens: 4000,
+      }
     });
 
     let text = response.text || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) text = jsonMatch[0];
     const parsed = JSON.parse(text);
-    const decision = String(parsed.decision || '').toUpperCase();
-    const reason = String(parsed.reason || 'no reason given').slice(0, 200);
 
-    const confirmed = decision !== 'REJECT';
+    // Master analyzer response: verdict lives in trade_signal.final_decision
+    // (EXECUTE | WAIT | REJECT). Legacy flat responses fall back to parsed.decision.
+    const masterSig = parsed?.trade_signal || {};
+    const decision = String(masterSig.final_decision || parsed.decision || '').toUpperCase();
+    const reason = String(masterSig?.quality_score?.reasoning || parsed.reason || 'no reason given').slice(0, 200);
+
+    // Only EXECUTE publishes. WAIT and REJECT both withhold the signal silently
+    // (user decision: WAIT = skip, no publish, saves tokens).
+    const confirmed = decision === 'EXECUTE';
     if (confirmed && m5Candles && m5Candles.length > 0) {
+      // Master-analyzer mode: normalize the nested entry_details into the flat
+      // shape the field validators expect, then apply with full validation.
+      const ed = masterSig.entry_details || {};
+      const flat = {
+        entry: ed.entry_price ?? parsed.entry,
+        sl: ed.stop_loss ?? parsed.sl,
+        tp1: ed.tp1 ?? parsed.tp1,
+        tp2: ed.tp2 ?? parsed.tp2,
+        tp3: ed.tp3 ?? parsed.tp3,
+        confidence: masterSig?.quality_score?.confidence ?? parsed.confidence,
+      };
+      // Master prompt emits news_bias (same fields as the legacy newsBias object)
+      parsed.newsBias = parsed.news_bias || parsed.newsBias;
       // Full-strategy mode: apply Gemini's analyzer-grade levels (validated field-by-field)
-      applyGeminiLevels(signal, parsed, m5Candles);
+      applyGeminiLevels(signal, flat, m5Candles);
       // News prediction: attach validated bias (lean + probability + scenarios)
       applyGeminiNewsBias(signal, parsed);
       const nb = signal.newsBias;
@@ -1455,7 +1500,11 @@ export async function startScanner() {
               } else if (data) {
                   const dbId = data[0]?.id;
                   console.log(`[DB INSERT] ${signal.pair} ${dbDirection} @ ${signal.entry} → id: ${dbId}`);
-                  if (dbId) generateAiReason(String(dbId), signal);
+                  if (dbId && !String(signal.aiReason || '').startsWith('GEMINI_STRATEGY')) {
+                    // Master analyzer already produced a reasoning sentence —
+                    // skip the separate explainer AI call (token saving).
+                    generateAiReason(String(dbId), signal);
+                  }
               }
             } catch (insertErr: any) {
               console.error("Supabase signals insert threw:", insertErr.message);
