@@ -198,6 +198,14 @@ export default function Dashboard() {
         statusPips: Math.abs(pips),
         tier,
         openedAgo: daysAgo(s.created_at || s.timestamp || ''),
+        news: s.newsBias
+          ? {
+              event: s.newsBias.eventSummary,
+              lean: s.newsBias.lean,
+              probability: s.newsBias.probability,
+              reason: s.newsBias.bullishScenario || s.newsBias.bearishScenario,
+            }
+          : undefined,
       };
     });
 

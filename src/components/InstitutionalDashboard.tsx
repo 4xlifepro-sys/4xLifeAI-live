@@ -50,6 +50,12 @@ interface ActiveSignal {
   statusPips?: number;
   tier?: "Strong" | "Good" | "Valid";
   openedAgo: string; // e.g. "12m ago"
+  news?: {
+    event?: string;
+    lean?: string;
+    probability?: number;
+    reason?: string;
+  };
 }
 
 interface ClosedSignal {
@@ -504,6 +510,20 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
         {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
       </div>
       <div className={`x4-signal__status x4-signal__status--${s.status}`}>{statusLabel}</div>
+      {s.news?.event && (
+        <div className="x4-signal__news">
+          <span className="x4-signal__news-icon">📰</span>
+          <span className="x4-signal__news-event">{s.news.event}</span>
+          {s.news.lean && (
+            <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>
+              {s.news.lean} {s.news.probability ? `${s.news.probability}%` : ''}
+            </span>
+          )}
+        </div>
+      )}
+      {s.news?.reason && (
+        <div className="x4-signal__news-reason">{s.news.reason}</div>
+      )}
     </div>
   );
 }
@@ -992,6 +1012,51 @@ const CSS = `
   border-radius: 999px;
   background: #2dd4bf;
   box-shadow: 0 0 12px rgba(45,212,191,0.9);
+}
+
+/* Signal news */
+.x4-signal__news {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 7px 10px;
+  background: rgba(79, 209, 232, 0.06);
+  border: 1px solid rgba(79, 209, 232, 0.18);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.x4-signal__news-icon { font-size: 11px; }
+.x4-signal__news-event {
+  color: var(--x4-text);
+  font-weight: 500;
+}
+.x4-signal__news-lean {
+  font-family: var(--x4-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+.x4-signal__news-lean--buy {
+  background: rgba(51, 209, 122, 0.14);
+  color: var(--x4-green);
+}
+.x4-signal__news-lean--sell {
+  background: rgba(255, 92, 92, 0.14);
+  color: var(--x4-red);
+}
+.x4-signal__news-lean--neutral {
+  background: var(--x4-panel-2);
+  color: var(--x4-text-dim);
+}
+.x4-signal__news-reason {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--x4-text-dim);
+  line-height: 1.4;
 }
 
 /* Watchlist groups */
