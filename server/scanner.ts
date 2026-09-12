@@ -47,6 +47,7 @@ import { sendTelegramMessage } from './telegram.js';
 import { GoogleGenAI } from "@google/genai";
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'crypto';
 
 function getSignalExplainerPrompt(): string {
   try {
@@ -294,6 +295,117 @@ function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void 
   }
 }
 
+function getEngineGeneratorPrompt(): string {
+  try {
+    const data = fs.readFileSync(path.join(process.cwd(), 'prompts.json'), 'utf8');
+    const prompts = JSON.parse(data);
+    if (prompts.engine_generator_prompt) return prompts.engine_generator_prompt;
+  } catch (e) { /* fall through to default */ }
+  return `You are 4xLifeAI Chart Analyzer. Read the attached M15 and M5 candle data like a chart screenshot and output a trading signal decision in strict JSON.`;
+}
+
+// Cache Gemini "no signal" responses per pair to avoid burning tokens when
+// markets are dead. Time-based only — not a trading filter.
+const geminiNoSignalCache = new Map<string, { at: number; price: number }>();
+const GEMINI_NO_SIGNAL_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function generateSignalWithGemini(
+  pair: string,
+  m15Candles: any[],
+  m5Candles: any[],
+  currentPrice: number
+): Promise<Signal | null> {
+  if (!ai) return null;
+
+  const nowMs = Date.now();
+  const cached = geminiNoSignalCache.get(pair);
+  if (cached && (nowMs - cached.at) < GEMINI_NO_SIGNAL_TTL_MS) {
+    return null;
+  }
+
+  try {
+    await getEngineEconomicCalendar();
+    const prompt = getEngineGeneratorPrompt()
+      .replace(/{htfCandles}/g, compactCandles(m15Candles, 80))
+      .replace(/{entryCandles}/g, compactCandles(m5Candles, 80))
+      .replace(/{newsBlock}/g, buildEngineNewsBlock(pair, nowMs));
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        temperature: 0.3,
+        maxOutputTokens: 4000,
+      }
+    });
+
+    let text = response.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) text = jsonMatch[0];
+    const g = JSON.parse(text);
+
+    const trade = String(g.trade || '').toUpperCase();
+    if (trade !== 'BUY' && trade !== 'SELL') {
+      geminiNoSignalCache.set(pair, { at: nowMs, price: currentPrice });
+      return null;
+    }
+
+    const direction = trade === 'BUY' ? 'LONG' : 'SHORT';
+    const bias = trade === 'BUY' ? 'BULLISH' : 'BEARISH';
+    const confidence = Number.isFinite(Number(g.confidence)) ? Math.round(Number(g.confidence)) : 70;
+    const timestamp = new Date().toISOString();
+
+    const signal: Signal = {
+      id: randomUUID(),
+      pair,
+      direction,
+      bias,
+      score: confidence,
+      tier: confidence >= 75 ? 'Strong' : confidence >= 65 ? 'Good' : 'Valid',
+      aiConfidence: Math.min(95, Math.max(40, confidence)),
+      aiReason: `GEMINI_GENERATED: ${String(g.reasoning || 'screenshot-style chart read').slice(0, 180)}`,
+      entry: Number(g.entry) || currentPrice,
+      sl: Number(g.stopLoss) || 0,
+      tp1: Number(g.tp1) || 0,
+      tp2: Number(g.tp2) || 0,
+      tp3: Number(g.tp3) || 0,
+      timestamp,
+      created_at: timestamp,
+      status: 'PENDING',
+      diagnostics: {
+        engine: 'GEMINI_GENERATOR',
+        trend: g.trend,
+        marketStructure: g.marketStructure,
+        support: g.support,
+        resistance: g.resistance,
+        warnings: g.warnings,
+        tfStatus: g.tfStatus,
+        tfNote: g.tfNote,
+      },
+    };
+
+    // Apply the screenshot-analyzer style news bias fields
+    applyGeminiNewsBias(signal, {
+      newsBias: {
+        lean: String(g.newsPrediction || 'NEUTRAL').toUpperCase(),
+        probability: Number(g.newsProbability) || 60,
+        eventSummary: String(g.newsEvent || ''),
+        bullishScenario: String(g.newsReason || ''),
+        bearishScenario: '',
+      }
+    });
+
+    // Validate and refine levels against live M5 candles
+    applyGeminiLevels(signal, g, m5Candles);
+
+    return signal;
+  } catch (e: any) {
+    console.error(`Gemini generator failed for ${pair}:`, e.message);
+    return null;
+  }
+}
+
 // ============================================================
 // DAILY SIGNAL CAP — publish at most DAILY_SIGNAL_LIMIT trades
 // per UTC day. Checked BEFORE the Gemini gate so capped signals
@@ -518,10 +630,9 @@ export const isWeekend = () => {
 export const WEEKEND_PAIRS = ['SOLUSD', 'LTCUSD', 'ETHUSD', 'ADAUSD', 'DOGEUSD', 'BTCUSD', 'XRPUSD', 'BNBUSD', 'XAGUSD', 'XAUUSD'];
 
 // USER-SELECTED ROSTER (9 pairs): 5 forex majors + 3 crypto + 1 metal.
-// All pairs route through the unified trend-pullback engine (engine2.ts)
-// and the Gemini analyzer gate. XAGUSD/BNBUSD removed (no edge / chop bleed);
-// open trades on removed pairs keep being tracked via DB.
-// NOTE: Oil/WTI intentionally excluded (user decision).
+// All pairs route through the Gemini screenshot-style generator. The old
+// trend-pullback engine (engine2.ts) remains only as a fallback if Gemini
+// is unavailable or returns no signal.
 export const APPROVED_PAIRS = [
   // Commodities
   'XAUUSD',
@@ -750,22 +861,9 @@ export async function startScanner() {
         throw new Error('Live market feed unavailable � retrying next cycle');
       }
 
-      // We now need 4h and 5min candles (with 4H caching)
-      let htf = null;
-      const cachedHtf = htfCache.get(pair);
-      
-      // Cache valid for 4 hours (4 * 60 * 60 * 1000 ms)
-      if (cachedHtf && (Date.now() - cachedHtf.timestamp < 4 * 60 * 60 * 1000)) {
-         htf = cachedHtf.data;
-      } else {
-         htf = await fetchCandles(pair, '4h');
-         if (htf) htfCache.set(pair, { data: htf, timestamp: Date.now() });
-         // Delay slightly between API calls to protect the live feed ONLY if we made a 4H request
-         await new Promise(r => setTimeout(r, 1500));
-      }
-      
-      // M5 entry candles + H4 trend candles for the unified trend-pullback engine.
-      // All 9 approved pairs (5 forex + 3 crypto + 1 metal) use the same engine.
+      // M15 bias candles + M5 entry candles for the Gemini generator.
+      // All 9 approved pairs (5 forex + 3 crypto + 1 metal) use the same path.
+      let htf = await fetchCandles(pair, '15min');
       let setupPromise = fetchCandles(pair, '5min');
       let activeSignalsPromise: any = null;
       
@@ -1133,28 +1231,75 @@ export async function startScanner() {
       }
       // ===========================================
 
-      const { signal, scores, regime, regimeReason } = detectTrendMomentumScannerV5(
-        pair,
-        htf,
-        entryTf,
-        entryTf
-      );
-      
-      let finalSignal = signal;
+      // PRIMARY PATH: Gemini reads M15 + M5 candles like a chart screenshot
+      // and decides direction, entry, SL, TP, confidence, and news bias.
+      // FALLBACK: if Gemini is unavailable or returns no signal, the old
+      // trend-pullback engine (engine2.ts) still runs so signals never stop.
+      const currentPrice = entryTf && entryTf.length > 0 ? Number(entryTf[entryTf.length - 1].close) : 0;
+      let geminiSignal: Signal | null = null;
+      let scores: any = {};
+      let regime = 'GEMINI_PRIMARY';
+      let regimeReason = 'Gemini screenshot-style generator is primary';
 
-      if (finalSignal && finalSignal.tier !== 'Reject') {
+      // CHEAP GUARDS: run BEFORE any AI call to save tokens when the slot
+      // is already blocked by hard rules (daily cap, max active trades).
+      let guardBlock: string | null = null;
+      if (!guardBlock) {
+        const publishedToday = await countSignalsPublishedToday();
+        if (publishedToday >= DAILY_SIGNAL_LIMIT) {
+          guardBlock = `DAILY_LIMIT: ${publishedToday}/${DAILY_SIGNAL_LIMIT} signals already published today`;
+        }
+      }
+      if (!guardBlock) {
         const globalActiveTradeCount = await getGlobalActiveTradeCount();
         if (globalActiveTradeCount >= MAX_ACTIVE_TRADES) {
-          console.log(`MAX_ACTIVE_TRADES_BLOCKED: ${globalActiveTradeCount}/${MAX_ACTIVE_TRADES} active trades already open`);
-          finalSignal.tier = 'Reject';
-          finalSignal.status = 'REJECTED';
-          finalSignal.aiReason = 'MAX_ACTIVE_TRADES_REACHED';
-          finalSignal.rejection_reason = 'MAX_ACTIVE_TRADES_REACHED';
-          rejectionStats.ACTIVE_TRADE_EXISTS++;
-          if (finalSignal.diagnostics) {
-            finalSignal.diagnostics.confidenceBreakdown = 'MAX_ACTIVE_TRADES_REACHED';
+          guardBlock = `MAX_ACTIVE_TRADES: ${globalActiveTradeCount}/${MAX_ACTIVE_TRADES} active trades already open`;
+        }
+      }
+      if (!guardBlock && supabase) {
+        try {
+          const { data: activePairTrades, error: activeTradesErr } = await supabase
+            .from('signals')
+            .select('id')
+            .eq('pair', pair)
+            .eq('is_active', true)
+            .in('status', OPEN_SIGNAL_STATUSES)
+            .limit(1);
+          if (!activeTradesErr && activePairTrades && activePairTrades.length > 0) {
+            guardBlock = `DUPLICATE_PAIR: Active trade exists for ${pair}`;
           }
-        } else if (finalSignal.aiConfidence < MIN_LIVE_SIGNAL_CONFIDENCE) {
+        } catch (e) {
+          console.error("Duplicate trade check error:", e);
+        }
+      }
+
+      if (!guardBlock) {
+        try {
+          geminiSignal = await generateSignalWithGemini(pair, htf, entryTf, currentPrice);
+        } catch (e: any) {
+          console.error(`Gemini generator error for ${pair}:`, e.message);
+        }
+      } else {
+        console.log(`GUARD_BLOCK_BEFORE_AI: ${pair} - ${guardBlock}`);
+      }
+
+      let finalSignal = geminiSignal;
+
+      if (!finalSignal) {
+        const fallback = detectTrendMomentumScannerV5(pair, htf, entryTf, entryTf);
+        finalSignal = fallback.signal;
+        scores = fallback.scores || {};
+        regime = fallback.regime || 'UNKNOWN';
+        regimeReason = fallback.regimeReason || 'Fallback engine2.ts';
+        if (finalSignal) {
+          console.log(`FALLBACK_ENGINE2_SIGNAL: ${pair} (${finalSignal.direction})`);
+        }
+      } else {
+        console.log(`GEMINI_GENERATED: ${pair} ${finalSignal.direction} @ ${finalSignal.entry} (${finalSignal.aiConfidence}%)`);
+      }
+
+      if (finalSignal && finalSignal.tier !== 'Reject') {
+        if (finalSignal.aiConfidence < MIN_LIVE_SIGNAL_CONFIDENCE) {
           console.log(`LOW_CONFIDENCE_BLOCKED: ${pair} ${finalSignal.aiConfidence}% below ${MIN_LIVE_SIGNAL_CONFIDENCE}% live threshold`);
           finalSignal.tier = 'Reject';
           finalSignal.status = 'REJECTED';
@@ -1174,32 +1319,6 @@ export async function startScanner() {
           if (finalSignal.diagnostics) {
             finalSignal.diagnostics.confidenceBreakdown = 'INVALID_STOP_LOSS';
           }
-        }
-      }
-
-      if (finalSignal && finalSignal.tier !== 'Reject' && supabase) {
-        try {
-          const { data: activePairTrades, error: activeTradesErr } = await supabase
-            .from('signals')
-            .select('id')
-            .eq('pair', pair)
-            .eq('is_active', true)
-            .in('status', OPEN_SIGNAL_STATUSES)
-            .limit(1);
-            
-          if (!activeTradesErr && activePairTrades && activePairTrades.length > 0) {
-            console.log(`DUPLICATE_PAIR_BLOCKED: Active trade exists for ${pair}`);
-            finalSignal.tier = 'Reject';
-            finalSignal.status = 'REJECTED';
-            finalSignal.aiReason = 'ACTIVE_TRADE_EXISTS';
-            finalSignal.rejection_reason = 'ACTIVE_TRADE_EXISTS';
-            rejectionStats.ACTIVE_TRADE_EXISTS++;
-            if (finalSignal.diagnostics) {
-               finalSignal.diagnostics.confidenceBreakdown = 'ACTIVE_TRADE_EXISTS';
-            }
-          }
-        } catch(e) {
-          console.error("Duplicate trade check error:", e);
         }
       }
 
@@ -1327,44 +1446,6 @@ export async function startScanner() {
         }
 
         if (!isDuplicate) {
-          // DAILY SIGNAL CAP: max DAILY_SIGNAL_LIMIT published trades per UTC day
-          if (signal.tier !== 'Reject') {
-            const publishedToday = await countSignalsPublishedToday();
-            if (publishedToday >= DAILY_SIGNAL_LIMIT) {
-              console.log(`DAILY_LIMIT: ${pair} ${signal.direction} blocked — ${publishedToday}/${DAILY_SIGNAL_LIMIT} signals already published today`);
-              signal.tier = 'Reject';
-              signal.status = 'REJECTED';
-              signal.rejection_reason = 'DAILY_LIMIT';
-              signal.aiReason = `Daily limit reached (${DAILY_SIGNAL_LIMIT} signals/day). Signal withheld.`;
-            }
-          }
-
-          // GEMINI CONFIRMATION GATE (final quality veto before publish)
-          // Bias timeframe = M15 (user spec), entry timeframe = M5.
-          if (signal.tier !== 'Reject') {
-            let m15Bias = m15BiasCache.get(pair);
-            if (!m15Bias || Date.now() - m15Bias.timestamp > 5 * 60 * 1000) {
-              const fetched = await fetchCandles(pair, '15m').catch(() => null);
-              if (fetched && (fetched as any[]).length > 0) {
-                m15Bias = { data: fetched, timestamp: Date.now() };
-                m15BiasCache.set(pair, m15Bias);
-              }
-            }
-            const biasCandles = m15Bias?.data ?? htf;
-            const confirmation = await confirmSignalWithGemini(signal, setup as any[], biasCandles as any[]);
-            if (!confirmation.confirmed) {
-              console.log(`GEMINI_VETO: ${pair} ${signal.direction} @ ${signal.entry} — ${confirmation.reason}`);
-              signal.tier = 'Reject';
-              signal.status = 'REJECTED';
-              signal.aiReason = `GEMINI_CHOP_VETO: ${confirmation.reason}`;
-              signal.rejection_reason = 'GEMINI_CHOP_VETO';
-              rejectionStats.LOW_CONFIDENCE++;
-              if (signal.diagnostics) {
-                signal.diagnostics.confidenceBreakdown = 'GEMINI_CHOP_VETO';
-              }
-            }
-          }
-
           // Update confidence history
           scannerState.confidenceHistory.unshift(signal.aiConfidence);
           if (scannerState.confidenceHistory.length > 4) {
