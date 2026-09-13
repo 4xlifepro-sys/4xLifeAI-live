@@ -101,6 +101,7 @@ export default function Admin() {
   const [manualSignal, setManualSignal] = useState({
     pair: 'XAUUSD',
     screenshot: null as string | null,
+    screenshot2: null as string | null,
     analyzing: false,
     analysis: null as any,
     sending: false,
@@ -1333,6 +1334,20 @@ export default function Admin() {
       reader.readAsDataURL(file);
     };
 
+    const handleFileChange2 = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        setManualSignal(s => ({ ...s, error: 'Please upload an image file', status: 'error' }));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setManualSignal(s => ({ ...s, screenshot2: reader.result as string, error: '', status: 'idle' }));
+      };
+      reader.readAsDataURL(file);
+    };
+
     const analyze = async () => {
       if (!manualSignal.screenshot) {
         setManualSignal(s => ({ ...s, error: 'Upload screenshot first', status: 'error' }));
@@ -1343,7 +1358,7 @@ export default function Admin() {
         const res = await fetch('/api/admin/manual-signal/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: manualSignal.screenshot, pair: manualSignal.pair }),
+          body: JSON.stringify({ imageBase64: manualSignal.screenshot, imageBase64_2: manualSignal.screenshot2 || undefined, pair: manualSignal.pair, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
         });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'Analyze failed');
@@ -1422,6 +1437,16 @@ export default function Admin() {
                 className="hidden"
                 onChange={handleFileChange}
               />
+              <label className="block text-xs text-[#8A95A5] uppercase tracking-wider">Optional second timeframe screenshot</label>
+              <input
+                type="file"
+                accept="image/*"
+                className="w-full text-xs text-[#8A95A5]"
+                onChange={handleFileChange2}
+              />
+              {manualSignal.screenshot2 && (
+                <img src={manualSignal.screenshot2} alt="Second chart preview" className="max-h-40 rounded-lg object-contain" />
+              )}
             </div>
 
             <button

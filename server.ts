@@ -1867,76 +1867,23 @@ Return the analysis in this exact JSON format:
   // Admin manual signal routes
   app.post("/api/admin/manual-signal/analyze", requireAdmin, async (req, res) => {
     try {
-      const { imageBase64, pair, timezone } = req.body;
+      const { imageBase64, imageBase64_2, pair, timezone } = req.body;
       if (!imageBase64) return res.status(400).json({ error: 'No image provided' });
       if (!APPROVED_PAIRS.includes(pair)) return res.status(400).json({ error: 'Invalid pair' });
 
-      const base64Data = String(imageBase64).replace(/^data:image\/\w+;base64,/, '');
-      const calendarEvents = await getEconomicCalendar();
-      const tz = typeof timezone === 'string' && timezone ? timezone : undefined;
-      const calendarBlock = buildCalendarPromptBlock(calendarEvents, tz);
-
-      const prompt = `You are 4xLifeAI Chart Analyzer. Analyze this ${pair} chart screenshot and output JSON only.
-
-${calendarBlock}
-
-Return valid JSON with these fields exactly:
-{
-  "instrument": "${pair}",
-  "trade": "BUY or SELL or WAIT",
-  "entry": "price",
-  "stopLoss": "price",
-  "tp1": "price",
-  "tp2": "price",
-  "tp3": "price",
-  "confidence": number,
-  "reasoning": "short reason",
-  "warnings": "short warnings",
-  "newsHasEvent": true/false,
-  "newsEvent": "event label or empty",
-  "newsPrediction": "BUY or SELL or NEUTRAL",
-  "newsProbability": number,
-  "newsReason": "short scenario sentence",
-  "newsBigMove": true/false,
-  "tfStatus": "ALIGNED or CONFLICT or SINGLE"
-}
-
-RULES:
-- For ${pair}, SL must be beyond the nearest valid swing high/low, with buffer. Never inside recent candle noise.
-- TP1 must be at least 2.0x the SL distance.
-- Entry = current market price.
-- Use scenario language for news. Never say will.
-- Keep all text fields short.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: 'image/png', data: base64Data } }] }],
-        config: { temperature: 0.3, responseMimeType: 'application/json' }
+      const analyzerResponse = await fetch(`${req.protocol}://${req.get('host')}/api/chart-analyzer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}),
+        },
+        body: JSON.stringify({ imageBase64, imageBase64_2, timezone, chartType: pair }),
       });
-
-      const text = response.text;
-      let analysis: any;
-      try {
-        analysis = JSON.parse(text);
-      } catch {
-        const m = text.match(/\{[\s\S]*\}/);
-        analysis = m ? JSON.parse(m[0]) : null;
+      const data = await analyzerResponse.json();
+      if (!analyzerResponse.ok || !data.success) {
+        return res.status(analyzerResponse.status || 500).json({ error: data.error || 'Failed to analyze screenshot' });
       }
-
-      if (!analysis) return res.status(500).json({ error: 'Could not parse Gemini response' });
-
-      // Normalize
-      analysis.newsHasEvent = analysis.newsHasEvent === true;
-      const pred = String(analysis.newsPrediction || '').toUpperCase();
-      analysis.newsPrediction = pred === 'BUY' || pred === 'SELL' ? pred : 'NEUTRAL';
-      if (analysis.newsHasEvent) {
-        const prob = Number(analysis.newsProbability);
-        analysis.newsProbability = Math.max(50, Math.min(75, isFinite(prob) ? Math.round(prob) : 50));
-      }
-      analysis.newsBigMove = analysis.newsBigMove === true;
-      if (!analysis.newsEvent) analysis.newsHasEvent = false;
-
-      res.json({ success: true, analysis });
+      res.json(data);
     } catch (e: any) {
       console.error('[manual-signal/analyze] error:', e);
       res.status(500).json({ error: e.message || 'Failed to analyze screenshot' });
