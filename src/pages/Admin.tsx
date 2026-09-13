@@ -4,11 +4,14 @@ import { twMerge } from 'tailwind-merge';
 import { 
   Shield, BarChart2, Users, CreditCard, Radio, MessageSquare, 
   Send, Award, ShieldAlert, RefreshCw, Check, X, ExternalLink, 
-  CircleDollarSign, Database, Play, Activity, LayoutList, Cpu 
+  CircleDollarSign, Database, Play, Activity, LayoutList, Cpu,
+  Upload, Image as ImageIcon, TrendingUp, TrendingDown, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../components/ConfirmDialog';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
+const APPROVED_PAIRS = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'BTCUSD', 'ETHUSD', 'SOLUSD'];
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -39,6 +42,7 @@ interface PayoutRequest {
 
 const TABS = [
   { id: 'analytics', label: 'ANALYTICS', icon: BarChart2 },
+  { id: 'manual-signal', label: 'SEND SIGNAL', icon: Send },
   { id: 'users', label: 'USERS', icon: Users },
   { id: 'plans', label: 'PLANS', icon: LayoutList },
   { id: 'payments', label: 'PAYMENTS', icon: CreditCard },
@@ -92,6 +96,19 @@ export default function Admin() {
   const [limitsConfig, setLimitsConfig] = useState({ freeDaily: 4, proDaily: 30 });
   const [isSavingLimits, setIsSavingLimits] = useState(false);
   const [limitsStatus, setLimitsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  // Manual signal state
+  const [manualSignal, setManualSignal] = useState({
+    pair: 'XAUUSD',
+    screenshot: null as string | null,
+    analyzing: false,
+    analysis: null as any,
+    sending: false,
+    status: 'idle' as 'idle' | 'success' | 'error',
+    error: '',
+  });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchPrompts = async () => {
     try {
@@ -1301,6 +1318,199 @@ export default function Admin() {
     </div>
   );
 
+  const renderManualSignalTab = () => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        setManualSignal(s => ({ ...s, error: 'Please upload an image file', status: 'error' }));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setManualSignal(s => ({ ...s, screenshot: reader.result as string, error: '', status: 'idle' }));
+      };
+      reader.readAsDataURL(file);
+    };
+
+    const analyze = async () => {
+      if (!manualSignal.screenshot) {
+        setManualSignal(s => ({ ...s, error: 'Upload screenshot first', status: 'error' }));
+        return;
+      }
+      setManualSignal(s => ({ ...s, analyzing: true, error: '', status: 'idle' }));
+      try {
+        const res = await fetch('/api/admin/manual-signal/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: manualSignal.screenshot, pair: manualSignal.pair }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Analyze failed');
+        setManualSignal(s => ({ ...s, analyzing: false, analysis: data.analysis }));
+      } catch (err: any) {
+        setManualSignal(s => ({ ...s, analyzing: false, error: err.message, status: 'error' }));
+      }
+    };
+
+    const send = async () => {
+      if (!manualSignal.analysis) return;
+      const trade = String(manualSignal.analysis.trade || '').toUpperCase();
+      if (trade !== 'BUY' && trade !== 'SELL') {
+        setManualSignal(s => ({ ...s, error: 'Analysis says WAIT — cannot send', status: 'error' }));
+        return;
+      }
+      setManualSignal(s => ({ ...s, sending: true, error: '', status: 'idle' }));
+      try {
+        const res = await fetch('/api/admin/manual-signal/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pair: manualSignal.pair, analysis: manualSignal.analysis }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Send failed');
+        setManualSignal(s => ({ ...s, sending: false, status: 'success' }));
+      } catch (err: any) {
+        setManualSignal(s => ({ ...s, sending: false, error: err.message, status: 'error' }));
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
+          <div className="p-4 sm:p-6 border-b border-[#202735]">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <Send className="w-5 h-5 text-cyan-400" />
+              Send Manual Signal
+            </h2>
+            <p className="text-sm text-[#8A95A5] mt-1">
+              Upload a chart screenshot. Gemini analyzes it. Click Send Confirm to publish it and pause the auto engine for this pair.
+            </p>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-white tracking-wider uppercase">Pair</label>
+              <select
+                className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white focus:outline-none focus:border-cyan-500/50"
+                value={manualSignal.pair}
+                onChange={(e) => setManualSignal(s => ({ ...s, pair: e.target.value }))}
+              >
+                {APPROVED_PAIRS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-white tracking-wider uppercase">Chart Screenshot</label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="cursor-pointer border-2 border-dashed border-[#202735] hover:border-cyan-500/40 rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors bg-[#0D1017]/50"
+              >
+                {manualSignal.screenshot ? (
+                  <img src={manualSignal.screenshot} alt="Preview" className="max-h-64 rounded-lg object-contain" />
+                ) : (
+                  <>
+                    <Upload className="w-10 h-10 text-[#5D6B80] mb-3" />
+                    <p className="text-sm text-[#8A95A5]">Click to upload screenshot</p>
+                  </>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            <button
+              onClick={analyze}
+              disabled={manualSignal.analyzing || !manualSignal.screenshot}
+              className="w-full py-3 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-cyan-500/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+            >
+              {manualSignal.analyzing ? 'Analyzing...' : 'Analyze Screenshot'}
+            </button>
+
+            {manualSignal.analysis && (
+              <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-white font-bold text-lg">{manualSignal.pair}</span>
+                    <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${String(manualSignal.analysis.trade).toUpperCase() === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                      {String(manualSignal.analysis.trade).toUpperCase() === 'BUY' ? 'LONG' : 'SHORT'}
+                    </span>
+                  </div>
+                  <span className="text-cyan-400 font-mono text-sm font-bold">{manualSignal.analysis.confidence}% confidence</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-[#11141A] rounded-xl p-3 border border-[#202735]">
+                    <div className="text-[10px] text-[#5D6B80] uppercase tracking-wider mb-1">Entry</div>
+                    <div className="text-white font-mono font-bold">{manualSignal.analysis.entry}</div>
+                  </div>
+                  <div className="bg-[#11141A] rounded-xl p-3 border border-[#202735]">
+                    <div className="text-[10px] text-[#5D6B80] uppercase tracking-wider mb-1">SL</div>
+                    <div className="text-white font-mono font-bold">{manualSignal.analysis.stopLoss}</div>
+                  </div>
+                  <div className="bg-[#11141A] rounded-xl p-3 border border-[#202735]">
+                    <div className="text-[10px] text-[#5D6B80] uppercase tracking-wider mb-1">TP1</div>
+                    <div className="text-white font-mono font-bold">{manualSignal.analysis.tp1}</div>
+                  </div>
+                  <div className="bg-[#11141A] rounded-xl p-3 border border-[#202735]">
+                    <div className="text-[10px] text-[#5D6B80] uppercase tracking-wider mb-1">TP2 / TP3</div>
+                    <div className="text-white font-mono font-bold">{manualSignal.analysis.tp2} / {manualSignal.analysis.tp3}</div>
+                  </div>
+                </div>
+
+                {manualSignal.analysis.newsHasEvent && (
+                  <div className="bg-[#11141A] rounded-xl p-3 border border-[#202735]">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="text-xs font-bold text-white">{manualSignal.analysis.newsEvent}</span>
+                      <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-bold uppercase ${String(manualSignal.analysis.newsPrediction).toUpperCase() === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : String(manualSignal.analysis.newsPrediction).toUpperCase() === 'SELL' ? 'bg-rose-500/10 text-rose-400' : 'bg-[#202735] text-[#8A95A5]'}`}>
+                        {manualSignal.analysis.newsPrediction} {manualSignal.analysis.newsProbability}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#8A95A5]">{manualSignal.analysis.newsReason}</p>
+                  </div>
+                )}
+
+                <div className="text-xs text-[#8A95A5]">
+                  <span className="text-white font-bold">Reason:</span> {manualSignal.analysis.reasoning}
+                </div>
+                <div className="text-xs text-[#8A95A5]">
+                  <span className="text-white font-bold">Warnings:</span> {manualSignal.analysis.warnings}
+                </div>
+
+                <button
+                  onClick={send}
+                  disabled={manualSignal.sending || String(manualSignal.analysis.trade).toUpperCase() === 'WAIT'}
+                  className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-[#0A0D12] rounded-xl text-sm font-black uppercase tracking-widest disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                >
+                  {manualSignal.sending ? 'Sending...' : 'Send Confirm'}
+                </button>
+              </div>
+            )}
+
+            {manualSignal.status === 'success' && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-emerald-400 text-sm font-bold flex items-center gap-2">
+                <Check className="w-4 h-4" />
+                Signal sent. It will appear in Today Signals and pause the auto engine for {manualSignal.pair}.
+              </div>
+            )}
+            {manualSignal.status === 'error' && (
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-rose-400 text-sm font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {manualSignal.error}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 w-full flex flex-col bg-[#0A0D12]">
       {/* Top Header / Title */}
@@ -1357,6 +1567,7 @@ export default function Admin() {
           {/* Active Tab Content */}
           <div className="pb-10">
             {activeTab === 'analytics' && renderAnalyticsTab()}
+            {activeTab === 'manual-signal' && renderManualSignalTab()}
             {activeTab === 'users' && renderUsersTab()}
             {activeTab === 'plans' && <PlansManager />}
             {activeTab === 'payments' && renderPaymentsTab()}

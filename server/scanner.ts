@@ -50,6 +50,10 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import JSON5 from 'json5';
 
+// Pairs currently under manual override. The auto engine will not scan or
+// publish signals for these pairs while a manual signal is LIVE.
+export const MANUAL_OVERRIDE_PAIRS = new Set<string>();
+
 function getSignalExplainerPrompt(): string {
   try {
     const data = fs.readFileSync(path.join(process.cwd(), 'prompts.json'), 'utf8');
@@ -1377,6 +1381,11 @@ export async function startScanner() {
       }
       // ===========================================
 
+      // Skip auto engine for pairs under manual admin override.
+      // The tracker above still runs so the manual signal remains live-managed.
+      if (MANUAL_OVERRIDE_PAIRS.has(pair)) {
+        console.log(`MANUAL_OVERRIDE: skipping ${pair} - admin manual signal is active`);
+      } else {
       // PRIMARY PATH: Gemini reads M15 + M5 candles like a chart screenshot
       // and decides direction, entry, SL, TP, confidence, and news bias.
       // FALLBACK: if Gemini is unavailable or returns no signal, the old
@@ -1723,6 +1732,7 @@ export async function startScanner() {
       }
 
       updatePairStatus(pair, 'success');
+      }
     } catch (e: any) {
       updatePairStatus(pair, 'error', e.message);
       latestMarketState.set(pair, {

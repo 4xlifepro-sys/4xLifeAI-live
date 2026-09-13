@@ -8,6 +8,7 @@ import { startSessionMessaging, sendSessionUpdate } from "./server/sessionMessag
 import { supabase } from './server/supabase.js';
 import { sendTelegramMessage } from './server/telegram.js';
 
+import { randomUUID } from 'crypto';
 import { GoogleGenAI } from "@google/genai";
 
 const adminAlertCooldown = new Map<string, number>();
@@ -1103,6 +1104,120 @@ async function startServer() {
     }
   });
 
+  const APPROVED_PAIRS = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'BTCUSD', 'ETHUSD', 'SOLUSD'];
+
+  function num(value: any): number | null {
+    const n = Number(value);
+    return isFinite(n) ? n : null;
+  }
+
+  async function publishManualSignal(analysis: any, pair: string): Promise<{ ok: boolean; error?: string; signal?: any }> {
+    if (!supabase) return { ok: false, error: 'Supabase not available' };
+
+    const trade = String(analysis.trade || '').toUpperCase();
+    if (trade !== 'BUY' && trade !== 'SELL') {
+      return { ok: false, error: `Invalid trade direction: ${analysis.trade}` };
+    }
+
+    const direction = trade === 'BUY' ? 'LONG' : 'SHORT';
+    const entry = num(analysis.entry);
+    const sl = num(analysis.stopLoss);
+    const tp1 = num(analysis.tp1);
+    const tp2 = num(analysis.tp2);
+    const tp3 = num(analysis.tp3);
+    const confidence = Math.min(95, Math.max(0, Number(analysis.confidence) || 0));
+
+    if (entry === null || sl === null || tp1 === null || tp2 === null || tp3 === null) {
+      return { ok: false, error: 'Missing required price levels' };
+    }
+
+    const isLong = direction === 'LONG';
+    if (isLong && sl >= entry) return { ok: false, error: 'BUY SL must be below entry' };
+    if (!isLong && sl <= entry) return { ok: false, error: 'SELL SL must be above entry' };
+
+    // Cancel any existing active signal for this pair
+    await supabase
+      .from('signals')
+      .update({ status: 'CLOSED', is_active: false, closed_at: new Date().toISOString(), result: 'CANCELLED' })
+      .eq('pair', pair)
+      .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT'])
+      .eq('is_active', true);
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const risk = Math.abs(entry - sl);
+    const rr = risk > 0 ? (Math.abs(tp1 - entry) / risk).toFixed(1) : '0.0';
+
+    const newsBias = {
+      lean: String(analysis.newsPrediction || 'NEUTRAL').toUpperCase(),
+      probability: analysis.newsHasEvent ? Math.max(50, Math.min(75, Number(analysis.newsProbability) || 50)) : undefined,
+      eventSummary: analysis.newsEvent || undefined,
+      bullishScenario: analysis.newsReason || undefined,
+      bearishScenario: undefined,
+    };
+
+    const signalPayload: any = {
+      id,
+      pair,
+      direction,
+      bias: isLong ? 'BULLISH' : 'BEARISH',
+      score: confidence,
+      tier: confidence >= 75 ? 'Strong' : 'Good',
+      aiConfidence: confidence,
+      aiReason: analysis.reasoning || 'Manual screenshot signal',
+      newsBias,
+      entry,
+      sl,
+      tp1,
+      tp2,
+      tp3,
+      timestamp: now,
+      created_at: now,
+      status: 'LIVE',
+      is_active: true,
+      source: 'MANUAL',
+      diagnostics: {
+        engine: 'MANUAL_SCREENSHOT',
+        trend: analysis.trend || '',
+        marketStructure: analysis.marketStructure || '',
+        support: analysis.support || '',
+        resistance: analysis.resistance || '',
+        warnings: analysis.warnings || '',
+        tfStatus: analysis.tfStatus || 'SINGLE',
+        reasoning: analysis.reasoning || '',
+      },
+    };
+
+    const { error: insertError } = await supabase.from('signals').insert([signalPayload]);
+    if (insertError) {
+      return { ok: false, error: insertError.message };
+    }
+
+    // Telegram broadcast
+    const emoji = isLong ? '🟢' : '🔴';
+    const msg = `${emoji} <b>4xFiveAI MANUAL SIGNAL</b>\n\n`
+      + `Pair: ${pair}\n`
+      + `Signal: ${trade}\n\n`
+      + `Entry: ${entry}\n`
+      + `SL: ${sl}\n`
+      + `TP1: ${tp1}\n`
+      + `TP2: ${tp2}\n`
+      + `TP3: ${tp3}\n`
+      + `RR: 1:${rr}\n`
+      + `Confidence: ${confidence}%\n\n`
+      + `${analysis.reasoning || ''}`;
+
+    if (!TELEGRAM_SIGNALS_DISABLED) {
+      await sendTelegramMessage(msg);
+    }
+
+    // Mark pair as manual override so auto engine skips it
+    const { MANUAL_OVERRIDE_PAIRS } = await import('./server/scanner.js');
+    MANUAL_OVERRIDE_PAIRS.add(pair);
+
+    return { ok: true, signal: signalPayload };
+  }
+
   const requireAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: "Missing authorization header" });
@@ -1370,8 +1485,6 @@ async function startServer() {
     }
     res.json({ success: true });
   });
-
-  app.use("/api/admin", requireAdmin);
 
   app.get("/api/limits", (req, res) => {
     res.json(getLimits());
@@ -1748,6 +1861,105 @@ Return the analysis in this exact JSON format:
       }
 
       res.status(500).json({ error: errorMessage });
+    }
+  });
+
+  // Admin manual signal routes
+  app.post("/api/admin/manual-signal/analyze", requireAdmin, async (req, res) => {
+    try {
+      const { imageBase64, pair, timezone } = req.body;
+      if (!imageBase64) return res.status(400).json({ error: 'No image provided' });
+      if (!APPROVED_PAIRS.includes(pair)) return res.status(400).json({ error: 'Invalid pair' });
+
+      const base64Data = String(imageBase64).replace(/^data:image\/\w+;base64,/, '');
+      const calendarEvents = await getEconomicCalendar();
+      const tz = typeof timezone === 'string' && timezone ? timezone : undefined;
+      const calendarBlock = buildCalendarPromptBlock(calendarEvents, tz);
+
+      const prompt = `You are 4xLifeAI Chart Analyzer. Analyze this ${pair} chart screenshot and output JSON only.
+
+${calendarBlock}
+
+Return valid JSON with these fields exactly:
+{
+  "instrument": "${pair}",
+  "trade": "BUY or SELL or WAIT",
+  "entry": "price",
+  "stopLoss": "price",
+  "tp1": "price",
+  "tp2": "price",
+  "tp3": "price",
+  "confidence": number,
+  "reasoning": "short reason",
+  "warnings": "short warnings",
+  "newsHasEvent": true/false,
+  "newsEvent": "event label or empty",
+  "newsPrediction": "BUY or SELL or NEUTRAL",
+  "newsProbability": number,
+  "newsReason": "short scenario sentence",
+  "newsBigMove": true/false,
+  "tfStatus": "ALIGNED or CONFLICT or SINGLE"
+}
+
+RULES:
+- For ${pair}, SL must be beyond the nearest valid swing high/low, with buffer. Never inside recent candle noise.
+- TP1 must be at least 2.0x the SL distance.
+- Entry = current market price.
+- Use scenario language for news. Never say will.
+- Keep all text fields short.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: 'image/png', data: base64Data } }] }],
+        config: { temperature: 0.3, responseMimeType: 'application/json' }
+      });
+
+      const text = response.text;
+      let analysis: any;
+      try {
+        analysis = JSON.parse(text);
+      } catch {
+        const m = text.match(/\{[\s\S]*\}/);
+        analysis = m ? JSON.parse(m[0]) : null;
+      }
+
+      if (!analysis) return res.status(500).json({ error: 'Could not parse Gemini response' });
+
+      // Normalize
+      analysis.newsHasEvent = analysis.newsHasEvent === true;
+      const pred = String(analysis.newsPrediction || '').toUpperCase();
+      analysis.newsPrediction = pred === 'BUY' || pred === 'SELL' ? pred : 'NEUTRAL';
+      if (analysis.newsHasEvent) {
+        const prob = Number(analysis.newsProbability);
+        analysis.newsProbability = Math.max(50, Math.min(75, isFinite(prob) ? Math.round(prob) : 50));
+      }
+      analysis.newsBigMove = analysis.newsBigMove === true;
+      if (!analysis.newsEvent) analysis.newsHasEvent = false;
+
+      res.json({ success: true, analysis });
+    } catch (e: any) {
+      console.error('[manual-signal/analyze] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to analyze screenshot' });
+    }
+  });
+
+  app.post("/api/admin/manual-signal/send", requireAdmin, async (req, res) => {
+    try {
+      const { pair, analysis } = req.body;
+      if (!pair || !analysis) return res.status(400).json({ error: 'Missing pair or analysis' });
+      if (!APPROVED_PAIRS.includes(pair)) return res.status(400).json({ error: 'Invalid pair' });
+
+      const trade = String(analysis.trade || '').toUpperCase();
+      if (trade !== 'BUY' && trade !== 'SELL') {
+        return res.status(400).json({ error: `Cannot send WAIT signal: ${analysis.trade}` });
+      }
+
+      const result = await publishManualSignal(analysis, pair);
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      res.json({ success: true, signal: result.signal });
+    } catch (e: any) {
+      console.error('[manual-signal/send] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to publish manual signal' });
     }
   });
 
