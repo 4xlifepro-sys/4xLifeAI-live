@@ -268,13 +268,23 @@ function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void 
     signal.entry = gEntry;
   }
 
-  // SL must sit on the correct side of entry
+  // SL must sit on the correct side of entry and be beyond recent candle range
   if (gSl !== null) {
     const slOk = isLong ? gSl < signal.entry : gSl > signal.entry;
     if (slOk) signal.sl = gSl;
+
+    // Enforce a minimum stop distance so we never accept a micro-SL inside noise.
+    // Minimum: 0.08% of entry price (approx 8 pips for XAUUSD, ~8 pips for BTCUSD, etc.)
+    const minSlDistance = signal.entry * 0.0008;
+    const actualSlDistance = Math.abs(signal.entry - signal.sl);
+    if (actualSlDistance < minSlDistance) {
+      // Push SL out to the minimum distance, preserving direction
+      signal.sl = isLong ? signal.entry - minSlDistance : signal.entry + minSlDistance;
+      console.log(`SL_NOISE_EXPAND: ${signal.pair} SL expanded from ${gSl} to ${signal.sl} (min distance ${minSlDistance.toFixed(4)})`);
+    }
   }
 
-  // TPs must each sit on the correct side of entry, and TP1 must keep >= 1:1.5 RR
+  // TPs must each sit on the correct side of entry, and TP1 must keep >= 1:2 RR
   const risk = Math.abs(signal.entry - signal.sl);
   const applyTp = (gTp: number | null, current: number): number => {
     if (gTp === null) return current;
@@ -283,11 +293,27 @@ function applyGeminiLevels(signal: Signal, gemini: any, m5Candles: any[]): void 
     return gTp;
   };
   const newTp1 = applyTp(gTp1, signal.tp1);
-  if (risk > 0 && Math.abs(signal.entry - newTp1) / risk >= 2.0) {
-    signal.tp1 = newTp1;
+  if (risk > 0) {
+    // Accept Gemini's TP1 only if it is at least 2.0R. Otherwise push TP1 out to 2.0R.
+    if (Math.abs(signal.entry - newTp1) / risk >= 2.0) {
+      signal.tp1 = newTp1;
+    } else {
+      signal.tp1 = isLong ? signal.entry + risk * 2.0 : signal.entry - risk * 2.0;
+      console.log(`TP1_RR_EXPAND: ${signal.pair} TP1 expanded to ${signal.tp1} for 2.0R`);
+    }
   }
+  // Ensure TP2 and TP3 are at least as far as TP1
   signal.tp2 = applyTp(gTp2, signal.tp2);
   signal.tp3 = applyTp(gTp3, signal.tp3);
+  if (risk > 0) {
+    if (isLong) {
+      if (signal.tp2 <= signal.tp1) signal.tp2 = signal.entry + risk * 2.5;
+      if (signal.tp3 <= signal.tp2) signal.tp3 = signal.entry + risk * 3.0;
+    } else {
+      if (signal.tp2 >= signal.tp1) signal.tp2 = signal.entry - risk * 2.5;
+      if (signal.tp3 >= signal.tp2) signal.tp3 = signal.entry - risk * 3.0;
+    }
+  }
 
   // Confidence: accept Gemini's read, clamped to a sane band
   const gConf = Number(gemini.confidence);
@@ -307,6 +333,12 @@ function validateAPlusSetup(signal: Signal): { ok: boolean; reason: string } {
   const tp1Dist = Math.abs(signal.entry - signal.tp1);
   if (risk <= 0 || tp1Dist / risk < 2.0) {
     return { ok: false, reason: `A_PLUS_RR: TP1 ${(tp1Dist / risk).toFixed(2)}R < 2.0R` };
+  }
+
+  // Reject micro stop losses inside market noise (minimum 0.05% of entry)
+  const minSlDistance = signal.entry * 0.0005;
+  if (risk < minSlDistance) {
+    return { ok: false, reason: `A_PLUS_SL_NOISE: SL ${risk.toFixed(4)} < min ${minSlDistance.toFixed(4)}` };
   }
 
   // Gemini screenshot generator explicitly reports timeframe alignment.
