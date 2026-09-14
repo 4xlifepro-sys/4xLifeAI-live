@@ -508,22 +508,20 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
         <Level label="TP1" value={s.tp1} copied={copiedLevel === "TP1"} onCopy={copyLevel} />
         <Level label="TP2" value={s.tp2} copied={copiedLevel === "TP2"} onCopy={copyLevel} />
         {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
+        {s.news?.event && (
+          <div className="x4-signal__news x4-signal__news--compact">
+            <span className="x4-signal__news-icon">NEWS</span>
+            <span className="x4-signal__news-event">{s.news.event}</span>
+            {s.news.lean && (
+              <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>
+                {s.news.lean} {s.news.probability ? `${s.news.probability}%` : ''}
+              </span>
+            )}
+            {s.news.reason && <span className="x4-signal__news-reason">{s.news.reason}</span>}
+          </div>
+        )}
       </div>
       <div className={`x4-signal__status x4-signal__status--${s.status}`}>{statusLabel}</div>
-      {s.news?.event && (
-        <div className="x4-signal__news">
-          <span className="x4-signal__news-icon">📰</span>
-          <span className="x4-signal__news-event">{s.news.event}</span>
-          {s.news.lean && (
-            <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>
-              {s.news.lean} {s.news.probability ? `${s.news.probability}%` : ''}
-            </span>
-          )}
-        </div>
-      )}
-      {s.news?.reason && (
-        <div className="x4-signal__news-reason">{s.news.reason}</div>
-      )}
     </div>
   );
 }
@@ -1026,6 +1024,13 @@ const CSS = `
   border: 1px solid rgba(79, 209, 232, 0.18);
   border-radius: 6px;
   font-size: 11px;
+}
+.x4-signal__news--compact {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
 }
 .x4-signal__news-icon { font-size: 11px; }
 .x4-signal__news-event {
