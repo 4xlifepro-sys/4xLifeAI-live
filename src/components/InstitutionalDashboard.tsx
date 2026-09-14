@@ -507,10 +507,10 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       </div>
       <div className="x4-signal__levels">
         <Level label="ENTRY" value={s.entry} copied={copiedLevel === "ENTRY"} onCopy={copyLevel} />
-        <Level label="SL" value={s.sl} muted copied={copiedLevel === "SL"} onCopy={copyLevel} />
-        <Level label="TP1" value={s.tp1} copied={copiedLevel === "TP1"} onCopy={copyLevel} />
-        <Level label="TP2" value={s.tp2} copied={copiedLevel === "TP2"} onCopy={copyLevel} />
-        {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
+        <Level label="SL" value={s.sl} tone="sl" muted copied={copiedLevel === "SL"} onCopy={copyLevel} />
+        <Level label="TP1" value={s.tp1} tone="tp" copied={copiedLevel === "TP1"} onCopy={copyLevel} />
+        <Level label="TP2" value={s.tp2} tone="tp" copied={copiedLevel === "TP2"} onCopy={copyLevel} />
+        {s.tp3 != null && <Level label="TP3" value={s.tp3} tone="tp" copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
         {s.confidence != null && (
           <div className="x4-signal__confidence">
             <span className="x4-signal__confidence-label">CONFIDENCE</span>
@@ -523,11 +523,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
             <span className="x4-signal__news-event">{s.news.event}</span>
             {s.news.impact && <span className={`x4-signal__news-impact x4-signal__news-impact--${s.news.impact.toLowerCase()}`}>{s.news.impact}</span>}
             {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
-            {s.news.lean && (
-              <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>
-                {s.news.lean} {s.news.probability ? `${s.news.probability}%` : ''}
-              </span>
-            )}
+            {s.news.lean && <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>{s.news.lean}</span>}
             {s.news.reason && <span className="x4-signal__news-reason">{s.news.reason}</span>}
           </div>
         )}
@@ -547,11 +543,12 @@ function Level({
   label: string;
   value: number;
   muted?: boolean;
+  tone?: "sl" | "tp";
   copied?: boolean;
   onCopy?: (label: string, value: number) => void;
 }) {
   return (
-    <div className={`x4-level ${muted ? "x4-level--muted" : ""}`}>
+    <div className={`x4-level ${muted ? "x4-level--muted" : ""} ${tone ? `x4-level--${tone}` : ""}`}>
       <span className="x4-level__label">{label}</span>
       <span className="x4-level__row">
         <span className="x4-level__value">{fmtPrice(value)}</span>
