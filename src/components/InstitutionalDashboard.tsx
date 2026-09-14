@@ -45,6 +45,7 @@ interface ActiveSignal {
   tp1: number;
   tp2: number;
   tp3?: number;
+  confidence?: number;
   status: "profit" | "loss" | "pending";
   tradeStatus?: string;
   statusPips?: number;
@@ -52,6 +53,8 @@ interface ActiveSignal {
   openedAgo: string; // e.g. "12m ago"
   news?: {
     event?: string;
+    impact?: string;
+    time?: string;
     lean?: string;
     probability?: number;
     reason?: string;
@@ -508,10 +511,18 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
         <Level label="TP1" value={s.tp1} copied={copiedLevel === "TP1"} onCopy={copyLevel} />
         <Level label="TP2" value={s.tp2} copied={copiedLevel === "TP2"} onCopy={copyLevel} />
         {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
+        {s.confidence != null && (
+          <div className="x4-signal__confidence">
+            <span className="x4-signal__confidence-label">CONFIDENCE</span>
+            <span>{s.confidence}%</span>
+          </div>
+        )}
         {s.news?.event && (
           <div className="x4-signal__news x4-signal__news--compact">
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
+            {s.news.impact && <span className="x4-signal__news-impact">{s.news.impact}</span>}
+            {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
             {s.news.lean && (
               <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>
                 {s.news.lean} {s.news.probability ? `${s.news.probability}%` : ''}

@@ -193,12 +193,20 @@ export default function Dashboard() {
         tp1: s.tp1 || 0,
         tp2: s.tp2 || 0,
         tp3: s.tp3 || undefined,
+        confidence: Number(s.aiConfidence ?? s.confidence ?? 0),
         status,
         tradeStatus: s.status,
         statusPips: Math.abs(pips),
         tier,
         openedAgo: daysAgo(s.created_at || s.timestamp || ''),
-        news: (() => {
+          news: (() => {
+          if (s.news_event) {
+            return {
+              event: s.news_event,
+              impact: s.news_impact,
+              time: s.news_time,
+            };
+          }
           const text = String(s.reason || '');
           const match = text.match(/NEWS:\\s*(.*?)\\s+[-—]+\\s*(BUY|SELL|NEUTRAL)\\s+(\\d+)%\\s+[-—]+\\s*(.*)$/i);
           return s.newsBias
