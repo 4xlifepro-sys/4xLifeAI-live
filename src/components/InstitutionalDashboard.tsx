@@ -521,9 +521,10 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
           <div className="x4-signal__news x4-signal__news--compact">
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
-            {s.news.impact && <span className={`x4-signal__news-impact x4-signal__news-impact--${s.news.impact.toLowerCase()}`}>{s.news.impact}</span>}
             {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
-            {s.news.lean && <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>{s.news.lean}</span>}
+            {s.news.lean && <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>→ {s.news.lean}</span>}
+            {s.news.probability && <span className="x4-signal__news-probability">📊 {s.news.probability}%</span>}
+            {s.news.impact && <span className={`x4-signal__news-impact x4-signal__news-impact--${s.news.impact.toLowerCase()}`}>⚠ {s.news.impact === 'HIGH' ? 'big move' : s.news.impact}</span>}
             {s.news.reason && <span className="x4-signal__news-reason">{s.news.reason}</span>}
           </div>
         )}
@@ -1035,9 +1036,10 @@ const CSS = `
 .x4-signal__news--compact {
   grid-column: 1 / -1;
   margin-top: 0;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .x4-level--sl .x4-level__label,
 .x4-level--sl .x4-level__value {
@@ -1095,9 +1097,14 @@ const CSS = `
   border-color: rgba(51, 209, 122, 0.3);
 }
 .x4-signal__news-time {
-  grid-column: 2 / -1;
   color: var(--x4-text-dim);
   font-size: 10px;
+}
+.x4-signal__news-probability {
+  color: var(--x4-green);
+  font-family: var(--x4-font-mono);
+  font-size: 10px;
+  font-weight: 700;
 }
 .x4-signal__news-icon { font-size: 11px; }
 .x4-signal__news-event {
