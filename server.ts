@@ -1193,9 +1193,7 @@ async function startServer() {
       + `Confidence: ${confidence}%\n\n`
       + `${analysis.reasoning || ''}`;
 
-    if (!TELEGRAM_SIGNALS_DISABLED) {
-      await sendTelegramMessage(msg);
-    }
+    await sendTelegramMessage(msg);
 
     // Mark pair as manual override so auto engine skips it
     const { MANUAL_OVERRIDE_PAIRS } = await import('./server/scanner.js');
