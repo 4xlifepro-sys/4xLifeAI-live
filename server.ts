@@ -571,10 +571,10 @@ async function startServer() {
       if (data) {
         recentSignals = data.map((d: any) => ({
         ...d,
-        newsEvent: d.news_event || d.newsEvent,
-        newsPrediction: d.news_prediction || d.newsPrediction,
-        newsProbability: d.news_probability || d.newsProbability,
-        newsReason: d.news_reason || d.newsReason,
+      newsEvent: d.news_event || d.newsEvent,
+      newsPrediction: d.news_prediction || d.newsPrediction,
+      newsProbability: d.news_probability || d.newsProbability,
+      newsReason: d.news_reason || d.newsReason,
           entry: d.entry_price,
           timestamp: d.created_at,
           aiConfidence: (d.confidence || 0) * 10,
@@ -1175,6 +1175,10 @@ async function startServer() {
       created_at: now,
       status: 'LIVE',
       is_active: true,
+      news_event: analysis.newsEvent || null,
+      news_prediction: analysis.newsPrediction || null,
+      news_probability: analysis.newsProbability || null,
+      news_reason: analysis.newsReason || null,
     };
 
     const { error: insertError } = await supabase.from('signals').insert([signalPayload]);
