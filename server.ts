@@ -1119,7 +1119,7 @@ async function startServer() {
       return { ok: false, error: `Invalid trade direction: ${analysis.trade}` };
     }
 
-    const direction = trade === 'BUY' ? 'LONG' : 'SHORT';
+    const direction = trade;
     const entry = num(analysis.entry);
     const sl = num(analysis.stopLoss);
     const tp1 = num(analysis.tp1);
