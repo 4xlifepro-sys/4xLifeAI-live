@@ -200,7 +200,7 @@ export default function Dashboard() {
         openedAgo: daysAgo(s.created_at || s.timestamp || ''),
         news: (() => {
           const text = String(s.reason || '');
-          const match = text.match(/NEWS:\\s*(.*?)\\s+[-—]\\s*(BUY|SELL|NEUTRAL)\\s+(\\d+)%\\s+[-—]\\s*(.*)$/i)
+          const match = text.match(/NEWS:\\s*(.*?)\\s+[-—]+\\s*(BUY|SELL|NEUTRAL)\\s+(\\d+)%\\s+[-—]+\\s*(.*)$/i);
           return s.newsBias
             ? {
                 event: s.newsBias.eventSummary,
