@@ -1174,6 +1174,9 @@ async function startServer() {
       created_at: now,
       status: 'LIVE',
       is_active: true,
+      news_event: analysis.newsHasEvent && analysis.newsEvent ? String(analysis.newsEvent) : null,
+      news_impact: analysis.newsHasEvent && analysis.newsEvent ? 'HIGH' : null,
+      news_time: null,
       reason: `${analysis.reasoning || 'Manual screenshot signal'}${analysis.newsHasEvent && analysis.newsEvent ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };
 
