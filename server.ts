@@ -1165,7 +1165,6 @@ async function startServer() {
       tier: confidence >= 75 ? 'Strong' : 'Good',
       confidence,
       reason: analysis.reasoning || 'Manual screenshot signal',
-      newsBias,
       entry_price: entry,
       sl,
       original_sl: sl,
