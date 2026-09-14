@@ -1146,6 +1146,13 @@ async function startServer() {
     const now = new Date().toISOString();
     const risk = Math.abs(entry - sl);
     const rr = risk > 0 ? (Math.abs(tp1 - entry) / risk).toFixed(1) : '0.0';
+    const newsBias = {
+      lean: String(analysis.newsPrediction || 'NEUTRAL').toUpperCase(),
+      probability: analysis.newsHasEvent ? Math.max(50, Math.min(75, Number(analysis.newsProbability) || 50)) : undefined,
+      eventSummary: analysis.newsEvent || undefined,
+      bullishScenario: analysis.newsReason || undefined,
+      bearishScenario: undefined,
+    };
 
     const signalPayload: any = {
       pair,
