@@ -1176,16 +1176,6 @@ async function startServer() {
       status: 'LIVE',
       is_active: true,
       source: 'MANUAL',
-      diagnostics: {
-        engine: 'MANUAL_SCREENSHOT',
-        trend: analysis.trend || '',
-        marketStructure: analysis.marketStructure || '',
-        support: analysis.support || '',
-        resistance: analysis.resistance || '',
-        warnings: analysis.warnings || '',
-        tfStatus: analysis.tfStatus || 'SINGLE',
-        reasoning: analysis.reasoning || '',
-      },
     };
 
     const { error: insertError } = await supabase.from('signals').insert([signalPayload]);
