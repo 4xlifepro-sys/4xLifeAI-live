@@ -876,6 +876,61 @@ async function getGlobalActiveTradeCount() {
   return supabase ? dbCount : memoryCount;
 }
 
+async function trackOpenSignals() {
+  if (!supabase) return;
+
+  const { data: signals, error } = await supabase
+    .from('signals')
+    .select('*')
+    .eq('is_active', true)
+    .in('status', OPEN_SIGNAL_STATUSES);
+
+  if (error) {
+    console.error('Open signal tracking error:', error.message);
+    return;
+  }
+
+  for (const signal of signals || []) {
+    const pair = String(signal.pair || '');
+    if (!pair) continue;
+
+    try {
+      const candles = await fetchCandles(pair, 'M5', 300);
+      if (!candles || candles.length < 2) continue;
+
+      const isMetal = pair === 'XAUUSD' || pair === 'XAGUSD';
+      const pipMult = getPipMultiplier(pair);
+      const metalExit = isMetal
+        ? trackMetalsTrailingExit(signal, candles, pipMult)
+        : { exit: false as const };
+
+      const latest = candles[candles.length - 1];
+      const isLong = signal.direction === 'BUY' || signal.direction === 'LONG';
+      const exitAt = metalExit.exit
+        ? metalExit.exitPrice
+        : isLong
+          ? signal.tp3
+          : signal.sl;
+      const shouldClose = metalExit.exit;
+
+      if (!shouldClose || exitAt == null) continue;
+
+      await supabase
+        .from('signals')
+        .update({
+          status: metalExit.reason === 'SL' ? 'STOP_LOSS_HIT' : 'CLOSED',
+          is_active: false,
+          closed_at: metalExit.exitTime || new Date().toISOString(),
+          exit_price: exitAt,
+          result: metalExit.reason === 'SL' ? 'LOSS' : 'WIN',
+        })
+        .eq('id', signal.id);
+    } catch (trackingError: any) {
+      console.error(`Signal tracking failed for ${pair}:`, trackingError?.message || trackingError);
+    }
+  }
+}
+
 // Metals (XAUUSD, XAGUSD) use the trend-breakout engine's trailing EMA20
 // exit - there is no fixed TP1/TP2/TP3 to check against live. This mirrors
 // the exact backtest-validated rule (server/backtest-walkforward.ts:
