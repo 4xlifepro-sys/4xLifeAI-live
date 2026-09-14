@@ -205,7 +205,14 @@ export default function Dashboard() {
               probability: s.newsBias.probability,
               reason: s.newsBias.bullishScenario || s.newsBias.bearishScenario,
             }
-          : undefined,
+          : s.newsEvent
+            ? {
+                event: s.newsEvent,
+                lean: s.newsPrediction || 'NEUTRAL',
+                probability: s.newsProbability,
+                reason: s.newsReason,
+              }
+            : undefined,
       };
     });
 

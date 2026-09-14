@@ -570,7 +570,11 @@ async function startServer() {
       
       if (data) {
         recentSignals = data.map((d: any) => ({
-          ...d,
+        ...d,
+        newsEvent: d.news_event || d.newsEvent,
+        newsPrediction: d.news_prediction || d.newsPrediction,
+        newsProbability: d.news_probability || d.newsProbability,
+        newsReason: d.news_reason || d.newsReason,
           entry: d.entry_price,
           timestamp: d.created_at,
           aiConfidence: (d.confidence || 0) * 10,
