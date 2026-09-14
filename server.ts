@@ -1161,7 +1161,7 @@ async function startServer() {
       bias: isLong ? 'BULLISH' : 'BEARISH',
       score: confidence,
       tier: confidence >= 75 ? 'Strong' : 'Good',
-      confidence,
+      confidence: Math.min(10, Math.max(1, Math.round(confidence / 10))),
       reason: analysis.reasoning || 'Manual screenshot signal',
       entry_price: entry,
       sl,

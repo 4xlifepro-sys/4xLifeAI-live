@@ -923,7 +923,7 @@ function trackMetalsTrailingExit(
 }
 
 export async function startScanner() {
-  console.log("Starting 24/7 4xLifeAI Scanner...");
+  console.log("Automatic signal engine disabled. SL/TP tracker remains active.");
 
   if (supabase) {
     try {
@@ -988,6 +988,12 @@ export async function startScanner() {
 
     const startTime = Date.now();
     const pair = PAIRS[currentIndex];
+
+    if (true) {
+      await trackOpenSignals();
+      setTimeout(runNextCycle, baseDelayMs);
+      return;
+    }
 
     // On weekends, skip forex pairs to save API credits and reduce latency
     const isCryptoOrMetal = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'BNBUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD', 'XAUUSD', 'XAGUSD'].includes(pair);
