@@ -1175,10 +1175,6 @@ async function startServer() {
       created_at: now,
       status: 'LIVE',
       is_active: true,
-      news_event: analysis.newsEvent || null,
-      news_prediction: analysis.newsPrediction || null,
-      news_probability: analysis.newsProbability || null,
-      news_reason: analysis.newsReason || null,
     };
 
     const { error: insertError } = await supabase.from('signals').insert([signalPayload]);
