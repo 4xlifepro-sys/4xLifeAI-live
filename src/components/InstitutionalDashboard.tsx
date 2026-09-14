@@ -507,10 +507,10 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       </div>
       <div className="x4-signal__levels">
         <Level label="ENTRY" value={s.entry} copied={copiedLevel === "ENTRY"} onCopy={copyLevel} />
-        <Level label="SL" value={s.sl} muted copied={copiedLevel === "SL"} onCopy={copyLevel} />
-        <Level label="TP1" value={s.tp1} copied={copiedLevel === "TP1"} onCopy={copyLevel} />
-        <Level label="TP2" value={s.tp2} copied={copiedLevel === "TP2"} onCopy={copyLevel} />
-        {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
+        <Level label="SL" value={s.sl} tone="sl" muted copied={copiedLevel === "SL"} onCopy={copyLevel} />
+        <Level label="TP1" value={s.tp1} tone="tp" copied={copiedLevel === "TP1"} onCopy={copyLevel} />
+        <Level label="TP2" value={s.tp2} tone="tp" copied={copiedLevel === "TP2"} onCopy={copyLevel} />
+        {s.tp3 != null && <Level label="TP3" value={s.tp3} tone="tp" copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
         {s.confidence != null && (
           <div className="x4-signal__confidence">
             <span className="x4-signal__confidence-label">CONFIDENCE</span>
@@ -521,7 +521,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
           <div className="x4-signal__news x4-signal__news--compact">
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
-            {s.news.impact && <span className="x4-signal__news-impact">{s.news.impact}</span>}
+            {s.news.impact && <span className={`x4-signal__news-impact x4-signal__news-impact--${s.news.impact.toLowerCase()}`}>{s.news.impact}</span>}
             {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
             {s.news.lean && (
               <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>
@@ -547,11 +547,12 @@ function Level({
   label: string;
   value: number;
   muted?: boolean;
+  tone?: "sl" | "tp";
   copied?: boolean;
   onCopy?: (label: string, value: number) => void;
 }) {
   return (
-    <div className={`x4-level ${muted ? "x4-level--muted" : ""}`}>
+    <div className={`x4-level ${muted ? "x4-level--muted" : ""} ${tone ? `x4-level--${tone}` : ""}`}>
       <span className="x4-level__label">{label}</span>
       <span className="x4-level__row">
         <span className="x4-level__value">{fmtPrice(value)}</span>
@@ -1043,6 +1044,14 @@ const CSS = `
   grid-template-columns: auto 1fr auto;
   align-items: center;
 }
+.x4-level--sl .x4-level__label,
+.x4-level--sl .x4-level__value {
+  color: var(--x4-red);
+}
+.x4-level--tp .x4-level__label,
+.x4-level--tp .x4-level__value {
+  color: var(--x4-green);
+}
 .x4-signal__confidence {
   grid-column: 1 / -1;
   display: flex;
@@ -1060,20 +1069,35 @@ const CSS = `
   font-weight: 700;
 }
 .x4-signal__confidence strong {
-  color: var(--x4-text);
+  color: var(--x4-amber);
   font-family: var(--x4-font-mono);
   font-size: 14px;
   line-height: 1;
 }
 .x4-signal__news-impact {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.12);
-  border: 1px solid rgba(251, 191, 36, 0.24);
+  color: var(--x4-amber);
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.24);
   border-radius: 3px;
   padding: 2px 6px;
   font-family: var(--x4-font-mono);
   font-size: 9px;
   font-weight: 700;
+}
+.x4-signal__news-impact--high {
+  color: var(--x4-red);
+  background: rgba(255, 92, 92, 0.14);
+  border-color: rgba(255, 92, 92, 0.3);
+}
+.x4-signal__news-impact--medium {
+  color: var(--x4-amber);
+  background: rgba(255, 176, 32, 0.14);
+  border-color: rgba(255, 176, 32, 0.3);
+}
+.x4-signal__news-impact--low {
+  color: var(--x4-green);
+  background: rgba(51, 209, 122, 0.14);
+  border-color: rgba(51, 209, 122, 0.3);
 }
 .x4-signal__news-time {
   grid-column: 2 / -1;
