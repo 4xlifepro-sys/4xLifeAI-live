@@ -898,37 +898,66 @@ async function trackOpenSignals() {
       const candles = await fetchCandles(pair, 'M5', 300);
       if (!candles || candles.length < 2) continue;
 
-      const isMetal = pair === 'XAUUSD' || pair === 'XAGUSD';
-      const pipMult = getPipMultiplier(pair);
-      const metalExit = isMetal
-        ? trackMetalsTrailingExit(signal, candles, pipMult)
-        : { exit: false as const };
-
-      const latest = candles[candles.length - 1];
-      const isLong = signal.direction === 'BUY' || signal.direction === 'LONG';
-      const exitAt = metalExit.exit
-        ? metalExit.exitPrice
-        : isLong
-          ? signal.tp3
-          : signal.sl;
-      const shouldClose = metalExit.exit;
-
-      if (!shouldClose || exitAt == null) continue;
-
-      await supabase
-        .from('signals')
-        .update({
-          status: metalExit.reason === 'SL' ? 'STOP_LOSS_HIT' : 'CLOSED',
-          is_active: false,
-          closed_at: metalExit.exitTime || new Date().toISOString(),
-          exit_price: exitAt,
-          result: metalExit.reason === 'SL' ? 'LOSS' : 'WIN',
-        })
-        .eq('id', signal.id);
+      await trackSignalAgainstCandles(signal, candles);
     } catch (trackingError: any) {
       console.error(`Signal tracking failed for ${pair}:`, trackingError?.message || trackingError);
     }
   }
+}
+
+async function trackSignalAgainstCandles(signal: any, candles: any[]) {
+  const isLong = signal.direction === 'BUY' || signal.direction === 'LONG';
+  const latest = candles[candles.length - 1];
+  const close = Number(latest.close);
+  if (!Number.isFinite(close)) return;
+
+  const reached = (level: unknown) => Number.isFinite(Number(level)) && (isLong ? close >= Number(level) : close <= Number(level));
+  const stopped = Number.isFinite(Number(signal.sl)) && (isLong ? close <= Number(signal.sl) : close >= Number(signal.sl));
+  const currentStatus = signal.status || 'LIVE';
+
+  let nextStatus: string | undefined;
+  let hitLevel: string | undefined;
+  let exitPrice: number | undefined;
+  if (stopped) {
+    nextStatus = 'STOP_LOSS_HIT';
+    hitLevel = 'SL';
+    exitPrice = Number(signal.sl);
+  } else if (currentStatus === 'LIVE' && reached(signal.tp1)) {
+    nextStatus = 'TP1_HIT';
+    hitLevel = 'TP1';
+    exitPrice = Number(signal.tp1);
+  } else if (currentStatus === 'TP1_HIT' && reached(signal.tp2)) {
+    nextStatus = 'TP2_HIT';
+    hitLevel = 'TP2';
+    exitPrice = Number(signal.tp2);
+  } else if (currentStatus === 'TP2_HIT' && reached(signal.tp3)) {
+    nextStatus = 'TP3_HIT';
+    hitLevel = 'TP3';
+    exitPrice = Number(signal.tp3);
+  }
+
+  if (!nextStatus || !hitLevel || exitPrice == null) return;
+
+  const closed = nextStatus === 'STOP_LOSS_HIT' || nextStatus === 'TP3_HIT';
+  const closedAt = new Date(latest.timestamp || Date.now()).toISOString();
+  const payload: any = {
+    status: nextStatus,
+    is_active: !closed,
+    exit_price: exitPrice,
+    updated_at: closedAt,
+  };
+  if (closed) payload.closed_at = closedAt;
+
+  if (hitLevel === 'TP1') payload.tp1_hit_at = closedAt;
+  if (hitLevel === 'TP2') payload.tp2_hit_at = closedAt;
+  if (hitLevel === 'TP3') payload.tp3_hit_at = closedAt;
+
+  const { error } = await supabase
+    .from('signals')
+    .update(payload)
+    .eq('id', signal.id)
+    .eq('is_active', true);
+  if (error) console.error(`Signal tracker update failed for ${signal.pair}:`, error.message);
 }
 
 // Metals (XAUUSD, XAGUSD) use the trend-breakout engine's trailing EMA20
