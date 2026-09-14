@@ -1143,7 +1143,6 @@ async function startServer() {
       .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT'])
       .eq('is_active', true);
 
-    const id = randomUUID();
     const now = new Date().toISOString();
     const risk = Math.abs(entry - sl);
     const rr = risk > 0 ? (Math.abs(tp1 - entry) / risk).toFixed(1) : '0.0';
@@ -1157,7 +1156,6 @@ async function startServer() {
     };
 
     const signalPayload: any = {
-      id,
       pair,
       direction,
       bias: isLong ? 'BULLISH' : 'BEARISH',
