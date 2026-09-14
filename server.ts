@@ -1175,7 +1175,6 @@ async function startServer() {
       created_at: now,
       status: 'LIVE',
       is_active: true,
-      source: 'MANUAL',
     };
 
     const { error: insertError } = await supabase.from('signals').insert([signalPayload]);
