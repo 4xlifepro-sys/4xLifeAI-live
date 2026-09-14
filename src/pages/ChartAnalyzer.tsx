@@ -4,6 +4,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -47,6 +48,7 @@ const ANALYSIS_STEPS = [
 ];
 
 export default function ChartAnalyzer() {
+  const { isAdmin } = useAuth();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
   const [selectedImage2, setSelectedImage2] = useState<string | null>(null);
@@ -59,7 +61,6 @@ export default function ChartAnalyzer() {
   const [isPro, setIsPro] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const [showNewsDetail, setShowNewsDetail] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishMessage, setPublishMessage] = useState('');
   const [limits, setLimits] = useState({ freeDaily: 4, proDaily: 30 });
@@ -82,13 +83,6 @@ export default function ChartAnalyzer() {
             if (subscriptionRes.ok) {
               const subscription = await subscriptionRes.json();
               setIsPro(subscription?.isPro === true);
-            }
-            const profileRes = await fetch('/api/auth/profile', {
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (profileRes.ok) {
-              const profile = await profileRes.json();
-              setIsAdmin(profile?.isAdmin === true || profile?.role === 'admin');
             }
           }
 
