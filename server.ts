@@ -1165,7 +1165,6 @@ async function startServer() {
       score: confidence,
       tier: confidence >= 75 ? 'Strong' : 'Good',
       confidence: Math.min(10, Math.max(1, Math.round(confidence / 10))),
-      reason: analysis.reasoning || 'Manual screenshot signal',
       entry_price: entry,
       sl,
       original_sl: sl,
@@ -1175,6 +1174,7 @@ async function startServer() {
       created_at: now,
       status: 'LIVE',
       is_active: true,
+      reason: `${analysis.reasoning || 'Manual screenshot signal'}${analysis.newsHasEvent && analysis.newsEvent ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };
 
     const { error: insertError } = await supabase.from('signals').insert([signalPayload]);

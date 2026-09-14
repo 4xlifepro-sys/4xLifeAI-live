@@ -198,21 +198,20 @@ export default function Dashboard() {
         statusPips: Math.abs(pips),
         tier,
         openedAgo: daysAgo(s.created_at || s.timestamp || ''),
-        news: s.newsBias
-          ? {
-              event: s.newsBias.eventSummary,
-              lean: s.newsBias.lean,
-              probability: s.newsBias.probability,
-              reason: s.newsBias.bullishScenario || s.newsBias.bearishScenario,
-            }
-          : s.newsEvent
+        news: (() => {
+          const text = String(s.reason || '');
+          const match = text.match(/NEWS:\s*(.*?)\s+—\s*(BUY|SELL|NEUTRAL)\s+(\d+)%\s+—\s*(.*)$/i);
+          return s.newsBias
             ? {
-                event: s.newsEvent,
-                lean: s.newsPrediction || 'NEUTRAL',
-                probability: s.newsProbability,
-                reason: s.newsReason,
+                event: s.newsBias.eventSummary,
+                lean: s.newsBias.lean,
+                probability: s.newsBias.probability,
+                reason: s.newsBias.bullishScenario || s.newsBias.bearishScenario,
               }
-            : undefined,
+            : match
+              ? { event: match[1], lean: match[2].toUpperCase(), probability: Number(match[3]), reason: match[4] }
+              : undefined;
+        })(),
       };
     });
 
