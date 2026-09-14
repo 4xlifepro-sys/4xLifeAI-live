@@ -551,7 +551,7 @@ function Level({
   onCopy?: (label: string, value: number) => void;
 }) {
   return (
-    <div className={`x4-level ${muted ? "x4-level--muted" : ""} ${tone ? `x4-level--${tone}` : ""}`}>
+    <div className={`x4-level ${muted ? "x4-level--muted" : ""}`}>
       <span className="x4-level__label">{label}</span>
       <span className="x4-level__row">
         <span className="x4-level__value">{fmtPrice(value)}</span>
