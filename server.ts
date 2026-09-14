@@ -1147,14 +1147,6 @@ async function startServer() {
     const risk = Math.abs(entry - sl);
     const rr = risk > 0 ? (Math.abs(tp1 - entry) / risk).toFixed(1) : '0.0';
 
-    const newsBias = {
-      lean: String(analysis.newsPrediction || 'NEUTRAL').toUpperCase(),
-      probability: analysis.newsHasEvent ? Math.max(50, Math.min(75, Number(analysis.newsProbability) || 50)) : undefined,
-      eventSummary: analysis.newsEvent || undefined,
-      bullishScenario: analysis.newsReason || undefined,
-      bearishScenario: undefined,
-    };
-
     const signalPayload: any = {
       pair,
       direction,
@@ -1191,7 +1183,13 @@ async function startServer() {
       + `TP3: ${tp3}\n`
       + `RR: 1:${rr}\n`
       + `Confidence: ${confidence}%\n\n`
-      + `${analysis.reasoning || ''}`;
+      + `${analysis.reasoning || ''}\n\n`
+      + (analysis.newsHasEvent && analysis.newsEvent
+        ? `📰 NEWS: ${analysis.newsEvent}\n`
+          + `News bias: ${String(analysis.newsPrediction || 'NEUTRAL').toUpperCase()} `
+          + `${Number(analysis.newsProbability) || 50}%\n`
+          + `News scenario: ${analysis.newsReason || 'Monitor the event and volatility.'}`
+        : '📰 NEWS: No high-impact event identified.');
 
     await sendTelegramMessage(msg);
 
