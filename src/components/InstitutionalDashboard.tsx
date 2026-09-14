@@ -514,7 +514,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
         {s.confidence != null && (
           <div className="x4-signal__confidence">
             <span className="x4-signal__confidence-label">CONFIDENCE</span>
-            <span>{s.confidence}%</span>
+            <strong>{s.confidence}%</strong>
           </div>
         )}
         {s.news?.event && (
@@ -1042,6 +1042,43 @@ const CSS = `
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
+}
+.x4-signal__confidence {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.x4-signal__confidence-label {
+  color: var(--x4-text-dim);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+.x4-signal__confidence strong {
+  color: var(--x4-text);
+  font-family: var(--x4-font-mono);
+  font-size: 14px;
+  line-height: 1;
+}
+.x4-signal__news-impact {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.24);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: var(--x4-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+.x4-signal__news-time {
+  grid-column: 2 / -1;
+  color: var(--x4-text-dim);
+  font-size: 10px;
 }
 .x4-signal__news-icon { font-size: 11px; }
 .x4-signal__news-event {
