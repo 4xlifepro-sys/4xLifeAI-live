@@ -507,10 +507,10 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       </div>
       <div className="x4-signal__levels">
         <Level label="ENTRY" value={s.entry} copied={copiedLevel === "ENTRY"} onCopy={copyLevel} />
-        <Level label="SL" value={s.sl} muted copied={copiedLevel === "SL"} onCopy={copyLevel} />
-        <Level label="TP1" value={s.tp1} copied={copiedLevel === "TP1"} onCopy={copyLevel} />
-        <Level label="TP2" value={s.tp2} copied={copiedLevel === "TP2"} onCopy={copyLevel} />
-        {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
+        <Level label="SL" value={s.sl} tone="sl" copied={copiedLevel === "SL"} onCopy={copyLevel} />
+        <Level label="TP1" value={s.tp1} tone="tp" copied={copiedLevel === "TP1"} onCopy={copyLevel} />
+        <Level label="TP2" value={s.tp2} tone="tp" copied={copiedLevel === "TP2"} onCopy={copyLevel} />
+        {s.tp3 != null && <Level label="TP3" value={s.tp3} tone="tp" copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
         {s.confidence != null && (
           <div className="x4-signal__confidence">
             <span className="x4-signal__confidence-label">CONFIDENCE</span>
@@ -544,11 +544,12 @@ function Level({
   label: string;
   value: number;
   muted?: boolean;
+  tone?: "sl" | "tp";
   copied?: boolean;
   onCopy?: (label: string, value: number) => void;
 }) {
   return (
-    <div className={`x4-level ${muted ? "x4-level--muted" : ""}`}>
+    <div className={`x4-level ${muted ? "x4-level--muted" : ""} ${tone ? `x4-level--${tone}` : ""}`}>
       <span className="x4-level__label">{label}</span>
       <span className="x4-level__row">
         <span className="x4-level__value">{fmtPrice(value)}</span>
@@ -952,6 +953,22 @@ const CSS = `
   border: 1px solid rgba(42, 52, 68, 0.75);
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(12, 18, 28, 0.92), rgba(7, 11, 18, 0.72));
+}
+.x4-level--sl {
+  border-color: rgba(255, 92, 92, 0.34);
+  background: linear-gradient(180deg, rgba(255, 92, 92, 0.10), rgba(7, 11, 18, 0.72));
+}
+.x4-level--sl .x4-level__label,
+.x4-level--sl .x4-level__value {
+  color: var(--x4-red);
+}
+.x4-level--tp {
+  border-color: rgba(51, 209, 122, 0.30);
+  background: linear-gradient(180deg, rgba(51, 209, 122, 0.09), rgba(7, 11, 18, 0.72));
+}
+.x4-level--tp .x4-level__label,
+.x4-level--tp .x4-level__value {
+  color: var(--x4-green);
 }
 .x4-level__label {
   display: block;
