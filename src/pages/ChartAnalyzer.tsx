@@ -59,6 +59,9 @@ export default function ChartAnalyzer() {
   const [isPro, setIsPro] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const [showNewsDetail, setShowNewsDetail] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishMessage, setPublishMessage] = useState('');
   const [limits, setLimits] = useState({ freeDaily: 4, proDaily: 30 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInput2Ref = useRef<HTMLInputElement>(null);
@@ -79,6 +82,13 @@ export default function ChartAnalyzer() {
             if (subscriptionRes.ok) {
               const subscription = await subscriptionRes.json();
               setIsPro(subscription?.isPro === true);
+            }
+            const profileRes = await fetch('/api/auth/profile', {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (profileRes.ok) {
+              const profile = await profileRes.json();
+              setIsAdmin(profile?.isAdmin === true || profile?.role === 'admin');
             }
           }
 
@@ -198,6 +208,30 @@ export default function ChartAnalyzer() {
   };
 
   const handleReset = () => { setSelectedImage(null); setSelectedFileName(''); setSelectedImage2(null); setSelectedFileName2(''); setResult(null); setError(''); setAnalysisStep(0); if (fileInputRef.current) fileInputRef.current.value = ''; if (fileInput2Ref.current) fileInput2Ref.current.value = ''; };
+
+  const handleSendConfirm = async () => {
+    if (!result || !isAdmin || isPublishing) return;
+    setIsPublishing(true);
+    setPublishMessage('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin/manual-signal/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ pair: result.instrument, analysis: result }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not publish signal');
+      setPublishMessage('Published to Today Signals, All Signals, and Engine Signal.');
+    } catch (e: any) {
+      setPublishMessage(e.message || 'Could not publish signal');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   const getTradeBadge = (trade: string) => {
     switch (trade.toUpperCase()) {
@@ -542,6 +576,17 @@ export default function ChartAnalyzer() {
             </div>
 
             {/* News Bias strip — one line, tap to expand */}
+            {isAdmin && result.trade.toUpperCase() !== 'WAIT' && (
+              <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Admin confirmation</p>
+                <p className="mt-2 text-sm text-slate-300">Publish this exact screenshot result to Today Signals, All Signals, and Engine Signal.</p>
+                <button type="button" onClick={handleSendConfirm} disabled={isPublishing || publishMessage.startsWith('Published')} className="mt-4 w-full rounded-xl bg-amber-400 px-5 py-3 font-black text-slate-950 disabled:opacity-60">
+                  {isPublishing ? 'Publishing...' : publishMessage.startsWith('Published') ? 'Published' : 'Send Confirm'}
+                </button>
+                {publishMessage && <p className={cn('mt-3 text-sm', publishMessage.startsWith('Published') ? 'text-emerald-300' : 'text-red-300')}>{publishMessage}</p>}
+              </div>
+            )}
+
             {result.newsHasEvent && result.newsEvent && (
               <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl px-5 py-3.5 backdrop-blur-sm">
                 <button
