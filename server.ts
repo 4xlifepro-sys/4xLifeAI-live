@@ -1171,7 +1171,6 @@ async function startServer() {
       tp1,
       tp2,
       tp3,
-      timestamp: now,
       created_at: now,
       status: 'LIVE',
       is_active: true,
