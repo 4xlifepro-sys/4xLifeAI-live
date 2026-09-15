@@ -1119,7 +1119,14 @@ async function startServer() {
   }
 
   function normalizePair(value: any): string {
-    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const normalized = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const aliases: Record<string, string> = {
+      XAUUSDM: 'XAUUSD',
+      GOLD: 'XAUUSD',
+      GOLDUSD: 'XAUUSD',
+      XAU: 'XAUUSD',
+    };
+    return aliases[normalized] || normalized;
   }
 
   async function publishManualSignal(analysis: any, pair: string): Promise<{ ok: boolean; error?: string; signal?: any }> {

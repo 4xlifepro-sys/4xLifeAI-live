@@ -209,7 +209,8 @@ export default function ChartAnalyzer() {
     setPublishMessage('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const normalizedPair = String(result.instrument || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const rawPair = String(result.instrument || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const normalizedPair = ({ XAUUSDM: 'XAUUSD', GOLD: 'XAUUSD', GOLDUSD: 'XAUUSD', XAU: 'XAUUSD' } as Record<string, string>)[rawPair] || rawPair;
       const response = await fetch('/api/admin/manual-signal/send', {
         method: 'POST',
         headers: {
