@@ -2,8 +2,10 @@ import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { adaptCtraderData, type AdapterOverrides } from '../lib/adaptCtraderData';
 import InstitutionalDashboard from '../components/InstitutionalDashboard';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
+  const { isAdmin } = useAuth();
   const [rawPrices, setRawPrices] = useState<any>(null);
   const [allSignals, setAllSignals] = useState<any[]>([]);
   const [closedSignals, setClosedSignals] = useState<any[]>([]);
