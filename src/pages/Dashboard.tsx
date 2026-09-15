@@ -248,7 +248,7 @@ export default function Dashboard() {
       const d = new Date(s.created_at || s.timestamp);
       const closedAt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
         d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-      return { pair: s.pair, direction: isLong ? 'LONG' as const : 'SHORT' as const, entry, exit, result, pips: Math.round(pips), closedAt };
+      return { pair: s.pair, direction: isLong ? 'LONG' as const : 'SHORT' as const, entry, exit, result, pips: Number(pips.toFixed(1)), closedAt };
     });
 
     const h = new Date().getUTCHours();
