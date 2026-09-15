@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 /**
  * ============================================================================
@@ -495,9 +496,14 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     setManualAction(level);
     setManualError(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in again before marking a target");
       const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/mark-tp`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ level }),
       });
       const result = await response.json().catch(() => null);
