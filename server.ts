@@ -1952,6 +1952,22 @@ Return the analysis in this exact JSON format:
     }
   });
 
+  app.post("/api/admin/signals/clear", requireAdmin, async (_req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const closedAt = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("signals")
+        .update({ status: "CLOSED", is_active: false, result: "CANCELLED", closed_at: closedAt })
+        .eq("is_active", true)
+        .select("id");
+      if (error) return res.status(500).json({ error: error.message });
+      res.json({ success: true, cleared: data?.length || 0 });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "Failed to clear active signals" });
+    }
+  });
+
   // Test-only route to trigger notifications
   app.post("/api/test/trigger-notification", async (req, res) => {
     if (process.env.NODE_ENV === "production") {

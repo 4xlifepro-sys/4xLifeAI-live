@@ -208,6 +208,23 @@ function trendClass(t: Trend): string {
 // ---------------------------------------------------------------------------
 
 export default function Dashboard({ data }: { data?: DashboardData }) {
+  const [clearState, setClearState] = useState<string | null>(null);
+  const clearActiveSignals = async () => {
+    setClearState("CLEARING...");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in again");
+      const response = await fetch("/api/admin/signals/clear", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Unable to clear signals");
+      window.location.reload();
+    } catch (error: any) {
+      setClearState(error?.message || "Unable to clear signals");
+    }
+  };
   const d = data ?? sampleData;
 
   const totalWatchlist = useMemo(
@@ -281,6 +298,11 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
       </div>
 
       <main className="x4-main">
+        {data.isAdmin && (
+          <button type="button" className="x4-clear-signals" onClick={clearActiveSignals} disabled={clearState === "CLEARING..."}>
+            {clearState || "CLEAR ACTIVE SIGNALS — START FRESH"}
+          </button>
+        )}
         {/* ---------------- Stat cards ---------------- */}
         <section className="x4-stats" aria-label="Performance summary">
           <StatCard
@@ -1085,6 +1107,19 @@ const CSS = `
   padding-top: 10px;
   border-top: 1px solid rgba(255,255,255,0.07);
 }
+.x4-clear-signals {
+  align-self: flex-end;
+  border: 1px solid rgba(255,92,92,0.45);
+  border-radius: 6px;
+  background: rgba(255,92,92,0.12);
+  color: var(--x4-red);
+  cursor: pointer;
+  font-family: var(--x4-font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 9px 12px;
+}
+.x4-clear-signals:disabled { opacity: 0.6; cursor: wait; }
 .x4-signal__manual-title {
   color: var(--x4-text-dim);
   font-family: var(--x4-font-mono);
