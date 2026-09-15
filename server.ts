@@ -1118,6 +1118,10 @@ async function startServer() {
     return isFinite(n) ? n : null;
   }
 
+  function normalizePair(value: any): string {
+    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
   async function publishManualSignal(analysis: any, pair: string): Promise<{ ok: boolean; error?: string; signal?: any }> {
     if (!supabase) return { ok: false, error: 'Supabase not available' };
 
@@ -1868,7 +1872,8 @@ Return the analysis in this exact JSON format:
     try {
       const { imageBase64, imageBase64_2, pair, timezone } = req.body;
       if (!imageBase64) return res.status(400).json({ error: 'No image provided' });
-      if (!APPROVED_PAIRS.includes(pair)) return res.status(400).json({ error: 'Invalid pair' });
+      const normalizedPair = normalizePair(pair);
+      if (!APPROVED_PAIRS.includes(normalizedPair)) return res.status(400).json({ error: `Invalid pair: ${pair || 'missing'}` });
 
       const analyzerResponse = await fetch(`${req.protocol}://${req.get('host')}/api/chart-analyzer`, {
         method: 'POST',
@@ -1876,7 +1881,7 @@ Return the analysis in this exact JSON format:
           'Content-Type': 'application/json',
           ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}),
         },
-        body: JSON.stringify({ imageBase64, imageBase64_2, timezone, chartType: pair }),
+        body: JSON.stringify({ imageBase64, imageBase64_2, timezone, chartType: normalizedPair }),
       });
       const data = await analyzerResponse.json();
       if (!analyzerResponse.ok || !data.success) {
@@ -1893,14 +1898,17 @@ Return the analysis in this exact JSON format:
     try {
       const { pair, analysis } = req.body;
       if (!pair || !analysis) return res.status(400).json({ error: 'Missing pair or analysis' });
-      if (!APPROVED_PAIRS.includes(pair)) return res.status(400).json({ error: 'Invalid pair' });
+      const normalizedPair = normalizePair(pair || analysis.instrument);
+      const detectedPair = normalizePair(analysis.instrument);
+      const finalPair = APPROVED_PAIRS.includes(normalizedPair) ? normalizedPair : detectedPair;
+      if (!APPROVED_PAIRS.includes(finalPair)) return res.status(400).json({ error: `Invalid pair: ${pair || analysis.instrument || 'missing'}` });
 
       const trade = String(analysis.trade || '').toUpperCase();
       if (trade !== 'BUY' && trade !== 'SELL') {
         return res.status(400).json({ error: `Cannot send WAIT signal: ${analysis.trade}` });
       }
 
-      const result = await publishManualSignal(analysis, pair);
+      const result = await publishManualSignal(analysis, finalPair);
       if (!result.ok) return res.status(400).json({ error: result.error });
       res.json({ success: true, signal: result.signal });
     } catch (e: any) {

@@ -209,13 +209,14 @@ export default function ChartAnalyzer() {
     setPublishMessage('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const normalizedPair = String(result.instrument || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       const response = await fetch('/api/admin/manual-signal/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ pair: result.instrument, analysis: result }),
+        body: JSON.stringify({ pair: normalizedPair, analysis: { ...result, instrument: normalizedPair } }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Could not publish signal');
