@@ -1955,11 +1955,10 @@ Return the analysis in this exact JSON format:
   app.post("/api/admin/signals/clear", requireAdmin, async (_req, res) => {
     try {
       if (!supabase) return res.status(503).json({ error: "Database unavailable" });
-      const closedAt = new Date().toISOString();
       const { data, error } = await supabase
         .from("signals")
-        .update({ status: "CLEARED", is_active: false, result: "CLEARED", closed_at: closedAt })
-        .neq("status", "CLEARED")
+        .delete()
+        .not("id", "is", null)
         .select("id");
       if (error) return res.status(500).json({ error: error.message });
       const { MANUAL_OVERRIDE_PAIRS } = await import('./server/scanner.js');
