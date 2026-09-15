@@ -166,7 +166,7 @@ export default function Dashboard() {
       }
 
       const entry = s.entry_price || s.entry || 0;
-      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result);
+      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result) || s.status === 'TP1_HIT' || s.status === 'TP2_HIT' || s.status === 'TP3_HIT';
       const exit = s.result === 'PARTIAL WIN'
         ? (s.tp2_hit_at ? s.tp2 : s.tp1)
         : isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
@@ -233,7 +233,7 @@ export default function Dashboard() {
       const isLong = s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY';
       const entry = s.entry_price || s.entry || 0;
       const storedPips = Number(s.pips_won || 0) - Number(s.pips_lost || 0);
-      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result);
+      const isWin = ['WIN', 'PARTIAL WIN'].includes(s.result) || s.status === 'TP1_HIT' || s.status === 'TP2_HIT' || s.status === 'TP3_HIT';
       const exit = s.result === 'PARTIAL WIN'
         ? (s.tp2_hit_at ? s.tp2 : s.tp1)
         : isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;

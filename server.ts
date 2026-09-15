@@ -1934,7 +1934,11 @@ Return the analysis in this exact JSON format:
       if (!signal || signal.is_active === false) return res.status(404).json({ error: "Active signal not found" });
       const now = new Date().toISOString();
       const nextStatus = level === "SL" ? "STOP_LOSS_HIT" : level === "TP1" ? "TP1_HIT" : level === "TP2" ? "TP2_HIT" : "TP3_HIT";
-      const update: Record<string, any> = { status: nextStatus, is_active: level === "TP3" || level === "SL" ? false : true };
+      const update: Record<string, any> = {
+        status: nextStatus,
+        is_active: level === "TP3" || level === "SL" ? false : true,
+        result: level === "SL" ? "LOSS" : level === "TP3" ? "WIN" : "PARTIAL WIN",
+      };
       if (level === "TP1") update.tp1_hit_at = now;
       if (level === "TP2") update.tp2_hit_at = now;
       if (level === "TP3") update.tp3_hit_at = now;
