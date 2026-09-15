@@ -943,7 +943,6 @@ async function trackSignalAgainstCandles(signal: any, candles: any[]) {
   const payload: any = {
     status: nextStatus,
     is_active: !closed,
-    exit_price: exitPrice,
     updated_at: closedAt,
   };
   if (closed) payload.closed_at = closedAt;
