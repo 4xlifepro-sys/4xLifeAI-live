@@ -1958,10 +1958,12 @@ Return the analysis in this exact JSON format:
       const closedAt = new Date().toISOString();
       const { data, error } = await supabase
         .from("signals")
-        .update({ status: "CLOSED", is_active: false, result: "CANCELLED", closed_at: closedAt })
-        .eq("is_active", true)
+        .update({ status: "CLEARED", is_active: false, result: "CLEARED", closed_at: closedAt })
+        .neq("status", "CLEARED")
         .select("id");
       if (error) return res.status(500).json({ error: error.message });
+      const { MANUAL_OVERRIDE_PAIRS } = await import('./server/scanner.js');
+      MANUAL_OVERRIDE_PAIRS.clear();
       res.json({ success: true, cleared: data?.length || 0 });
     } catch (error: any) {
       res.status(500).json({ error: error?.message || "Failed to clear active signals" });
