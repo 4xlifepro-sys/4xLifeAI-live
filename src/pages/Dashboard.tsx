@@ -186,6 +186,7 @@ export default function Dashboard() {
       if (conf >= 80) tier = 'Strong';
       else if (conf >= 65) tier = 'Good';
       return {
+        id: String(s.id || ''),
         pair: s.pair,
         direction: isLong ? 'LONG' as const : 'SHORT' as const,
         entry,
@@ -196,6 +197,7 @@ export default function Dashboard() {
         confidence: Number(s.aiConfidence ?? s.confidence ?? 0),
         status,
         tradeStatus: s.status,
+        isAdmin,
         statusPips: Math.abs(pips),
         tier,
         openedAgo: daysAgo(s.created_at || s.timestamp || ''),

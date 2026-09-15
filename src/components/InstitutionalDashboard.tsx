@@ -38,6 +38,7 @@ interface WatchlistGroup {
 }
 
 interface ActiveSignal {
+  id?: string;
   pair: string;
   direction: "LONG" | "SHORT";
   entry: number;
@@ -59,6 +60,7 @@ interface ActiveSignal {
     probability?: number;
     reason?: string;
   };
+  isAdmin?: boolean;
 }
 
 interface ClosedSignal {
@@ -464,6 +466,8 @@ function StatCard({
 
 function ActiveSignalCard({ s }: { s: ActiveSignal }) {
   const [copiedLevel, setCopiedLevel] = useState<string | null>(null);
+  const [manualAction, setManualAction] = useState<string | null>(null);
+  const [manualError, setManualError] = useState<string | null>(null);
   const statusLabel =
     s.tradeStatus === "TP2_HIT"
       ? "TP2 secured - waiting for TP3"
@@ -485,6 +489,25 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
   const progressPct =
     s.tradeStatus === "TP2_HIT" ? 85 : s.tradeStatus === "TP1_HIT" ? 55 : s.status === "profit" ? 30 : s.status === "loss" ? 0 : 10;
   const pipsMoved = s.statusPips ?? 0;
+  const nextTarget = s.tradeStatus === "TP1_HIT" ? "TP2" : s.tradeStatus === "TP2_HIT" ? "TP3" : "TP1";
+  const markTarget = async (level: "SL" | "TP1" | "TP2" | "TP3") => {
+    if (!s.id || manualAction) return;
+    setManualAction(level);
+    setManualError(null);
+    try {
+      const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/mark-tp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Unable to update signal");
+      window.location.reload();
+    } catch (error: any) {
+      setManualError(error?.message || "Unable to update signal");
+      setManualAction(null);
+    }
+  };
 
   return (
     <div className="x4-signal">
@@ -530,6 +553,20 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
         )}
       </div>
       <div className={`x4-signal__status x4-signal__status--${s.status}`}>{statusLabel}</div>
+      {s.isAdmin && s.id && (
+        <div className="x4-signal__manual">
+          <div className="x4-signal__manual-title">ADMIN TRADE CONTROL</div>
+          <button type="button" className="x4-signal__manual-button x4-signal__manual-button--sl" onClick={() => markTarget("SL")} disabled={manualAction !== null}>
+            {manualAction === "SL" ? "UPDATING..." : "MARK SL HIT"}
+          </button>
+          {(["TP1", "TP2", "TP3"] as const).map((level) => (
+            <button key={level} type="button" className={`x4-signal__manual-button ${level === nextTarget ? "is-next" : ""}`} onClick={() => markTarget(level)} disabled={level !== nextTarget || manualAction !== null}>
+              {manualAction === level ? "UPDATING..." : `MARK ${level} HIT`}
+            </button>
+          ))}
+          {manualError && <div className="x4-signal__manual-error">{manualError}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1034,6 +1071,51 @@ const CSS = `
   border-radius: 999px;
   background: #2dd4bf;
   box-shadow: 0 0 12px rgba(45,212,191,0.9);
+}
+.x4-signal__manual {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.x4-signal__manual-title {
+  color: var(--x4-text-dim);
+  font-family: var(--x4-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.x4-signal__manual-button {
+  min-height: 36px;
+  border: 1px solid rgba(79,209,232,0.35);
+  border-radius: 6px;
+  background: rgba(79,209,232,0.12);
+  color: var(--x4-cyan);
+  cursor: pointer;
+  font-family: var(--x4-font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.x4-signal__manual-button--sl {
+  border-color: rgba(255,92,92,0.42);
+  background: rgba(255,92,92,0.12);
+  color: var(--x4-red);
+}
+.x4-signal__manual-button.is-next {
+  border-color: rgba(255,176,32,0.62);
+  background: rgba(255,176,32,0.18);
+  color: var(--x4-amber);
+  box-shadow: 0 0 14px rgba(255,176,32,0.10);
+}
+.x4-signal__manual-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.x4-signal__manual-error {
+  color: var(--x4-red);
+  font-size: 10px;
 }
 
 /* Signal news */

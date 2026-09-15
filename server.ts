@@ -1909,6 +1909,30 @@ Return the analysis in this exact JSON format:
     }
   });
 
+  app.post("/api/admin/signals/:id/mark-tp", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const level = String(req.body?.level || req.body?.tp_level || "").toUpperCase();
+      if (!["SL", "TP1", "TP2", "TP3"].includes(level)) return res.status(400).json({ error: "Invalid target" });
+      const { data: signal, error: readError } = await supabase.from("signals").select("id,status,is_active").eq("id", req.params.id).maybeSingle();
+      if (readError) return res.status(500).json({ error: readError.message });
+      if (!signal || signal.is_active === false) return res.status(404).json({ error: "Active signal not found" });
+      const now = new Date().toISOString();
+      const nextStatus = level === "SL" ? "STOP_LOSS_HIT" : level === "TP1" ? "TP1_HIT" : level === "TP2" ? "TP2_HIT" : "TP3_HIT";
+      const update: Record<string, any> = { status: nextStatus, is_active: level === "TP3" || level === "SL" ? false : true };
+      if (level === "TP1") update.tp1_hit_at = now;
+      if (level === "TP2") update.tp2_hit_at = now;
+      if (level === "TP3") update.tp3_hit_at = now;
+      if (level === "TP3" || level === "SL") update.closed_at = now;
+      const { data: updated, error: updateError } = await supabase.from("signals").update(update).eq("id", req.params.id).eq("is_active", true).select("*").maybeSingle();
+      if (updateError) return res.status(500).json({ error: updateError.message });
+      if (!updated) return res.status(409).json({ error: "Signal was already updated" });
+      res.json({ success: true, signal: updated });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "Failed to mark target" });
+    }
+  });
+
   // Test-only route to trigger notifications
   app.post("/api/test/trigger-notification", async (req, res) => {
     if (process.env.NODE_ENV === "production") {
