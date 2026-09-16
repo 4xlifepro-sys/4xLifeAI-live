@@ -99,6 +99,21 @@ function normalizeAnalysisNewsTime(analysis: any): string | null {
   if (!Number.isFinite(parsed.getTime())) return null;
   return parsed.toISOString();
 }
+
+function matchCalendarEvent(events: FFEvent[], title: string, country?: string): string | null {
+  const normalizedTitle = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!normalizedTitle) return null;
+  const candidates = events
+    .map((event) => ({ event, timestamp: parseForexFactoryEventUtc(event) }))
+    .filter(({ event, timestamp }) => {
+      if (!timestamp || new Date(timestamp).getTime() <= Date.now()) return false;
+      if (country && String(event.country || '').toUpperCase() !== String(country).toUpperCase()) return false;
+      const eventTitle = String(event.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      return eventTitle === normalizedTitle || eventTitle.includes(normalizedTitle) || normalizedTitle.includes(eventTitle);
+    })
+    .sort((a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime());
+  return candidates[0]?.timestamp || null;
+}
 let ffCache: { at: number; events: FFEvent[] } | null = null;
 const FF_CACHE_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -1924,7 +1939,10 @@ Return the analysis in this exact JSON format:
       if (analysis && typeof analysis === 'object') {
         analysis.newsHasEvent = analysis.newsHasEvent === true;
         const parsedNewsTime = normalizeAnalysisNewsTime(analysis);
-        analysis.newsTime = parsedNewsTime;
+        const calendarNewsTime = analysis.newsEvent
+          ? matchCalendarEvent(calendarEvents, String(analysis.newsEvent).split('·')[0].trim(), 'USD')
+          : null;
+        analysis.newsTime = calendarNewsTime || parsedNewsTime;
         if (!parsedNewsTime || new Date(parsedNewsTime).getTime() <= Date.now()) {
           analysis.newsHasEvent = false;
           analysis.newsEvent = '';
