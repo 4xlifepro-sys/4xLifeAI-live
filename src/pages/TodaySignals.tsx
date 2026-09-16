@@ -195,7 +195,8 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     );
                   }
                   
-                  const isWin = signal.result === 'WIN' || signal.result === 'PARTIAL WIN';
+                  const isTp1Secured = signal.result === 'TP1_SECURED_BE';
+                  const isWin = signal.result === 'WIN' || signal.result === 'PARTIAL WIN' || isTp1Secured;
                   const isLoss = signal.result === 'LOSS';
                   const isBreakeven = signal.result === 'BREAKEVEN';
                   const isInvalid = signal.result === 'INVALID';
@@ -207,6 +208,7 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   if (isInvalid) closedLevel = "Closed: invalid SL equals entry";
                   else if (isLoss) closedLevel = "Closed at SL";
                   else if (isBreakeven) closedLevel = "Closed at Entry";
+                  else if (isTp1Secured) closedLevel = signal.tp2_hit_at ? "TP1 secured, then break-even after TP2" : "TP1 secured, then break-even";
                   else if (signal.result === 'PARTIAL WIN') {
                     // A PARTIAL WIN always means at least TP1 was secured before the
                     // trade closed at breakeven/SL - never show the bare "Closed at
@@ -224,6 +226,7 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   let badgeText = "CLOSED";
                   if (isInvalid) badgeText = "INVALID";
                   else if (isBreakeven) badgeText = "BREAKEVEN 0.0 pips";
+                  else if (isTp1Secured) badgeText = `TP1 SECURED ${formattedPips ? `+${formattedPips} pips` : ''}`;
                   else if (isWin) badgeText = `WIN ${formattedPips ? `+${formattedPips} pips` : ''}`;
                   else if (isLoss) badgeText = `LOSS ${formattedPips ? `-${formattedPips} pips` : ''}`;
                   
