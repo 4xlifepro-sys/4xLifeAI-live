@@ -18,12 +18,79 @@ let notificationsTableAvailable = true;
 type FFEvent = {
   title: string;
   country: string; // currency code e.g. USD
-  date: string;    // ISO datetime
+  date: string;
+  time?: string;
   impact: string;  // Low | Medium | High | Holiday
   forecast: string;
   previous: string;
   actual?: string;
 };
+
+const FOREX_FACTORY_SOURCE_TIME_ZONE = 'America/New_York';
+const FOREX_FACTORY_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const FOREX_FACTORY_TIME_PATTERN = /^(\d{1,2}):(\d{2})(am|pm)$/i;
+
+function getTimeZoneOffsetMinutes(timeZone: string, timestamp: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(timestamp));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const asUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  );
+  return (asUtc - timestamp) / 60000;
+}
+
+function parseForexFactoryEventUtc(event: FFEvent): string | null {
+  const rawDate = String(event.date || '').trim();
+  const rawTime = String(event.time || '').trim();
+  const isoTimestamp = Date.parse(rawDate);
+  let timestamp: number;
+
+  if (rawTime && FOREX_FACTORY_DATE_TIME_PATTERN.test(rawDate)) {
+    const match = rawTime.match(FOREX_FACTORY_TIME_PATTERN);
+    if (!match) return null;
+    let hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    const meridiem = match[3].toLowerCase();
+    if (hours === 12) hours = 0;
+    if (meridiem === 'pm') hours += 12;
+    const sourceWallClock = Date.UTC(
+      Number(rawDate.slice(0, 4)),
+      Number(rawDate.slice(5, 7)) - 1,
+      Number(rawDate.slice(8, 10)),
+      hours,
+      minutes,
+      0,
+    );
+    const offset = getTimeZoneOffsetMinutes(FOREX_FACTORY_SOURCE_TIME_ZONE, sourceWallClock);
+    timestamp = sourceWallClock - offset * 60_000;
+    console.log('[calendar] parsed event time', {
+      rawDate,
+      rawTime,
+      sourceTimezone: FOREX_FACTORY_SOURCE_TIME_ZONE,
+      normalizedUtc: new Date(timestamp).toISOString(),
+    });
+  } else if (Number.isFinite(isoTimestamp)) {
+    timestamp = isoTimestamp;
+  } else {
+    return null;
+  }
+
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
 let ffCache: { at: number; events: FFEvent[] } | null = null;
 const FF_CACHE_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -51,7 +118,8 @@ function buildCalendarPromptBlock(events: FFEvent[], timeZone?: string): string 
   const highImpact = events.filter((e) => {
     const impact = (e.impact || '').toLowerCase();
     if (impact !== 'high') return false;
-    const t = new Date(e.date).getTime();
+    const normalizedUtc = parseForexFactoryEventUtc(e);
+    const t = normalizedUtc ? new Date(normalizedUtc).getTime() : NaN;
     if (isNaN(t)) return false;
     return t > now && t < now + 5 * 24 * 60 * 60 * 1000;
   });
@@ -59,7 +127,8 @@ function buildCalendarPromptBlock(events: FFEvent[], timeZone?: string): string 
   return highImpact
     .slice(0, 20)
     .map((e) => {
-      const d = new Date(e.date);
+      const normalizedUtc = parseForexFactoryEventUtc(e);
+      const d = normalizedUtc ? new Date(normalizedUtc) : new Date(NaN);
       let when: string;
       if (isNaN(d.getTime())) when = e.date;
       else if (timeZone) {
