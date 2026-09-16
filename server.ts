@@ -1192,8 +1192,9 @@ async function startServer() {
       news_impact: analysis.newsHasEvent && analysis.newsEvent ? 'HIGH' : null,
       news_time: (() => {
         const candidate = (analysis as any).newsTime || (analysis as any).news_time;
-        const timestamp = candidate ? new Date(candidate).toISOString() : null;
-        return timestamp && Number.isFinite(new Date(timestamp).getTime()) ? timestamp : null;
+        if (!candidate) return null;
+        const parsed = new Date(candidate);
+        return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
       })(),
       reason: `${analysis.reasoning || 'Manual screenshot signal'}${analysis.newsHasEvent && analysis.newsEvent ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };
@@ -1779,7 +1780,8 @@ Return the analysis in this exact JSON format:
   "reasoning": "explanation",
   "warnings": "risks",
   "newsHasEvent": true/false,
-  "newsEvent": "short event label with day and time, or empty string",
+      "newsEvent": "short event label with day and time, or empty string",
+      "newsTime": "ISO timestamp for the event in the user's local time, or empty string",
   "newsPrediction": "BUY/SELL/NEUTRAL",
   "newsProbability": number,
   "newsReason": "one short scenario sentence, or empty string",
