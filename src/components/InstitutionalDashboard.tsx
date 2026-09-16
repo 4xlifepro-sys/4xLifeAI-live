@@ -633,7 +633,11 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
             {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
             {releaseCountdown && (
               <span className={`x4-signal__news-countdown ${withinDangerWindow ? "x4-signal__news-countdown--danger" : ""}`} key={now}>
-                {withinDangerWindow && releaseCountdown !== "🟢 RELEASED" ? "⚠️ HIGH IMPACT — DANGER WINDOW" : `⏱ ${releaseCountdown} until release`}
+                {releaseCountdown === "🟢 RELEASED"
+                  ? releaseCountdown
+                  : withinDangerWindow
+                  ? `⚠️ HIGH IMPACT — DANGER WINDOW · ⏱ ${releaseCountdown}`
+                  : `⏱ ${releaseCountdown} until release`}
               </span>
             )}
             {s.news.lean && <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>→ {s.news.lean}</span>}
