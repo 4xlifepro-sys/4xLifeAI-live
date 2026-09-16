@@ -2009,6 +2009,45 @@ Return the analysis in this exact JSON format:
     }
   });
 
+  app.post("/api/admin/signals/:id/send-free", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const { data: signal, error } = await supabase
+        .from("signals")
+        .select("id,pair,direction,entry_price,sl,tp1,tp2,tp3,confidence,status,result,news_event,news_impact,news_time")
+        .eq("id", req.params.id)
+        .maybeSingle();
+      if (error) return res.status(500).json({ error: error.message });
+      if (!signal) return res.status(404).json({ error: "Signal not found" });
+
+      const isBuy = signal.direction === "BUY" || signal.direction === "LONG";
+      const direction = isBuy ? "🟢 BUY" : "🔴 SELL";
+      const news = signal.news_event
+        ? `\n📰 NEWS: ${escapeTelegramHtml(signal.news_event)}`
+          + (signal.news_impact ? `\nImpact: ${escapeTelegramHtml(signal.news_impact)}` : "")
+          + (signal.news_time ? `\nTime: ${escapeTelegramHtml(signal.news_time)}` : "")
+        : "";
+      const message =
+        `📣 <b>4xFiveAI — FREE SIGNAL</b>\n\n`
+        + `Pair: <b>${escapeTelegramHtml(signal.pair)}</b>\n`
+        + `Signal: <b>${direction}</b>\n\n`
+        + `📍 Entry: ${signal.entry_price}\n`
+        + `🛑 SL: ${signal.sl}\n`
+        + `🎯 TP1: ${signal.tp1}\n`
+        + `🚀 TP2: ${signal.tp2}\n`
+        + `🏆 TP3: ${signal.tp3}\n\n`
+        + `📊 Confidence: ${signal.confidence ?? "—"}%`
+        + news
+        + `\n\n🛡️ Risk-managed levels\n🔗 https://t.me/forxlife3`;
+      const sent = await sendTelegramMessage(message, process.env.TELEGRAM_FREE_CHAT_ID || "@forxlife3");
+      if (!sent) return res.status(503).json({ error: "Telegram Free channel is not configured" });
+      res.json({ success: true, channel: "FREE" });
+    } catch (error: any) {
+      console.error("[send-free] error:", error);
+      res.status(500).json({ error: error?.message || "Failed to send Free signal" });
+    }
+  });
+
   app.post("/api/admin/signals/clear", requireAdmin, async (_req, res) => {
     try {
       if (!supabase) return res.status(503).json({ error: "Database unavailable" });

@@ -1,6 +1,6 @@
 export async function sendTelegramMessage(message: string, chatId?: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const defaultChatId = process.env.TELEGRAM_DEFAULT_CHAT_ID;
+  const defaultChatId = process.env.TELEGRAM_DEFAULT_CHAT_ID || '@forxlife3';
   const targetChatId = chatId || defaultChatId;
 
   if (!token || !targetChatId) {
