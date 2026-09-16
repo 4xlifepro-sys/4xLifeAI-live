@@ -218,6 +218,19 @@ function newsCountdown(value?: string): string | null {
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
+function formatCountdown(value?: string): string | null {
+  if (!value) return null;
+  const release = new Date(value).getTime();
+  if (!Number.isFinite(release)) return null;
+  const remaining = release - Date.now();
+  if (remaining <= 0) return "🟢 RELEASED";
+  const totalSeconds = Math.floor(remaining / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -509,6 +522,9 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     return () => window.clearInterval(timer);
   }, []);
   const countdown = newsCountdown(s.news?.time);
+  const releaseCountdown = formatCountdown(s.news?.time);
+  const releaseMs = s.news?.time ? new Date(s.news.time).getTime() : NaN;
+  const withinDangerWindow = Number.isFinite(releaseMs) && Math.abs(releaseMs - now) <= 30 * 60 * 1000;
   const [copiedLevel, setCopiedLevel] = useState<string | null>(null);
   const [manualAction, setManualAction] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
@@ -615,7 +631,11 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
             {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
-            {countdown && <span className="x4-signal__news-countdown" key={now}>⏱ {countdown === "LIVE NOW" || countdown === "RELEASED" ? countdown : `${countdown} left`}</span>}
+            {releaseCountdown && (
+              <span className={`x4-signal__news-countdown ${withinDangerWindow ? "x4-signal__news-countdown--danger" : ""}`} key={now}>
+                {withinDangerWindow && releaseCountdown !== "🟢 RELEASED" ? "⚠️ HIGH IMPACT — DANGER WINDOW" : `⏱ ${releaseCountdown} until release`}
+              </span>
+            )}
             {s.news.lean && <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>→ {s.news.lean}</span>}
             {s.news.probability && <span className="x4-signal__news-probability">📊 {s.news.probability}%</span>}
             {s.news.impact && <span className={`x4-signal__news-impact x4-signal__news-impact--${s.news.impact.toLowerCase()}`}>⚠ {s.news.impact === 'HIGH' ? 'big move' : s.news.impact}</span>}
@@ -1306,6 +1326,9 @@ const CSS = `
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
+}
+.x4-signal__news-countdown--danger {
+  color: #ffb454;
 }
 .x4-signal__news-probability {
   color: var(--x4-green);
