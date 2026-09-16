@@ -234,7 +234,7 @@ function formatCountdown(value?: string): string | null {
 function isValidNewsTime(value?: string): boolean {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) && timestamp > Date.now() - 30 * 60 * 1000;
+  return Number.isFinite(timestamp) && timestamp > Date.now();
 }
 
 // ---------------------------------------------------------------------------

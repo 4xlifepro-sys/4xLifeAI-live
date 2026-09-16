@@ -53,8 +53,7 @@ function buildCalendarPromptBlock(events: FFEvent[], timeZone?: string): string 
     if (impact !== 'high') return false;
     const t = new Date(e.date).getTime();
     if (isNaN(t)) return false;
-    // Keep events from 12h ago (just-released) up to 5 days ahead
-    return t > now - 12 * 60 * 60 * 1000 && t < now + 5 * 24 * 60 * 60 * 1000;
+    return t > now && t < now + 5 * 24 * 60 * 60 * 1000;
   });
   if (highImpact.length === 0) return 'NONE (no high-impact red-folder events this week).';
   return highImpact
@@ -1188,13 +1187,21 @@ async function startServer() {
       created_at: now,
       status: 'LIVE',
       is_active: true,
-      news_event: analysis.newsHasEvent && analysis.newsEvent ? String(analysis.newsEvent) : null,
-      news_impact: analysis.newsHasEvent && analysis.newsEvent ? 'HIGH' : null,
+      news_event: analysis.newsHasEvent && analysis.newsEvent && (() => {
+        const candidate = (analysis as any).newsTime || (analysis as any).news_time;
+        const timestamp = candidate ? new Date(candidate).getTime() : NaN;
+        return Number.isFinite(timestamp) && timestamp > Date.now();
+      })() ? String(analysis.newsEvent) : null,
+      news_impact: analysis.newsHasEvent && analysis.newsEvent && (() => {
+        const candidate = (analysis as any).newsTime || (analysis as any).news_time;
+        const timestamp = candidate ? new Date(candidate).getTime() : NaN;
+        return Number.isFinite(timestamp) && timestamp > Date.now();
+      })() ? 'HIGH' : null,
       news_time: (() => {
         const candidate = (analysis as any).newsTime || (analysis as any).news_time;
         if (!candidate) return null;
         const parsed = new Date(candidate);
-        return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+        return Number.isFinite(parsed.getTime()) && parsed.getTime() > Date.now() ? parsed.toISOString() : null;
       })(),
       reason: `${analysis.reasoning || 'Manual screenshot signal'}${analysis.newsHasEvent && analysis.newsEvent ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };

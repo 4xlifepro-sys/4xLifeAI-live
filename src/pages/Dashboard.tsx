@@ -217,16 +217,7 @@ export default function Dashboard() {
           }
           const text = String(s.reason || '');
           const match = text.match(/NEWS:\\s*(.*?)\\s+[-—]+\\s*(BUY|SELL|NEUTRAL)\\s+(\\d+)%\\s+[-—]+\\s*(.*)$/i);
-          return s.newsBias
-            ? {
-                event: s.newsBias.eventSummary,
-                lean: s.newsBias.lean,
-                probability: s.newsBias.probability,
-                reason: s.newsBias.bullishScenario || s.newsBias.bearishScenario,
-              }
-            : match
-              ? { event: match[1], lean: match[2].toUpperCase(), probability: Number(match[3]), reason: match[4] }
-              : undefined;
+          return undefined;
         })(),
       };
     });
