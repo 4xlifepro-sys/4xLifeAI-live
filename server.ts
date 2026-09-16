@@ -1816,7 +1816,8 @@ NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the d
 - newsProbability: 50-75 integer. Bigger forecast-vs-previous gap or a released beat/miss = higher number. Never above 75 (news is a lean, not a certainty).
 - newsReason: ONE short sentence, plain English, scenario/lean language (e.g. "NFP forecast far above previous — a strong number would lift USD and pressure Gold"). Never promise ("will rise"). Never invent numbers not in the calendar.
 - newsBigMove: true if the chosen event is still PENDING (not released) and within the next ~48h; otherwise false.
-- newsEvent: short label like "NFP · Fri 3:30pm" (event name + day + time EXACTLY as shown in the calendar above — the time is already in the user's local time).
+- newsEvent: short label like "NFP · Fri 3:30pm" (event name + day + time EXACTLY as shown in the calendar above).
+- newsTime: copy the matching event's normalized UTC timestamp from the calendar data exactly. Never calculate it from the display label, user's timezone, or current time.
 
 DUAL-TIMEFRAME RULES (apply ONLY when two charts are attached):
 - Read the directional bias of each chart (bullish / bearish / range).
@@ -1860,7 +1861,7 @@ Return the analysis in this exact JSON format:
   "warnings": "risks",
   "newsHasEvent": true/false,
       "newsEvent": "short event label with day and time, or empty string",
-      "newsTime": "ISO timestamp for the event in the user's local time, or empty string",
+  "newsTime": "ISO timestamp for the event in UTC, or empty string",
   "newsPrediction": "BUY/SELL/NEUTRAL",
   "newsProbability": number,
   "newsReason": "one short scenario sentence, or empty string",
@@ -1922,6 +1923,12 @@ Return the analysis in this exact JSON format:
       // Normalize news-bias fields so the analysis engine can never show a misleading value
       if (analysis && typeof analysis === 'object') {
         analysis.newsHasEvent = analysis.newsHasEvent === true;
+        const parsedNewsTime = normalizeAnalysisNewsTime(analysis);
+        analysis.newsTime = parsedNewsTime;
+        if (!parsedNewsTime || new Date(parsedNewsTime).getTime() <= Date.now()) {
+          analysis.newsHasEvent = false;
+          analysis.newsEvent = '';
+        }
         const pred = String(analysis.newsPrediction || '').toUpperCase();
         analysis.newsPrediction = pred === 'BUY' || pred === 'SELL' ? pred : 'NEUTRAL';
         const prob = Number(analysis.newsProbability);
