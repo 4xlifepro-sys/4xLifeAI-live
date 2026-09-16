@@ -1952,6 +1952,15 @@ Return the analysis in this exact JSON format:
         const { data: updated, error: updateError } = await supabase.from("signals").update(update).eq("id", req.params.id).eq("is_active", true).select("*").maybeSingle();
         if (updateError) return res.status(500).json({ error: updateError.message });
         if (!updated) return res.status(409).json({ error: "Signal was already closed" });
+        await sendTelegramMessage(
+          `<b>4xFiveAI — BREAK-EVEN CLOSED</b>\n\n`
+          + `Pair: ${signal.pair}\n`
+          + `Signal: ${signal.direction}\n`
+          + `TP${signal.status === "TP2_HIT" ? "2" : "1"} secured: ${targetPrice}\n`
+          + `Entry protected: ${signal.entry_price}\n`
+          + `Secured profit: +${securedPips.toFixed(1)} pips\n`
+          + `Remaining position: closed at break-even`
+        ).catch((telegramError) => console.error("[TELEGRAM] break-even notification failed:", telegramError));
         return res.json({ success: true, signal: updated });
       }
       if (level === "SL" && ["TP1_HIT", "TP2_HIT", "TP3_HIT"].includes(signal.status)) {
@@ -1980,6 +1989,19 @@ Return the analysis in this exact JSON format:
       const { data: updated, error: updateError } = await supabase.from("signals").update(update).eq("id", req.params.id).eq("is_active", true).select("*").maybeSingle();
       if (updateError) return res.status(500).json({ error: updateError.message });
       if (!updated) return res.status(409).json({ error: "Signal was already updated" });
+      const eventLabel = level === "SL" ? "STOP LOSS HIT" : `${level} SECURED`;
+      const outcomeLine = level === "SL"
+        ? `Loss: -${targetPips.toFixed(1)} pips`
+        : `Secured profit: +${targetPips.toFixed(1)} pips`;
+      await sendTelegramMessage(
+        `<b>4xFiveAI — ${eventLabel}</b>\n\n`
+        + `Pair: ${signal.pair}\n`
+        + `Signal: ${signal.direction}\n`
+        + `Entry: ${signal.entry_price}\n`
+        + `${level}: ${targetPrice}\n`
+        + `${outcomeLine}\n`
+        + (level === "TP1" ? "Remaining position: protected at Entry while waiting for TP2" : "")
+      ).catch((telegramError) => console.error(`[TELEGRAM] ${level} notification failed:`, telegramError));
       res.json({ success: true, signal: updated });
     } catch (error: any) {
       res.status(500).json({ error: error?.message || "Failed to mark target" });
