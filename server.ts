@@ -1190,7 +1190,11 @@ async function startServer() {
       is_active: true,
       news_event: analysis.newsHasEvent && analysis.newsEvent ? String(analysis.newsEvent) : null,
       news_impact: analysis.newsHasEvent && analysis.newsEvent ? 'HIGH' : null,
-      news_time: null,
+      news_time: (() => {
+        const candidate = (analysis as any).newsTime || (analysis as any).news_time;
+        const timestamp = candidate ? new Date(candidate).toISOString() : null;
+        return timestamp && Number.isFinite(new Date(timestamp).getTime()) ? timestamp : null;
+      })(),
       reason: `${analysis.reasoning || 'Manual screenshot signal'}${analysis.newsHasEvent && analysis.newsEvent ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };
 
