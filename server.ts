@@ -26,69 +26,10 @@ type FFEvent = {
   actual?: string;
 };
 
-const FOREX_FACTORY_SOURCE_TIME_ZONE = 'America/New_York';
-const FOREX_FACTORY_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-const FOREX_FACTORY_TIME_PATTERN = /^(\d{1,2}):(\d{2})(am|pm)$/i;
-
-function getTimeZoneOffsetMinutes(timeZone: string, timestamp: number): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date(timestamp));
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const asUtc = Date.UTC(
-    Number(values.year),
-    Number(values.month) - 1,
-    Number(values.day),
-    Number(values.hour),
-    Number(values.minute),
-    Number(values.second),
-  );
-  return (asUtc - timestamp) / 60000;
-}
-
 function parseForexFactoryEventUtc(event: FFEvent): string | null {
-  const rawDate = String(event.date || '').trim();
-  const rawTime = String(event.time || '').trim();
-  const isoTimestamp = Date.parse(rawDate);
-  let timestamp: number;
-
-  if (rawTime && FOREX_FACTORY_DATE_TIME_PATTERN.test(rawDate)) {
-    const match = rawTime.match(FOREX_FACTORY_TIME_PATTERN);
-    if (!match) return null;
-    let hours = Number(match[1]);
-    const minutes = Number(match[2]);
-    const meridiem = match[3].toLowerCase();
-    if (hours === 12) hours = 0;
-    if (meridiem === 'pm') hours += 12;
-    const sourceWallClock = Date.UTC(
-      Number(rawDate.slice(0, 4)),
-      Number(rawDate.slice(5, 7)) - 1,
-      Number(rawDate.slice(8, 10)),
-      hours,
-      minutes,
-      0,
-    );
-    const offset = getTimeZoneOffsetMinutes(FOREX_FACTORY_SOURCE_TIME_ZONE, sourceWallClock);
-    timestamp = sourceWallClock - offset * 60_000;
-    console.log('[calendar] parsed event time', {
-      rawDate,
-      rawTime,
-      sourceTimezone: FOREX_FACTORY_SOURCE_TIME_ZONE,
-      normalizedUtc: new Date(timestamp).toISOString(),
-    });
-  } else if (Number.isFinite(isoTimestamp)) {
-    timestamp = isoTimestamp;
-  } else {
-    return null;
-  }
-
+  const rawTimestamp = String(event.date || '').trim();
+  if (!rawTimestamp) return null;
+  const timestamp = Date.parse(rawTimestamp);
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
@@ -100,25 +41,54 @@ function normalizeAnalysisNewsTime(analysis: any): string | null {
   return parsed.toISOString();
 }
 
+function normalizeCalendarTitle(value: unknown): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
 function matchCalendarEvent(events: FFEvent[], title: string, country?: string): string | null {
-  const normalizedTitle = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const requestedTitle = String(title || '').split('·')[0].trim();
+  const normalizedTitle = normalizeCalendarTitle(requestedTitle);
   if (!normalizedTitle) return null;
+  const now = Date.now();
   const candidates = events
     .map((event) => ({ event, timestamp: parseForexFactoryEventUtc(event) }))
     .filter(({ event, timestamp }) => {
-      if (!timestamp || new Date(timestamp).getTime() <= Date.now()) return false;
+      if (!timestamp || new Date(timestamp).getTime() <= now) return false;
       if (country && String(event.country || '').toUpperCase() !== String(country).toUpperCase()) return false;
-      const eventTitle = String(event.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-      return eventTitle === normalizedTitle || eventTitle.includes(normalizedTitle) || normalizedTitle.includes(eventTitle);
+      return normalizeCalendarTitle(event.title) === normalizedTitle;
     })
     .sort((a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime());
-  return candidates[0]?.timestamp || null;
+  const selected = candidates[0];
+  console.log(selected ? '[calendar] matched event' : '[calendar] no exact future event match', {
+    requestedTitle,
+    matchedTitle: selected?.event.title || null,
+    country: selected?.event.country || country || null,
+    rawDate: selected?.event.date || null,
+    rawTime: selected?.event.time || null,
+    normalizedUtc: selected?.timestamp || null,
+    nowUtc: new Date(now).toISOString(),
+    remainingSeconds: selected?.timestamp
+      ? Math.max(0, Math.floor((new Date(selected.timestamp).getTime() - now) / 1000))
+      : null,
+  });
+  return selected?.timestamp || null;
 }
 let ffCache: { at: number; events: FFEvent[] } | null = null;
 const FF_CACHE_MS = 15 * 60 * 1000; // 15 minutes
 
 async function getEconomicCalendar(): Promise<FFEvent[]> {
-  if (ffCache && Date.now() - ffCache.at < FF_CACHE_MS) return ffCache.events;
+  if (ffCache && Date.now() - ffCache.at < FF_CACHE_MS) {
+    console.log('[calendar] cache hit', {
+      ageSeconds: Math.floor((Date.now() - ffCache.at) / 1000),
+      events: ffCache.events.length,
+    });
+    return ffCache.events;
+  }
   try {
     const resp = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json', {
       headers: { 'User-Agent': 'Mozilla/5.0 (4xLifeAI Chart Analyzer)' },
@@ -126,6 +96,10 @@ async function getEconomicCalendar(): Promise<FFEvent[]> {
     if (!resp.ok) throw new Error(`FF feed ${resp.status}`);
     const data = (await resp.json()) as FFEvent[];
     ffCache = { at: Date.now(), events: Array.isArray(data) ? data : [] };
+    console.log('[calendar] fetched live feed', {
+      fetchedAtUtc: new Date(ffCache.at).toISOString(),
+      events: ffCache.events.length,
+    });
     return ffCache.events;
   } catch (e) {
     console.error('[calendar] fetch failed:', (e as any)?.message || e);
@@ -1270,6 +1244,16 @@ async function startServer() {
       normalizedNewsTime &&
       new Date(normalizedNewsTime).getTime() > Date.now(),
     );
+    console.log('[signal] news mapping', {
+      pair,
+      matchedTitle: analysis.newsEvent || null,
+      normalizedUtc: normalizedNewsTime,
+      nowUtc: new Date().toISOString(),
+      remainingSeconds: normalizedNewsTime
+        ? Math.floor((new Date(normalizedNewsTime).getTime() - Date.now()) / 1000)
+        : null,
+      saved: hasFutureNews,
+    });
 
     const signalPayload: any = {
       pair,
@@ -1940,7 +1924,7 @@ Return the analysis in this exact JSON format:
         analysis.newsHasEvent = analysis.newsHasEvent === true;
         const parsedNewsTime = normalizeAnalysisNewsTime(analysis);
         const calendarNewsTime = analysis.newsEvent
-          ? matchCalendarEvent(calendarEvents, String(analysis.newsEvent).split('·')[0].trim(), 'USD')
+          ? matchCalendarEvent(calendarEvents, String(analysis.newsEvent), 'USD')
           : null;
         analysis.newsTime = calendarNewsTime || parsedNewsTime;
         if (!parsedNewsTime || new Date(parsedNewsTime).getTime() <= Date.now()) {
