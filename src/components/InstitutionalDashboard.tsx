@@ -587,7 +587,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
           <button type="button" className="x4-signal__manual-button x4-signal__manual-button--sl" onClick={() => markTarget("SL")} disabled={manualAction !== null}>
             {manualAction === "SL" ? "UPDATING..." : "MARK SL HIT"}
           </button>
-          {(["TP1_HIT", "TP2_HIT"].includes(s.tradeStatus || "") || s.status === "profit") && (
+          {(["TP1_HIT", "TP2_HIT"].includes(s.tradeStatus || "") || s.status === "profit" || s.status === "profit secured") && (
             <button type="button" className="x4-signal__manual-button x4-signal__manual-button--be" onClick={() => markTarget("BE")} disabled={manualAction !== null}>
               {manualAction === "BE" ? "UPDATING..." : "MARK BREAK-EVEN"}
             </button>
