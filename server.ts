@@ -1151,7 +1151,7 @@ async function startServer() {
 
     const isLong = direction === 'LONG';
     if (isLong && sl >= entry) return { ok: false, error: 'BUY SL must be below entry' };
-    if (!isLong && sl <= entry) return { ok: false, error: 'SELL SL must be above entry' };
+      if (!isLong && sl <= entry) return { ok: false, error: 'SELL SL must be above entry' };
 
     // Cancel any existing active signal for this pair
     await supabase
@@ -1938,7 +1938,17 @@ Return the analysis in this exact JSON format:
       }
       if (["BE", "BREAKEVEN"].includes(level)) {
         if (!["TP1_HIT", "TP2_HIT"].includes(signal.status)) return res.status(400).json({ error: "Break-even requires TP1 or TP2 secured" });
-        const update = { status: "CLOSED", is_active: false, result: "BREAKEVEN", pips_won: 0, pips_lost: 0, closed_at: now };
+        const targetPrice = signal.status === "TP2_HIT" ? signal.tp2 : signal.tp1;
+        const pipMultiplier = ["XAUUSD", "XAGUSD"].includes(String(signal.pair).toUpperCase()) ? 0.1 : (String(signal.pair).toUpperCase().includes("JPY") ? 0.01 : 0.0001);
+        const securedPips = Math.abs(Number(targetPrice) - Number(signal.entry_price)) / pipMultiplier;
+        const update = {
+          status: "CLOSED",
+          is_active: false,
+          result: "TP1_SECURED_BE",
+          pips_won: securedPips,
+          pips_lost: 0,
+          closed_at: now,
+        };
         const { data: updated, error: updateError } = await supabase.from("signals").update(update).eq("id", req.params.id).eq("is_active", true).select("*").maybeSingle();
         if (updateError) return res.status(500).json({ error: updateError.message });
         if (!updated) return res.status(409).json({ error: "Signal was already closed" });
