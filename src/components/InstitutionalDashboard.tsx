@@ -231,6 +231,12 @@ function formatCountdown(value?: string): string | null {
   return `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
 }
 
+function isValidNewsTime(value?: string): boolean {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) && timestamp > Date.now() - 30 * 60 * 1000;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -630,8 +636,8 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
           <div className="x4-signal__news x4-signal__news--compact">
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
-            {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
-            {releaseCountdown && (
+            {isValidNewsTime(s.news.time) && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
+            {isValidNewsTime(s.news.time) && releaseCountdown && (
               <span className={`x4-signal__news-countdown ${withinDangerWindow ? "x4-signal__news-countdown--danger" : ""}`} key={now}>
                 {releaseCountdown === "🟢 RELEASED"
                   ? releaseCountdown

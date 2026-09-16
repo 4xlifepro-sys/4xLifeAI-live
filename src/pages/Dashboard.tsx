@@ -204,11 +204,13 @@ export default function Dashboard() {
         tier,
         openedAgo: daysAgo(s.created_at || s.timestamp || ''),
           news: (() => {
-          if (s.news_event) {
+          const newsTimestamp = s.news_time || s.newsTime || null;
+          const newsTimeMs = newsTimestamp ? new Date(newsTimestamp).getTime() : NaN;
+          if (s.news_event && Number.isFinite(newsTimeMs) && newsTimeMs > Date.now() - 30 * 60 * 1000) {
             return {
               event: s.news_event,
               impact: s.news_impact,
-              time: s.news_time || s.newsTime || null,
+              time: newsTimestamp,
               lean: s.news_prediction || (s.direction === 'BUY' ? 'BUY' : s.direction === 'SELL' ? 'SELL' : 'NEUTRAL'),
               probability: Number(s.news_probability || 0) || undefined,
             };
