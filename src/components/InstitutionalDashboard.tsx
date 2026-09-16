@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 /**
  * ============================================================================
@@ -229,6 +229,33 @@ function formatCountdown(value?: string): string | null {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+const NEWS_DISPLAY_TIME_ZONE = "Europe/Athens";
+
+function formatNewsDisplayTime(value: string, now: number): { displayTimezone: string; formattedDisplayTime: string } | null {
+  const timestamp = new Date(value);
+  if (!Number.isFinite(timestamp.getTime())) return null;
+  const displayTimezone = NEWS_DISPLAY_TIME_ZONE;
+  const formattedDisplayTime = new Intl.DateTimeFormat("en-US", {
+    timeZone: displayTimezone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(timestamp);
+  const remainingSeconds = Math.floor((timestamp.getTime() - now) / 1000);
+  const countdownText = formatCountdown(value);
+  console.log("[news-display]", {
+    rawUtc: value,
+    displayTimezone,
+    formattedDisplayTime,
+    remainingSeconds,
+    countdownText,
+  });
+  return { displayTimezone, formattedDisplayTime };
 }
 
 function isValidNewsTime(value?: string): boolean {
@@ -529,6 +556,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
   }, []);
   const countdown = newsCountdown(s.news?.time);
   const releaseCountdown = formatCountdown(s.news?.time);
+  const formattedNewsTime = s.news?.time ? formatNewsDisplayTime(s.news.time, now) : null;
   const releaseMs = s.news?.time ? new Date(s.news.time).getTime() : NaN;
   const withinDangerWindow = Number.isFinite(releaseMs) && Math.abs(releaseMs - now) <= 30 * 60 * 1000;
   const [copiedLevel, setCopiedLevel] = useState<string | null>(null);
@@ -636,7 +664,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
           <div className="x4-signal__news x4-signal__news--compact">
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
-            {isValidNewsTime(s.news.time) && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
+            {isValidNewsTime(s.news.time) && formattedNewsTime && <span className="x4-signal__news-time">{formattedNewsTime.formattedDisplayTime}</span>}
             {isValidNewsTime(s.news.time) && releaseCountdown && (
               <span className={`x4-signal__news-countdown ${withinDangerWindow ? "x4-signal__news-countdown--danger" : ""}`} key={now}>
                 {releaseCountdown === "🟢 RELEASED"
