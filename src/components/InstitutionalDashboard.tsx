@@ -615,7 +615,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
             {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
-            {countdown && <span className="x4-signal__news-countdown" key={now}>⏱ {countdown}</span>}
+            {countdown && <span className="x4-signal__news-countdown" key={now}>⏱ {countdown === "LIVE NOW" || countdown === "RELEASED" ? countdown : `${countdown} left`}</span>}
             {s.news.lean && <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>→ {s.news.lean}</span>}
             {s.news.probability && <span className="x4-signal__news-probability">📊 {s.news.probability}%</span>}
             {s.news.impact && <span className={`x4-signal__news-impact x4-signal__news-impact--${s.news.impact.toLowerCase()}`}>⚠ {s.news.impact === 'HIGH' ? 'big move' : s.news.impact}</span>}
