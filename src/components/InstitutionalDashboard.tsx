@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { useEffect, useState } from "react";
 
 /**
  * ============================================================================
@@ -201,6 +202,20 @@ function fmtPrice(n: number): string {
 
 function trendClass(t: Trend): string {
   return t === "BULL" ? "x4-pill--bull" : t === "BEAR" ? "x4-pill--bear" : "x4-pill--neutral";
+}
+
+function newsCountdown(value?: string): string | null {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  const remaining = timestamp - Date.now();
+  if (remaining <= 0 && remaining > -60 * 60 * 1000) return "LIVE NOW";
+  if (remaining <= 0) return "RELEASED";
+  const totalMinutes = Math.ceil(remaining / 60000);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +503,12 @@ function StatCard({
 }
 
 function ActiveSignalCard({ s }: { s: ActiveSignal }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const countdown = newsCountdown(s.news?.time);
   const [copiedLevel, setCopiedLevel] = useState<string | null>(null);
   const [manualAction, setManualAction] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
@@ -594,6 +615,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
             <span className="x4-signal__news-icon">NEWS</span>
             <span className="x4-signal__news-event">{s.news.event}</span>
             {s.news.time && <span className="x4-signal__news-time">{new Date(s.news.time).toLocaleString()}</span>}
+            {countdown && <span className="x4-signal__news-countdown" key={now}>⏱ {countdown}</span>}
             {s.news.lean && <span className={`x4-signal__news-lean x4-signal__news-lean--${s.news.lean.toLowerCase()}`}>→ {s.news.lean}</span>}
             {s.news.probability && <span className="x4-signal__news-probability">📊 {s.news.probability}%</span>}
             {s.news.impact && <span className={`x4-signal__news-impact x4-signal__news-impact--${s.news.impact.toLowerCase()}`}>⚠ {s.news.impact === 'HIGH' ? 'big move' : s.news.impact}</span>}
@@ -1277,6 +1299,13 @@ const CSS = `
 .x4-signal__news-time {
   color: var(--x4-text-dim);
   font-size: 10px;
+}
+.x4-signal__news-countdown {
+  color: var(--x4-cyan);
+  font-family: var(--x4-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 .x4-signal__news-probability {
   color: var(--x4-green);
