@@ -1922,14 +1922,14 @@ Return the analysis in this exact JSON format:
       // Normalize news-bias fields so the analysis engine can never show a misleading value
       if (analysis && typeof analysis === 'object') {
         analysis.newsHasEvent = analysis.newsHasEvent === true;
-        const parsedNewsTime = normalizeAnalysisNewsTime(analysis);
         const calendarNewsTime = analysis.newsEvent
           ? matchCalendarEvent(calendarEvents, String(analysis.newsEvent), 'USD')
           : null;
-        analysis.newsTime = calendarNewsTime || parsedNewsTime;
-        if (!parsedNewsTime || new Date(parsedNewsTime).getTime() <= Date.now()) {
+        analysis.newsTime = calendarNewsTime || null;
+        if (!calendarNewsTime || new Date(calendarNewsTime).getTime() <= Date.now()) {
           analysis.newsHasEvent = false;
           analysis.newsEvent = '';
+          analysis.newsTime = null;
         }
         const pred = String(analysis.newsPrediction || '').toUpperCase();
         analysis.newsPrediction = pred === 'BUY' || pred === 'SELL' ? pred : 'NEUTRAL';
