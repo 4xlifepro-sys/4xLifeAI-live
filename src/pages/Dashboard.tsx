@@ -206,7 +206,7 @@ export default function Dashboard() {
           news: (() => {
           const newsTimestamp = s.news_time || s.newsTime || null;
           const newsTimeMs = newsTimestamp ? new Date(newsTimestamp).getTime() : NaN;
-          if (s.news_event && Number.isFinite(newsTimeMs) && newsTimeMs > Date.now() - 30 * 60 * 1000) {
+          if (s.news_event && Number.isFinite(newsTimeMs) && newsTimeMs > Date.now()) {
             return {
               event: s.news_event,
               impact: s.news_impact,

@@ -91,6 +91,14 @@ function parseForexFactoryEventUtc(event: FFEvent): string | null {
 
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
+
+function normalizeAnalysisNewsTime(analysis: any): string | null {
+  const candidate = String(analysis?.newsTime || analysis?.news_time || '').trim();
+  if (!candidate) return null;
+  const parsed = new Date(candidate);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
 let ffCache: { at: number; events: FFEvent[] } | null = null;
 const FF_CACHE_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -1240,6 +1248,14 @@ async function startServer() {
       bearishScenario: undefined,
     };
 
+    const normalizedNewsTime = normalizeAnalysisNewsTime(analysis);
+    const hasFutureNews = Boolean(
+      analysis.newsHasEvent &&
+      analysis.newsEvent &&
+      normalizedNewsTime &&
+      new Date(normalizedNewsTime).getTime() > Date.now(),
+    );
+
     const signalPayload: any = {
       pair,
       direction,
@@ -1256,23 +1272,10 @@ async function startServer() {
       created_at: now,
       status: 'LIVE',
       is_active: true,
-      news_event: analysis.newsHasEvent && analysis.newsEvent && (() => {
-        const candidate = (analysis as any).newsTime || (analysis as any).news_time;
-        const timestamp = candidate ? new Date(candidate).getTime() : NaN;
-        return Number.isFinite(timestamp) && timestamp > Date.now();
-      })() ? String(analysis.newsEvent) : null,
-      news_impact: analysis.newsHasEvent && analysis.newsEvent && (() => {
-        const candidate = (analysis as any).newsTime || (analysis as any).news_time;
-        const timestamp = candidate ? new Date(candidate).getTime() : NaN;
-        return Number.isFinite(timestamp) && timestamp > Date.now();
-      })() ? 'HIGH' : null,
-      news_time: (() => {
-        const candidate = (analysis as any).newsTime || (analysis as any).news_time;
-        if (!candidate) return null;
-        const parsed = new Date(candidate);
-        return Number.isFinite(parsed.getTime()) && parsed.getTime() > Date.now() ? parsed.toISOString() : null;
-      })(),
-      reason: `${analysis.reasoning || 'Manual screenshot signal'}${analysis.newsHasEvent && analysis.newsEvent ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
+      news_event: hasFutureNews ? String(analysis.newsEvent) : null,
+      news_impact: hasFutureNews ? 'HIGH' : null,
+      news_time: hasFutureNews ? normalizedNewsTime : null,
+      reason: `${analysis.reasoning || 'Manual screenshot signal'}${hasFutureNews ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };
 
     const { error: insertError } = await supabase.from('signals').insert([signalPayload]);
