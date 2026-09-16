@@ -491,8 +491,6 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
   const [copiedLevel, setCopiedLevel] = useState<string | null>(null);
   const [manualAction, setManualAction] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
-  const [freeSending, setFreeSending] = useState(false);
-  const [freeSent, setFreeSent] = useState(false);
   const statusLabel =
     s.tradeStatus === "TP2_HIT"
       ? "TP2 secured - waiting for TP3"
@@ -536,28 +534,6 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     } catch (error: any) {
       setManualError(error?.message || "Unable to update signal");
       setManualAction(null);
-    }
-  };
-
-  const sendToFreeChannel = async () => {
-    if (!s.id || freeSending) return;
-    setFreeSending(true);
-    setFreeSent(false);
-    setManualError(null);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("Please sign in again before sending");
-      const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/send-free`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.error || "Unable to send Free signal");
-      setFreeSent(true);
-    } catch (error: any) {
-      setManualError(error?.message || "Unable to send Free signal");
-    } finally {
-      setFreeSending(false);
     }
   };
 
@@ -621,9 +597,6 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
               {manualAction === level ? "UPDATING..." : `MARK ${level} HIT`}
             </button>
           ))}
-          <button type="button" className="x4-signal__manual-button x4-signal__manual-button--free" onClick={sendToFreeChannel} disabled={freeSending}>
-            {freeSending ? "SENDING..." : freeSent ? "SENT TO FREE CHANNEL ✓" : "SEND TO FREE CHANNEL"}
-          </button>
           {manualError && <div className="x4-signal__manual-error">{manualError}</div>}
         </div>
       )}
@@ -1180,11 +1153,6 @@ const CSS = `
   border-color: rgba(94,234,212,0.55);
   background: rgba(94,234,212,0.12);
   color: #5eead4;
-}
-.x4-signal__manual-button--free {
-  border-color: rgba(79, 209, 232, 0.55);
-  background: linear-gradient(90deg, rgba(79, 209, 232, 0.18), rgba(51, 209, 122, 0.14));
-  color: var(--x4-cyan);
 }
 .x4-signal__manual-button.is-next {
   border-color: rgba(255,176,32,0.62);
