@@ -513,7 +513,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     s.tradeStatus === "TP2_HIT" ? 85 : s.tradeStatus === "TP1_HIT" ? 55 : s.status === "profit" ? 30 : s.status === "loss" ? 0 : 10;
   const pipsMoved = s.statusPips ?? 0;
   const nextTarget = s.tradeStatus === "TP1_HIT" ? "TP2" : s.tradeStatus === "TP2_HIT" ? "TP3" : "TP1";
-  const markTarget = async (level: "SL" | "TP1" | "TP2" | "TP3") => {
+  const markTarget = async (level: "SL" | "TP1" | "TP2" | "TP3" | "BE") => {
     if (!s.id || manualAction) return;
     setManualAction(level);
     setManualError(null);
@@ -587,6 +587,11 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
           <button type="button" className="x4-signal__manual-button x4-signal__manual-button--sl" onClick={() => markTarget("SL")} disabled={manualAction !== null}>
             {manualAction === "SL" ? "UPDATING..." : "MARK SL HIT"}
           </button>
+          {(["TP1_HIT", "TP2_HIT"].includes(s.tradeStatus || "") || s.status === "profit") && (
+            <button type="button" className="x4-signal__manual-button x4-signal__manual-button--be" onClick={() => markTarget("BE")} disabled={manualAction !== null}>
+              {manualAction === "BE" ? "UPDATING..." : "MARK BREAK-EVEN"}
+            </button>
+          )}
           {(["TP1", "TP2", "TP3"] as const).map((level) => (
             <button key={level} type="button" className={`x4-signal__manual-button ${level === nextTarget ? "is-next" : ""}`} onClick={() => markTarget(level)} disabled={level !== nextTarget || manualAction !== null}>
               {manualAction === level ? "UPDATING..." : `MARK ${level} HIT`}
@@ -1143,6 +1148,11 @@ const CSS = `
   border-color: rgba(255,92,92,0.42);
   background: rgba(255,92,92,0.12);
   color: var(--x4-red);
+}
+.x4-signal__manual-button--be {
+  border-color: rgba(94,234,212,0.55);
+  background: rgba(94,234,212,0.12);
+  color: #5eead4;
 }
 .x4-signal__manual-button.is-next {
   border-color: rgba(255,176,32,0.62);
