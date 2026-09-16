@@ -1149,7 +1149,7 @@ async function startServer() {
       return { ok: false, error: 'Missing required price levels' };
     }
 
-    const isLong = direction === 'LONG';
+    const isLong = direction === 'LONG' || direction === 'BUY';
     if (isLong && sl >= entry) return { ok: false, error: 'BUY SL must be below entry' };
       if (!isLong && sl <= entry) return { ok: false, error: 'SELL SL must be above entry' };
 
