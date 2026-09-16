@@ -1929,11 +1929,21 @@ Return the analysis in this exact JSON format:
       if (!supabase) return res.status(503).json({ error: "Database unavailable" });
       const level = String(req.body?.level || req.body?.tp_level || "").toUpperCase();
       if (!["SL", "TP1", "TP2", "TP3"].includes(level)) return res.status(400).json({ error: "Invalid target" });
-      const { data: signal, error: readError } = await supabase.from("signals").select("id,status,is_active").eq("id", req.params.id).maybeSingle();
+      const { data: signal, error: readError } = await supabase.from("signals").select("id,status,is_active,pair,direction,entry_price,sl,tp1,tp2,tp3,pips_won,pips_lost").eq("id", req.params.id).maybeSingle();
       if (readError) return res.status(500).json({ error: readError.message });
       if (!signal || signal.is_active === false) return res.status(404).json({ error: "Active signal not found" });
       const now = new Date().toISOString();
+      if (level === "TP1" && ["TP1_HIT", "TP2_HIT", "TP3_HIT"].includes(signal.status)) {
+        return res.json({ success: true, signal, alreadySecured: true });
+      }
+      if (level === "SL" && ["TP1_HIT", "TP2_HIT", "TP3_HIT"].includes(signal.status)) {
+        return res.json({ success: true, signal, protectedByTarget: true });
+      }
       const nextStatus = level === "SL" ? "STOP_LOSS_HIT" : level === "TP1" ? "TP1_HIT" : level === "TP2" ? "TP2_HIT" : "TP3_HIT";
+      const isLong = signal.direction === "BUY" || signal.direction === "LONG";
+      const pipMultiplier = ["XAUUSD", "XAGUSD"].includes(String(signal.pair).toUpperCase()) ? 0.1 : (String(signal.pair).toUpperCase().includes("JPY") ? 0.01 : 0.0001);
+      const targetPrice = level === "SL" ? signal.sl : level === "TP1" ? signal.tp1 : level === "TP2" ? signal.tp2 : signal.tp3;
+      const targetPips = Math.abs(Number(targetPrice) - Number(signal.entry_price)) / pipMultiplier;
       const update: Record<string, any> = {
         status: nextStatus,
         is_active: level === "TP3" || level === "SL" ? false : true,
@@ -1943,6 +1953,12 @@ Return the analysis in this exact JSON format:
       if (level === "TP2") update.tp2_hit_at = now;
       if (level === "TP3") update.tp3_hit_at = now;
       if (level === "TP3" || level === "SL") update.closed_at = now;
+      if (level !== "SL") {
+        update.pips_won = targetPips;
+        update.pips_lost = 0;
+      } else {
+        update.pips_lost = targetPips;
+      }
       const { data: updated, error: updateError } = await supabase.from("signals").update(update).eq("id", req.params.id).eq("is_active", true).select("*").maybeSingle();
       if (updateError) return res.status(500).json({ error: updateError.message });
       if (!updated) return res.status(409).json({ error: "Signal was already updated" });
