@@ -238,11 +238,14 @@ export default function Dashboard() {
         ? (s.tp2_hit_at ? s.tp2 : s.tp1)
         : isWin ? s.tp3 || s.tp1 || 0 : s.sl || 0;
       const fallbackPips = calcPips(s.pair, entry, exit);
-      const pips = storedPips !== 0 || s.result === 'BREAKEVEN'
+      const pips = s.result === 'TP1_SECURED_BE'
+        ? Number(s.pips_won || 0)
+        : storedPips !== 0 || s.result === 'BREAKEVEN'
         ? storedPips
         : isWin ? Math.abs(fallbackPips) : -Math.abs(fallbackPips);
       let result: 'win' | 'loss' | 'breakeven' | 'invalid' = 'loss';
       if (s.result === 'INVALID') result = 'invalid';
+      else if (s.result === 'TP1_SECURED_BE') result = 'win';
       else if (Math.abs(pips) < 1) result = 'breakeven';
       else if (pips > 0) result = 'win';
       const d = new Date(s.created_at || s.timestamp);
