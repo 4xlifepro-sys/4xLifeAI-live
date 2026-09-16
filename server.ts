@@ -2037,15 +2037,15 @@ Return the analysis in this exact JSON format:
 
       const { MANUAL_OVERRIDE_PAIRS } = await import("./server/scanner.js");
       MANUAL_OVERRIDE_PAIRS.delete(signal.pair);
-      await sendTelegramMessage(
+      const telegramSent = await sendTelegramMessage(
         `⚪ <b>4xFiveAI — SIGNAL CANCELLED</b>\n\n`
         + `Pair: ${signal.pair}\n`
         + `Signal: ${signal.direction === "BUY" || signal.direction === "LONG" ? "🟢 BUY" : "🔴 SELL"}\n`
         + `Status: Cancelled before trade result\n`
         + `Outcome: 0 pips — no profit, no loss\n`
         + `Reason: Administrative correction / market conditions`
-      ).catch((telegramError) => console.error("[TELEGRAM] cancellation notification failed:", telegramError));
-      res.json({ success: true, signal: updated });
+      );
+      res.json({ success: true, signal: updated, telegramSent });
     } catch (error: any) {
       res.status(500).json({ error: error?.message || "Failed to cancel signal" });
     }
