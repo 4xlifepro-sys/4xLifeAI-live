@@ -1151,7 +1151,7 @@ async function startServer() {
 
     const isLong = direction === 'LONG';
     if (isLong && sl >= entry) return { ok: false, error: 'BUY SL must be below entry' };
-    if (!isLong && sl >= entry) return { ok: false, error: 'SELL SL must be below entry' };
+    if (!isLong && sl <= entry) return { ok: false, error: 'SELL SL must be above entry' };
 
     // Cancel any existing active signal for this pair
     await supabase
