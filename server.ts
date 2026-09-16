@@ -2040,7 +2040,7 @@ Return the analysis in this exact JSON format:
         + news
         + `\n\n🛡️ Risk-managed levels\n🔗 https://t.me/forxlife3`;
       const sent = await sendTelegramMessage(message, process.env.TELEGRAM_FREE_CHAT_ID || "@forxlife3");
-      if (!sent) return res.status(503).json({ error: "Telegram Free channel is not configured" });
+      if (!sent) return res.status(502).json({ error: "Telegram could not send to the Free channel. Check that the bot is an administrator of @forxlife3 with Post Messages permission." });
       res.json({ success: true, channel: "FREE" });
     } catch (error: any) {
       console.error("[send-free] error:", error);

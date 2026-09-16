@@ -3,8 +3,12 @@ export async function sendTelegramMessage(message: string, chatId?: string) {
   const defaultChatId = process.env.TELEGRAM_DEFAULT_CHAT_ID || '@forxlife3';
   const targetChatId = chatId || defaultChatId;
 
-  if (!token || !targetChatId) {
-    console.log("Telegram bot token or chat ID not configured. Skipping message:", message);
+  if (!token) {
+    console.error("[TELEGRAM] TELEGRAM_BOT_TOKEN is missing");
+    return false;
+  }
+  if (!targetChatId) {
+    console.error("[TELEGRAM] Telegram chat ID is missing");
     return false;
   }
 
@@ -22,8 +26,10 @@ export async function sendTelegramMessage(message: string, chatId?: string) {
       }),
     });
 
-    if (!response.ok) {
-        throw new Error(`Telegram API Error: ${response.status} ${response.statusText}`);
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.ok) {
+      console.error("[TELEGRAM] Send failed:", result?.description || response.statusText);
+      return false;
     }
     return true;
   } catch (error) {
