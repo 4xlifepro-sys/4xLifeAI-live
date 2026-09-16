@@ -2009,6 +2009,40 @@ Return the analysis in this exact JSON format:
     }
   });
 
+  app.post("/api/admin/signals/:id/cancel", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const { data: signal, error: readError } = await supabase
+        .from("signals")
+        .select("id,pair,direction,is_active,status")
+        .eq("id", req.params.id)
+        .maybeSingle();
+      if (readError) return res.status(500).json({ error: readError.message });
+      if (!signal || signal.is_active === false) return res.status(404).json({ error: "Active signal not found" });
+
+      const { data: updated, error: updateError } = await supabase
+        .from("signals")
+        .update({
+          status: "CLOSED",
+          is_active: false,
+          result: "CANCELLED",
+          closed_at: new Date().toISOString(),
+        })
+        .eq("id", req.params.id)
+        .eq("is_active", true)
+        .select("*")
+        .maybeSingle();
+      if (updateError) return res.status(500).json({ error: updateError.message });
+      if (!updated) return res.status(409).json({ error: "Signal was already closed" });
+
+      const { MANUAL_OVERRIDE_PAIRS } = await import("./server/scanner.js");
+      MANUAL_OVERRIDE_PAIRS.delete(signal.pair);
+      res.json({ success: true, signal: updated });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "Failed to cancel signal" });
+    }
+  });
+
   app.post("/api/admin/signals/clear", requireAdmin, async (_req, res) => {
     try {
       if (!supabase) return res.status(503).json({ error: "Database unavailable" });

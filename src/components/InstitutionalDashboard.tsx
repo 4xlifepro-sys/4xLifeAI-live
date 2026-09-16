@@ -537,6 +537,27 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     }
   };
 
+  const cancelSignal = async () => {
+    if (!s.id || manualAction) return;
+    if (!window.confirm("Cancel this signal immediately? It will be hidden from Active Signals and marked CANCELLED.")) return;
+    setManualAction("CANCEL");
+    setManualError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in again before cancelling a signal");
+      const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Unable to cancel signal");
+      window.location.reload();
+    } catch (error: any) {
+      setManualError(error?.message || "Unable to cancel signal");
+      setManualAction(null);
+    }
+  };
+
   return (
     <div className="x4-signal">
       <div className="x4-signal__top">
@@ -597,6 +618,9 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
               {manualAction === level ? "UPDATING..." : `MARK ${level} HIT`}
             </button>
           ))}
+          <button type="button" className="x4-signal__manual-button x4-signal__manual-button--cancel" onClick={cancelSignal} disabled={manualAction !== null}>
+            {manualAction === "CANCEL" ? "CANCELLING..." : "CANCEL SIGNAL"}
+          </button>
           {manualError && <div className="x4-signal__manual-error">{manualError}</div>}
         </div>
       )}
@@ -1153,6 +1177,11 @@ const CSS = `
   border-color: rgba(94,234,212,0.55);
   background: rgba(94,234,212,0.12);
   color: #5eead4;
+}
+.x4-signal__manual-button--cancel {
+  border-color: rgba(255,92,92,0.55);
+  background: rgba(255,92,92,0.08);
+  color: #ff8585;
 }
 .x4-signal__manual-button.is-next {
   border-color: rgba(255,176,32,0.62);
