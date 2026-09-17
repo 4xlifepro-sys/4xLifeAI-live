@@ -2089,7 +2089,7 @@ Return the analysis in this exact JSON format:
           + `Entry protected: ${signal.entry_price} 🛡️\n`
           + `Secured profit: +${securedPips.toFixed(1)} pips 💰\n`
           + `Remaining position: closed at break-even`,
-          process.env.TELEGRAM_FREE_CHAT_ID || undefined
+          process.env.TELEGRAM_VIP_CHAT_ID || undefined
         ).catch((telegramError) => console.error("[TELEGRAM] break-even notification failed:", telegramError));
         return res.json({ success: true, signal: updated });
       }
@@ -2132,7 +2132,7 @@ Return the analysis in this exact JSON format:
         + `${level}: ${targetPrice} ${level === "SL" ? "🛑" : "🎯"}\n`
         + `${outcomeLine}\n`
         + (level === "TP1" ? "Remaining position: protected at Entry 🛡️ while waiting for TP2" : level === "TP2" ? "Remaining position: protected at Entry 🛡️ while waiting for TP3" : ""),
-        process.env.TELEGRAM_FREE_CHAT_ID || undefined
+        process.env.TELEGRAM_VIP_CHAT_ID || undefined
       ).catch((telegramError) => console.error(`[TELEGRAM] ${level} notification failed:`, telegramError));
       res.json({ success: true, signal: updated });
     } catch (error: any) {
