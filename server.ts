@@ -2161,6 +2161,37 @@ Return the analysis in this exact JSON format:
     }
   });
 
+  app.post("/api/admin/signals/:id/send-telegram-channel", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const channel = String(req.body?.channel || "").toUpperCase();
+      if (channel !== "FREE" && channel !== "VIP") return res.status(400).json({ error: "Invalid Telegram channel" });
+      const chatId = channel === "VIP" ? process.env.TELEGRAM_VIP_CHAT_ID : process.env.TELEGRAM_FREE_CHAT_ID;
+      if (!chatId) return res.status(503).json({ error: `Telegram ${channel.toLowerCase()} channel is not configured` });
+      const { data: signal, error } = await supabase
+        .from("signals")
+        .select("id,pair,direction,entry_price,sl,tp1,tp2,tp3,confidence,score,pips_won,news_event,news_impact,news_time")
+        .eq("id", req.params.id)
+        .maybeSingle();
+      if (error) return res.status(500).json({ error: error.message });
+      if (!signal) return res.status(404).json({ error: "Signal not found" });
+      const telegramSent = await sendTelegramMessage(
+        formatSignalTelegramMessage(signal, "SIGNAL UPDATE"),
+        chatId,
+      );
+      if (!telegramSent) return res.status(502).json({ error: "Telegram message failed" });
+      res.json({ success: true, telegramSent: true, channel });
+    } catch (error: any) {
+      console.error("[admin/send-telegram-channel] failed", {
+        signalId: req.params.id,
+        channel: req.body?.channel,
+        stack: error?.stack || String(error),
+        message: error?.message || String(error),
+      });
+      res.status(500).json({ error: error?.message || "Failed to send Telegram message" });
+    }
+  });
+
   app.post("/api/admin/signals/:id/cancel", requireAdmin, async (req, res) => {
     try {
       if (!supabase) return res.status(503).json({ error: "Database unavailable" });

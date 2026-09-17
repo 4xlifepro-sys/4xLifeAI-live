@@ -629,16 +629,20 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     }
   };
 
-  const sendToTelegram = async () => {
+  const sendToTelegramChannel = async (channel: "FREE" | "VIP") => {
     if (!s.id || manualAction) return;
-    setManualAction("TELEGRAM");
+    setManualAction(`TELEGRAM_${channel}`);
     setManualError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Please sign in again before sending to Telegram");
-      const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/send-telegram`, {
+      const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/send-telegram-channel`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ channel }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error || "Unable to send Telegram message");
@@ -705,8 +709,11 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       {s.isAdmin && s.id && (
         <div className="x4-signal__manual">
           <div className="x4-signal__manual-title">ADMIN TRADE CONTROL</div>
-          <button type="button" className="x4-signal__manual-button x4-signal__manual-button--telegram" onClick={sendToTelegram} disabled={manualAction !== null}>
-            {manualAction === "TELEGRAM" ? "SENDING..." : "SEND TO TELEGRAM"}
+          <button type="button" className="x4-signal__manual-button x4-signal__manual-button--telegram" onClick={() => sendToTelegramChannel("FREE")} disabled={manualAction !== null}>
+            {manualAction === "TELEGRAM_FREE" ? "SENDING..." : "SEND TO FREE CHANNEL"}
+          </button>
+          <button type="button" className="x4-signal__manual-button x4-signal__manual-button--telegram" onClick={() => sendToTelegramChannel("VIP")} disabled={manualAction !== null}>
+            {manualAction === "TELEGRAM_VIP" ? "SENDING..." : "SEND TO VIP CHANNEL"}
           </button>
           <button type="button" className="x4-signal__manual-button x4-signal__manual-button--sl" onClick={() => markTarget("SL")} disabled={manualAction !== null}>
             {manualAction === "SL" ? "UPDATING..." : "MARK SL HIT"}
