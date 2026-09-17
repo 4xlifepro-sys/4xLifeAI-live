@@ -130,6 +130,8 @@ const AuthContext = createContext<AuthContextType>({
     } catch (error) {
       console.error('Sign out cleanup failed:', error);
     }
+
+    window.location.replace('/login');
   };
 
   return (

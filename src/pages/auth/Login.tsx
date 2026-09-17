@@ -59,6 +59,8 @@ export default function Login() {
       setError('System temporarily unavailable. Please try again later.');
       return;
     }
+    setError(null);
+    setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -69,6 +71,7 @@ export default function Login() {
       if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Failed to login with Google');
+      setLoading(false);
     }
   };
 

@@ -81,6 +81,8 @@ export default function Signup() {
         setError('System configuration error: Supabase client is not initialized.');
         return;
     }
+    setError(null);
+    setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -91,6 +93,7 @@ export default function Signup() {
       if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Failed to sign up with Google');
+      setLoading(false);
     }
   };
 
