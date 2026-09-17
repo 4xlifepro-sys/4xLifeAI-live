@@ -1,7 +1,11 @@
 export async function sendTelegramMessage(message: string, chatId?: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const defaultChatId = process.env.TELEGRAM_DEFAULT_CHAT_ID || '@forxlife3';
-  const targetChatId = defaultChatId;
+  const defaultChatId = process.env.TELEGRAM_FREE_CHAT_ID || process.env.TELEGRAM_DEFAULT_CHAT_ID || '@forxlife3';
+  const targetChatId = chatId || defaultChatId;
+  console.log('[TELEGRAM] sendMessage target', {
+    target: targetChatId,
+    source: chatId ? 'explicit argument' : process.env.TELEGRAM_FREE_CHAT_ID ? 'TELEGRAM_FREE_CHAT_ID' : process.env.TELEGRAM_DEFAULT_CHAT_ID ? 'TELEGRAM_DEFAULT_CHAT_ID' : 'fallback @forxlife3',
+  });
 
   if (!token) {
     console.error("[TELEGRAM] TELEGRAM_BOT_TOKEN is missing");
@@ -32,8 +36,8 @@ export async function sendTelegramMessage(message: string, chatId?: string) {
       return false;
     }
     return true;
-  } catch (error) {
-    console.error("Failed to send Telegram message:", error);
+  } catch (error: any) {
+    console.error("[TELEGRAM] sendMessage exception:", error?.stack || error);
     return false;
   }
 }

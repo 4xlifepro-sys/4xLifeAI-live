@@ -2147,10 +2147,15 @@ Return the analysis in this exact JSON format:
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });
       if (!signal) return res.status(404).json({ error: "Signal not found" });
-      const telegramSent = await sendSignalTelegram(signal, "SIGNAL UPDATE");
+      const telegramSent = await sendTelegramMessage(formatSignalTelegramMessage(signal, "SIGNAL UPDATE"), process.env.TELEGRAM_FREE_CHAT_ID || undefined);
       if (!telegramSent) return res.status(502).json({ error: "Telegram message failed" });
       res.json({ success: true, telegramSent: true });
     } catch (error: any) {
+      console.error("[admin/send-telegram] failed", {
+        signalId: req.params.id,
+        stack: error?.stack || String(error),
+        message: error?.message || String(error),
+      });
       res.status(500).json({ error: error?.message || "Failed to send Telegram message" });
     }
   });
