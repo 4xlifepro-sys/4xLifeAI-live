@@ -1348,7 +1348,7 @@ export async function startScanner() {
                  
                  console.log(`[OUTCOME TRACKER] ${s.pair} ${hitLevel} HIT @ ${closedAt}`);
                  if (!TELEGRAM_SIGNALS_DISABLED) {
-                   const freeHitMsg = `✅ <b>TP HIT — ${s.pair} (${directionStr})</b>\n${hitLevel}: ${hitPrice} ✅\n\nYou’re seeing the result after the move.\nVIP members get the signal before it happens, with the full execution plan.\n\n🔥 <b>Member Benefits</b>\n• Trade ideas with clear scenarios 📊\n• Entry / SL / TP levels 📍\n• Real-time updates ⏱️\n• Risk management framework 🛡️\n• Market insights 🧠\n\n📩 <b>Contact / Access:</b>\nMessage: @TOFIFX1`;
+                   const freeHitMsg = `✅ <b>TP HIT — ${s.pair} (${directionStr})</b>\n${hitLevel}: ${hitPrice} ✅\n\nYou’re seeing the result after the move.\nVIP members get the signal before it happens, with the full execution plan.\n\n🔥 <b>Member Benefits</b>\n• Trade ideas with clear scenarios 📊\n• Entry / SL / TP levels 📍\n• Real-time updates ⏱️\n• Risk management framework 🛡️\n• Market insights 🧠\n\n📩 <b>Contact / Access:</b>\n<a href="https://t.me/TOFIFX1">Message @TOFIFX1</a>`;
                    sendTelegramOutcomeToVipAndFree(hitMsg, freeHitMsg);
                  } else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
                  
