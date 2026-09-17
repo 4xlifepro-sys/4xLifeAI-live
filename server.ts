@@ -1334,6 +1334,7 @@ async function startServer() {
       + `TP3: ${signal.tp3 ?? 'N/A'}${signal.tp3 != null ? ` (+${pipsBetween(signal.tp3)} pips)` : ''}\n`
       + `Confidence: ${confidencePercent}%\n`
       + (securedPips > 0 ? `Secured pips: +${securedPips.toFixed(1)}\n` : '')
+      + `\n💬 <b>Support:</b> <a href="https://t.me/TOFIFX1">Contact support</a>\n`
       + (signal.news_event
         ? `\n📰 <b>News:</b> ${signal.news_event}\n`
           + `Impact: ${String(signal.news_impact || 'N/A').toUpperCase()}\n`
