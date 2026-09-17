@@ -1302,7 +1302,7 @@ async function startServer() {
           + `News scenario: ${analysis.newsReason || 'Monitor the event and volatility.'}`
         : '📰 NEWS: No high-impact event identified.');
 
-    await sendTelegramMessage(msg, process.env.TELEGRAM_FREE_CHAT_ID || undefined);
+    await sendTelegramMessage(msg, process.env.TELEGRAM_VIP_CHAT_ID || undefined);
 
     // Mark pair as manual override so auto engine skips it
     const { MANUAL_OVERRIDE_PAIRS } = await import('./server/scanner.js');
