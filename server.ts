@@ -1315,17 +1315,30 @@ async function startServer() {
     const isLong = signal.direction === 'BUY' || signal.direction === 'LONG';
     const emoji = isLong ? '🟢' : '🔴';
     const securedPips = Number(signal.pips_won || 0);
+    const confidence = Number(signal.score ?? signal.confidence ?? 0);
+    const confidencePercent = confidence <= 10 ? confidence * 10 : confidence;
+    const pipMultiplier = ['XAUUSD', 'XAGUSD'].includes(String(signal.pair).toUpperCase())
+      ? 0.1
+      : String(signal.pair).toUpperCase().includes('JPY') ? 0.01 : 0.0001;
+    const pipsBetween = (target: unknown) => {
+      const distance = Math.abs(Number(target) - Number(signal.entry_price ?? signal.entry));
+      return Number.isFinite(distance) ? (distance / pipMultiplier).toFixed(1) : '0.0';
+    };
     return `${emoji} <b>4xFiveAI ${label}</b>\n\n`
       + `Pair: ${signal.pair}\n`
       + `Signal: ${signal.direction}\n\n`
       + `Entry: ${signal.entry_price ?? signal.entry}\n`
       + `SL: ${signal.sl}\n`
-      + `TP1: ${signal.tp1}\n`
-      + `TP2: ${signal.tp2}\n`
-      + `TP3: ${signal.tp3 ?? 'N/A'}\n`
-      + `Confidence: ${signal.confidence ?? 0}%\n`
+      + `TP1: ${signal.tp1} (+${pipsBetween(signal.tp1)} pips)\n`
+      + `TP2: ${signal.tp2} (+${pipsBetween(signal.tp2)} pips)\n`
+      + `TP3: ${signal.tp3 ?? 'N/A'}${signal.tp3 != null ? ` (+${pipsBetween(signal.tp3)} pips)` : ''}\n`
+      + `Confidence: ${confidencePercent}%\n`
       + (securedPips > 0 ? `Secured pips: +${securedPips.toFixed(1)}\n` : '')
-      + (signal.news_event ? `\n📰 NEWS: ${signal.news_event}` : '');
+      + (signal.news_event
+        ? `\n📰 <b>News Forecast:</b> ${signal.news_event}\n`
+          + `Bias: ${String(signal.news_prediction || 'NEUTRAL').toUpperCase()} (${Number(signal.news_probability) || 50}%)\n`
+          + `Scenario: ${signal.news_reason || 'Monitor the event and volatility.'}`
+        : '\n📰 News: No high-impact event identified.');
   }
 
   async function sendSignalTelegram(signal: any, label = 'SIGNAL') {
@@ -2129,7 +2142,7 @@ Return the analysis in this exact JSON format:
       if (!supabase) return res.status(503).json({ error: "Database unavailable" });
       const { data: signal, error } = await supabase
         .from("signals")
-        .select("id,pair,direction,entry_price,sl,tp1,tp2,tp3,confidence,pips_won,news_event")
+        .select("id,pair,direction,entry_price,sl,tp1,tp2,tp3,confidence,score,pips_won,news_event,news_prediction,news_probability,news_reason")
         .eq("id", req.params.id)
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });

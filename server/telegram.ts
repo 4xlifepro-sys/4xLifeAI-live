@@ -1,7 +1,7 @@
 export async function sendTelegramMessage(message: string, chatId?: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const defaultChatId = process.env.TELEGRAM_DEFAULT_CHAT_ID || '@forxlife3';
-  const targetChatId = chatId || defaultChatId;
+  const targetChatId = defaultChatId;
 
   if (!token) {
     console.error("[TELEGRAM] TELEGRAM_BOT_TOKEN is missing");
