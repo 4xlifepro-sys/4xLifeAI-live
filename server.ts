@@ -6,7 +6,7 @@ import { createServer as createViteServer } from "vite";
 import { startScanner, scannerState, latestMarketState, rejectionStats } from "./server/scanner.js";
 import { startSessionMessaging, sendSessionUpdate } from "./server/sessionMessaging.js";
 import { supabase } from './server/supabase.js';
-import { sendTelegramMessage } from './server/telegram.js';
+import { sendTelegramMessage, sendTelegramToVipAndFree } from './server/telegram.js';
 
 import { randomUUID } from 'crypto';
 import { GoogleGenAI } from "@google/genai";
@@ -2081,7 +2081,7 @@ Return the analysis in this exact JSON format:
         const { data: updated, error: updateError } = await supabase.from("signals").update(update).eq("id", req.params.id).eq("is_active", true).select("*").maybeSingle();
         if (updateError) return res.status(500).json({ error: updateError.message });
         if (!updated) return res.status(409).json({ error: "Signal was already closed" });
-      await sendTelegramMessage(
+      await sendTelegramToVipAndFree(
           `🛡️ <b>4xFiveAI — BREAK-EVEN CLOSED</b> ✅\n\n`
           + `Pair: ${signal.pair}\n`
           + `Signal: ${signal.direction === "BUY" || signal.direction === "LONG" ? "🟢 BUY" : "🔴 SELL"}\n`
@@ -2124,7 +2124,7 @@ Return the analysis in this exact JSON format:
       const outcomeLine = level === "SL"
         ? `Loss: -${targetPips.toFixed(1)} pips 📉`
         : `Secured profit: +${targetPips.toFixed(1)} pips 💰`;
-      await sendTelegramMessage(
+      await sendTelegramToVipAndFree(
         `${eventIcon} <b>4xFiveAI — ${eventLabel}</b> ✅\n\n`
         + `Pair: ${signal.pair}\n`
         + `Signal: ${signal.direction === "BUY" || signal.direction === "LONG" ? "🟢 BUY" : "🔴 SELL"}\n`

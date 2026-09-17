@@ -41,3 +41,20 @@ export async function sendTelegramMessage(message: string, chatId?: string) {
     return false;
   }
 }
+
+export async function sendTelegramToVipAndFree(message: string) {
+  const targets = [
+    ['VIP', process.env.TELEGRAM_VIP_CHAT_ID],
+    ['FREE', process.env.TELEGRAM_FREE_CHAT_ID],
+  ] as const;
+  const results = await Promise.all(targets.map(async ([channel, chatId]) => {
+    if (!chatId) {
+      console.error(`[TELEGRAM] ${channel} channel is not configured`);
+      return false;
+    }
+    const sent = await sendTelegramMessage(message, chatId);
+    console.log(`[TELEGRAM] ${channel} outcome message ${sent ? 'sent' : 'failed'}`);
+    return sent;
+  }));
+  return results.every(Boolean);
+}

@@ -43,7 +43,7 @@ export const rejectionStats = {
 };
 import { supabase } from './supabase.js';
 import { Signal, Stats, PairScanStatus, MarketState } from '../src/types.js';
-import { sendTelegramMessage } from './telegram.js';
+import { sendTelegramMessage, sendTelegramToVipAndFree } from './telegram.js';
 import { GoogleGenAI } from "@google/genai";
 import fs from 'fs';
 import path from 'path';
@@ -1171,7 +1171,7 @@ export async function startScanner() {
                 if (hasAnyTPHit) {
                   const alertMsg = `🛡️ <b>Auto-Safety Blocked Invalid</b>\n\nPair: ${s.pair}\nIssue: SL equals entry after TP was already hit\nRestored original SL: ${s.original_sl || 'n/a'}\nSignal will keep its real TP outcome.`;
                   console.log(`[OUTCOME TRACKER] ${s.pair} SL equals entry but TP was already hit — NOT marking invalid. Restoring original SL ${s.original_sl || 'n/a'}.`);
-                  sendTelegramMessage(alertMsg, process.env.TELEGRAM_VIP_CHAT_ID || undefined).catch(() => {});
+                  sendTelegramToVipAndFree(alertMsg).catch(() => {});
                   if (s.original_sl) {
                     await supabase.from('signals').update({ sl: s.original_sl }).eq('id', s.id);
                   }
@@ -1347,7 +1347,7 @@ export async function startScanner() {
                  + `Timestamp: ${dt.toUTCString()}`;
                  
                  console.log(`[OUTCOME TRACKER] ${s.pair} ${hitLevel} HIT @ ${closedAt}`);
-                 if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(hitMsg, process.env.TELEGRAM_VIP_CHAT_ID || undefined); else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
+                 if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramToVipAndFree(hitMsg); else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
                  
                  if (finalClose) {
                      scannerState.stats.lastTradeTimestamp = closedAt;
@@ -1386,7 +1386,7 @@ export async function startScanner() {
                      + `Outcome: ${finalResult} ${summaryEmoji}\n\n`
                      + `Timestamp: ${dt.toUTCString()}`;
                      
-                     if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramMessage(summaryMsg, process.env.TELEGRAM_VIP_CHAT_ID || undefined); else console.log('[KILL SWITCH] Telegram summary msg BLOCKED');
+                     if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramToVipAndFree(summaryMsg); else console.log('[KILL SWITCH] Telegram summary msg BLOCKED');
                      }
                  }
                  
@@ -1802,7 +1802,7 @@ export async function startScanner() {
               if (TELEGRAM_SIGNALS_DISABLED) {
                 console.log(`[KILL SWITCH] Telegram signal BLOCKED for ${signal.pair}`);
               } else {
-                sendTelegramMessage(msgOut, process.env.TELEGRAM_VIP_CHAT_ID || undefined);
+                sendTelegramToVipAndFree(msgOut);
                 scannerState.stats.telegramPushes++;
               }
              } else {
