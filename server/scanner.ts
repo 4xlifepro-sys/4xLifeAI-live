@@ -1348,7 +1348,7 @@ export async function startScanner() {
                  
                  console.log(`[OUTCOME TRACKER] ${s.pair} ${hitLevel} HIT @ ${closedAt}`);
                  if (!TELEGRAM_SIGNALS_DISABLED) {
-                   const freeHitMsg = formatFreeTpHitMessage(s.pair, directionStr, hitLevel, hitPrice);
+                   const freeHitMsg = formatFreeTpHitMessage(s.pair, directionStr, hitLevel, hitPrice, sEntry);
                    sendTelegramOutcomeToVipAndFree(hitMsg, freeHitMsg);
                  } else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
                  

@@ -2135,7 +2135,7 @@ Return the analysis in this exact JSON format:
       if (level === "TP1" || level === "TP2" || level === "TP3") {
         await sendTelegramOutcomeToVipAndFree(
           vipOutcomeMessage,
-          formatFreeTpHitMessage(signal.pair, signal.direction === "BUY" || signal.direction === "LONG" ? "BUY" : "SELL", level, targetPrice),
+          formatFreeTpHitMessage(signal.pair, signal.direction === "BUY" || signal.direction === "LONG" ? "BUY" : "SELL", level, targetPrice, signal.entry_price),
         ).catch((telegramError) => console.error(`[TELEGRAM] ${level} notification failed:`, telegramError));
       } else {
         await sendTelegramToVipAndFree(vipOutcomeMessage)

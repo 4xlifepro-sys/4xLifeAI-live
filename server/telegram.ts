@@ -67,8 +67,9 @@ export async function sendTelegramOutcomeToVipAndFree(vipMessage: string, freeMe
   return results.every(Boolean);
 }
 
-export function formatFreeTpHitMessage(pair: string, direction: string, level: string, price: unknown) {
+export function formatFreeTpHitMessage(pair: string, direction: string, level: string, price: unknown, entry?: unknown) {
   return `✅ <b>TP HIT — ${pair} (${direction})</b>\n`
+    + `Entry: ${entry ?? 'N/A'}\n`
     + `${level}: ${price} ✅\n\n`
     + `You're seeing the result after the move.\n`
     + `VIP members get the signal before it happens, with the full execution plan.\n\n`
