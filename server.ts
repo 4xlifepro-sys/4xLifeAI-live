@@ -1335,9 +1335,10 @@ async function startServer() {
       + `Confidence: ${confidencePercent}%\n`
       + (securedPips > 0 ? `Secured pips: +${securedPips.toFixed(1)}\n` : '')
       + (signal.news_event
-        ? `\n📰 <b>News Forecast:</b> ${signal.news_event}\n`
-          + `Bias: ${String(signal.news_prediction || 'NEUTRAL').toUpperCase()} (${Number(signal.news_probability) || 50}%)\n`
-          + `Scenario: ${signal.news_reason || 'Monitor the event and volatility.'}`
+        ? `\n📰 <b>News:</b> ${signal.news_event}\n`
+          + `Impact: ${String(signal.news_impact || 'N/A').toUpperCase()}\n`
+          + `Time: ${signal.news_time || 'Scheduled event time unavailable'}\n`
+          + `Analysis: Monitor the event and volatility.`
         : '\n📰 News: No high-impact event identified.');
   }
 
@@ -2142,7 +2143,7 @@ Return the analysis in this exact JSON format:
       if (!supabase) return res.status(503).json({ error: "Database unavailable" });
       const { data: signal, error } = await supabase
         .from("signals")
-        .select("id,pair,direction,entry_price,sl,tp1,tp2,tp3,confidence,score,pips_won,news_event,news_prediction,news_probability,news_reason")
+        .select("id,pair,direction,entry_price,sl,tp1,tp2,tp3,confidence,score,pips_won,news_event,news_impact,news_time")
         .eq("id", req.params.id)
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });
