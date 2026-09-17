@@ -58,3 +58,11 @@ export async function sendTelegramToVipAndFree(message: string) {
   }));
   return results.every(Boolean);
 }
+
+export async function sendTelegramOutcomeToVipAndFree(vipMessage: string, freeMessage: string) {
+  const results = await Promise.all([
+    sendTelegramMessage(vipMessage, process.env.TELEGRAM_VIP_CHAT_ID || undefined),
+    sendTelegramMessage(freeMessage, process.env.TELEGRAM_FREE_CHAT_ID || undefined),
+  ]);
+  return results.every(Boolean);
+}

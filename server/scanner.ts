@@ -43,7 +43,7 @@ export const rejectionStats = {
 };
 import { supabase } from './supabase.js';
 import { Signal, Stats, PairScanStatus, MarketState } from '../src/types.js';
-import { sendTelegramMessage, sendTelegramToVipAndFree } from './telegram.js';
+import { sendTelegramMessage, sendTelegramOutcomeToVipAndFree, sendTelegramToVipAndFree } from './telegram.js';
 import { GoogleGenAI } from "@google/genai";
 import fs from 'fs';
 import path from 'path';
@@ -1347,7 +1347,10 @@ export async function startScanner() {
                  + `Timestamp: ${dt.toUTCString()}`;
                  
                  console.log(`[OUTCOME TRACKER] ${s.pair} ${hitLevel} HIT @ ${closedAt}`);
-                 if (!TELEGRAM_SIGNALS_DISABLED) sendTelegramToVipAndFree(hitMsg); else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
+                 if (!TELEGRAM_SIGNALS_DISABLED) {
+                   const freeHitMsg = `✅ <b>TP HIT — ${s.pair} (${directionStr})</b>\n${hitLevel}: ${hitPrice} ✅\n\nYou’re seeing the result after the move.\nVIP members get the signal before it happens, with the full execution plan.\n\n🔥 <b>Member Benefits</b>\n• Trade ideas with clear scenarios 📊\n• Entry / SL / TP levels 📍\n• Real-time updates ⏱️\n• Risk management framework 🛡️\n• Market insights 🧠\n\n📩 <b>Contact / Access:</b>\nMessage: @TOFIFX1`;
+                   sendTelegramOutcomeToVipAndFree(hitMsg, freeHitMsg);
+                 } else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
                  
                  if (finalClose) {
                      scannerState.stats.lastTradeTimestamp = closedAt;
