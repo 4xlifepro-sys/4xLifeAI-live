@@ -629,6 +629,26 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
     }
   };
 
+  const sendToTelegram = async () => {
+    if (!s.id || manualAction) return;
+    setManualAction("TELEGRAM");
+    setManualError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in again before sending to Telegram");
+      const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/send-telegram`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Unable to send Telegram message");
+      setManualAction(null);
+    } catch (error: any) {
+      setManualError(error?.message || "Unable to send Telegram message");
+      setManualAction(null);
+    }
+  };
+
   return (
     <div className="x4-signal">
       <div className="x4-signal__top">
@@ -685,6 +705,9 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       {s.isAdmin && s.id && (
         <div className="x4-signal__manual">
           <div className="x4-signal__manual-title">ADMIN TRADE CONTROL</div>
+          <button type="button" className="x4-signal__manual-button x4-signal__manual-button--telegram" onClick={sendToTelegram} disabled={manualAction !== null}>
+            {manualAction === "TELEGRAM" ? "SENDING..." : "SEND TO TELEGRAM"}
+          </button>
           <button type="button" className="x4-signal__manual-button x4-signal__manual-button--sl" onClick={() => markTarget("SL")} disabled={manualAction !== null}>
             {manualAction === "SL" ? "UPDATING..." : "MARK SL HIT"}
           </button>
@@ -1252,6 +1275,11 @@ const CSS = `
   border-color: rgba(255,92,92,0.42);
   background: rgba(255,92,92,0.12);
   color: var(--x4-red);
+}
+.x4-signal__manual-button--telegram {
+  border-color: rgba(79,209,232,0.62);
+  background: rgba(79,209,232,0.18);
+  color: var(--x4-cyan);
 }
 .x4-signal__manual-button--be {
   border-color: rgba(94,234,212,0.55);

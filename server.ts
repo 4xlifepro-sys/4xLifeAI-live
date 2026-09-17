@@ -1311,6 +1311,27 @@ async function startServer() {
     return { ok: true, signal: signalPayload };
   }
 
+  function formatSignalTelegramMessage(signal: any, label = 'SIGNAL') {
+    const isLong = signal.direction === 'BUY' || signal.direction === 'LONG';
+    const emoji = isLong ? '🟢' : '🔴';
+    const securedPips = Number(signal.pips_won || 0);
+    return `${emoji} <b>4xFiveAI ${label}</b>\n\n`
+      + `Pair: ${signal.pair}\n`
+      + `Signal: ${signal.direction}\n\n`
+      + `Entry: ${signal.entry_price ?? signal.entry}\n`
+      + `SL: ${signal.sl}\n`
+      + `TP1: ${signal.tp1}\n`
+      + `TP2: ${signal.tp2}\n`
+      + `TP3: ${signal.tp3 ?? 'N/A'}\n`
+      + `Confidence: ${signal.confidence ?? 0}%\n`
+      + (securedPips > 0 ? `Secured pips: +${securedPips.toFixed(1)}\n` : '')
+      + (signal.news_event ? `\n📰 NEWS: ${signal.news_event}` : '');
+  }
+
+  async function sendSignalTelegram(signal: any, label = 'SIGNAL') {
+    return sendTelegramMessage(formatSignalTelegramMessage(signal, label));
+  }
+
   const requireAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: "Missing authorization header" });
@@ -2100,6 +2121,24 @@ Return the analysis in this exact JSON format:
       res.json({ success: true, signal: updated });
     } catch (error: any) {
       res.status(500).json({ error: error?.message || "Failed to mark target" });
+    }
+  });
+
+  app.post("/api/admin/signals/:id/send-telegram", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const { data: signal, error } = await supabase
+        .from("signals")
+        .select("id,pair,direction,entry_price,sl,tp1,tp2,tp3,confidence,pips_won,news_event")
+        .eq("id", req.params.id)
+        .maybeSingle();
+      if (error) return res.status(500).json({ error: error.message });
+      if (!signal) return res.status(404).json({ error: "Signal not found" });
+      const telegramSent = await sendSignalTelegram(signal, "SIGNAL UPDATE");
+      if (!telegramSent) return res.status(502).json({ error: "Telegram message failed" });
+      res.json({ success: true, telegramSent: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "Failed to send Telegram message" });
     }
   });
 
