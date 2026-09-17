@@ -6,7 +6,7 @@ import { createServer as createViteServer } from "vite";
 import { startScanner, scannerState, latestMarketState, rejectionStats } from "./server/scanner.js";
 import { startSessionMessaging, sendSessionUpdate } from "./server/sessionMessaging.js";
 import { supabase } from './server/supabase.js';
-import { sendTelegramMessage, sendTelegramToVipAndFree } from './server/telegram.js';
+import { formatFreeTpHitMessage, sendTelegramMessage, sendTelegramOutcomeToVipAndFree, sendTelegramToVipAndFree } from './server/telegram.js';
 
 import { randomUUID } from 'crypto';
 import { GoogleGenAI } from "@google/genai";
@@ -2125,16 +2125,22 @@ Return the analysis in this exact JSON format:
       const outcomeLine = level === "SL"
         ? `Loss: -${targetPips.toFixed(1)} pips 📉`
         : `Secured profit: +${targetPips.toFixed(1)} pips 💰`;
-      await sendTelegramToVipAndFree(
-        `${eventIcon} <b>4xFiveAI — ${eventLabel}</b> ✅\n\n`
+      const vipOutcomeMessage = `${eventIcon} <b>4xFiveAI — ${eventLabel}</b> ✅\n\n`
         + `Pair: ${signal.pair}\n`
         + `Signal: ${signal.direction === "BUY" || signal.direction === "LONG" ? "🟢 BUY" : "🔴 SELL"}\n`
         + `Entry: ${signal.entry_price}\n`
         + `${level}: ${targetPrice} ${level === "SL" ? "🛑" : "🎯"}\n`
         + `${outcomeLine}\n`
-        + (level === "TP1" ? "Remaining position: protected at Entry 🛡️ while waiting for TP2" : level === "TP2" ? "Remaining position: protected at Entry 🛡️ while waiting for TP3" : ""),
-        process.env.TELEGRAM_VIP_CHAT_ID || undefined
-      ).catch((telegramError) => console.error(`[TELEGRAM] ${level} notification failed:`, telegramError));
+        + (level === "TP1" ? "Remaining position: protected at Entry 🛡️ while waiting for TP2" : level === "TP2" ? "Remaining position: protected at Entry 🛡️ while waiting for TP3" : "");
+      if (level === "TP1" || level === "TP2" || level === "TP3") {
+        await sendTelegramOutcomeToVipAndFree(
+          vipOutcomeMessage,
+          formatFreeTpHitMessage(signal.pair, signal.direction === "BUY" || signal.direction === "LONG" ? "BUY" : "SELL", level, targetPrice),
+        ).catch((telegramError) => console.error(`[TELEGRAM] ${level} notification failed:`, telegramError));
+      } else {
+        await sendTelegramToVipAndFree(vipOutcomeMessage)
+          .catch((telegramError) => console.error(`[TELEGRAM] ${level} notification failed:`, telegramError));
+      }
       res.json({ success: true, signal: updated });
     } catch (error: any) {
       res.status(500).json({ error: error?.message || "Failed to mark target" });
