@@ -1208,13 +1208,16 @@ async function startServer() {
     const tp1 = num(analysis.tp1);
     const tp2 = num(analysis.tp2);
     const tp3 = num(analysis.tp3);
-    const confidence = Math.min(95, Math.max(0, Number(analysis.confidence) || 0));
+    const confidence = Math.min(80, Math.max(0, Number(analysis.confidence) || 0));
 
     if (entry === null || sl === null || tp1 === null || tp2 === null || tp3 === null) {
       return { ok: false, error: 'Missing required price levels' };
     }
+    if (confidence < 65) {
+      return { ok: false, error: 'Confidence below 65: setup must remain WAITING' };
+    }
 
-    const isLong = direction === 'LONG' || direction === 'BUY';
+    const isLong = direction === 'BUY';
     if (isLong && sl >= entry) return { ok: false, error: 'BUY SL must be below entry' };
       if (!isLong && sl <= entry) return { ok: false, error: 'SELL SL must be above entry' };
 
@@ -1260,7 +1263,7 @@ async function startServer() {
       direction,
       bias: isLong ? 'BULLISH' : 'BEARISH',
       score: confidence,
-      tier: confidence >= 75 ? 'Strong' : 'Good',
+      tier: confidence >= 75 ? 'Strong' : confidence >= 70 ? 'Good' : confidence >= 65 ? 'Valid' : 'Reject',
       confidence: Math.min(10, Math.max(1, Math.round(confidence / 10))),
       entry_price: entry,
       sl,
@@ -1316,7 +1319,7 @@ async function startServer() {
     const emoji = isLong ? '🟢' : '🔴';
     const securedPips = Number(signal.pips_won || 0);
     const confidence = Number(signal.score ?? signal.confidence ?? 0);
-    const confidencePercent = confidence <= 10 ? confidence * 10 : confidence;
+    const confidencePercent = Math.min(80, confidence <= 10 ? confidence * 10 : confidence);
     const pipMultiplier = ['XAUUSD', 'XAGUSD'].includes(String(signal.pair).toUpperCase())
       ? 0.1
       : String(signal.pair).toUpperCase().includes('JPY') ? 0.01 : 0.0001;
@@ -1835,7 +1838,7 @@ Determine:
 8. Stop Loss (beyond nearest swing)
 9. TP1, TP2, TP3 (logical levels, TP1 min 1:1.5 RR)
 10. Risk:Reward ratio
-11. Confidence Score (0-100%)
+11. Confidence Score (0-80%) — never return more than 80
 12. Reasoning (why this trade exists)
 13. Warnings (any risks to be aware of)
 14. News Bias — using ONLY the high-impact calendar above, for the currencies in the detected instrument
@@ -1858,7 +1861,7 @@ DUAL-TIMEFRAME RULES (apply ONLY when two charts are attached):
 - Read the directional bias of each chart (bullish / bearish / range).
 - tfStatus = "ALIGNED" if both charts lean the same direction; "CONFLICT" if they disagree (one bullish vs the other bearish, or one strongly trending vs the other reversing).
 - If tfStatus = "CONFLICT": trade MUST be "WAIT", and warnings must state that the two timeframes disagree.
-- If tfStatus = "ALIGNED" and trade is BUY/SELL in that same direction: raise confidence by 10 points (max 95).
+- If tfStatus = "ALIGNED" and trade is BUY/SELL in that same direction: raise confidence by 10 points (max 80).
 - tfNote: ONE short sentence, e.g. "H1 trend up and M5 pullback also up — aligned for BUY." Never promise outcomes.
 - When only one chart is attached: tfStatus = "SINGLE", tfNote = "".
 
@@ -1979,12 +1982,14 @@ Return the analysis in this exact JSON format:
         // Dual-timeframe safety: a conflict always blocks entry, whatever the analysis returns
         const tf = String(analysis.tfStatus || '').toUpperCase();
         analysis.tfStatus = (tf === 'ALIGNED' || tf === 'CONFLICT') && base64Data2 ? tf : 'SINGLE';
+        analysis.confidence = Math.min(80, Math.max(0, Number(analysis.confidence) || 0));
         if (analysis.tfStatus === 'CONFLICT') {
           if (String(analysis.trade || '').toUpperCase() !== 'WAIT') analysis.trade = 'WAIT';
           analysis.warnings = `The two timeframes disagree — entry blocked. ${analysis.warnings || ''}`;
         }
-        if (analysis.tfStatus === 'ALIGNED') {
-          analysis.confidence = Math.min(95, Number(analysis.confidence) || 0);
+        if (analysis.confidence < 65 && String(analysis.trade || '').toUpperCase() !== 'WAIT') {
+          analysis.trade = 'WAIT';
+          analysis.warnings = `Confidence below 65 — setup is too weak to publish. ${analysis.warnings || ''}`;
         }
       }
 
@@ -2082,7 +2087,7 @@ Return the analysis in this exact JSON format:
         const { data: updated, error: updateError } = await supabase.from("signals").update(update).eq("id", req.params.id).eq("is_active", true).select("*").maybeSingle();
         if (updateError) return res.status(500).json({ error: updateError.message });
         if (!updated) return res.status(409).json({ error: "Signal was already closed" });
-      await sendTelegramToVipAndFree(
+        await sendTelegramToVipAndFree(
           `🛡️ <b>4xFiveAI — BREAK-EVEN CLOSED</b> ✅\n\n`
           + `Pair: ${signal.pair}\n`
           + `Signal: ${signal.direction === "BUY" || signal.direction === "LONG" ? "🟢 BUY" : "🔴 SELL"}\n`
@@ -2090,7 +2095,6 @@ Return the analysis in this exact JSON format:
           + `Entry protected: ${signal.entry_price} 🛡️\n`
           + `Secured profit: +${securedPips.toFixed(1)} pips 💰\n`
           + `Remaining position: closed at break-even`,
-          process.env.TELEGRAM_VIP_CHAT_ID || undefined
         ).catch((telegramError) => console.error("[TELEGRAM] break-even notification failed:", telegramError));
         return res.json({ success: true, signal: updated });
       }
