@@ -35,6 +35,13 @@ interface AnalysisResult {
   newsBigMove?: boolean;
   tfStatus?: string;
   tfNote?: string;
+  liveValidation?: {
+    status: string;
+    pair: string | null;
+    livePrice: number | null;
+    updatedAt: string | null;
+    reason: string;
+  };
 }
 
 const ANALYSIS_STEPS = [
@@ -626,6 +633,24 @@ export default function ChartAnalyzer() {
                     : <span className="text-amber-300">🔄 Timeframes disagree ⚠️ — WAIT recommended</span>}
                 </p>
                 {result.tfNote && <p className="text-xs text-slate-400 mt-1">{result.tfNote}</p>}
+              </div>
+            )}
+
+            {result.liveValidation && (
+              <div className="rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-3.5">
+                <p className="text-sm font-bold text-cyan-200">
+                  cTrader DEMO validation: {result.liveValidation.status}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  {result.liveValidation.livePrice !== null
+                    ? `Live price: ${result.liveValidation.livePrice}`
+                    : result.liveValidation.reason}
+                </p>
+                {result.liveValidation.updatedAt && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Updated: {new Date(result.liveValidation.updatedAt).toLocaleTimeString()}
+                  </p>
+                )}
               </div>
             )}
 

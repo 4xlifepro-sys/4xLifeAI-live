@@ -1993,7 +1993,56 @@ Return the analysis in this exact JSON format:
         }
       }
 
-      res.json({ success: true, analysis });
+      const liveValidation: {
+        status: string;
+        pair: string | null;
+        livePrice: number | null;
+        updatedAt: string | null;
+        reason: string;
+      } = {
+        status: 'NOT_CONNECTED',
+        pair: String(analysis.instrument || '').trim().toUpperCase() || null,
+        livePrice: null,
+        updatedAt: null,
+        reason: 'cTrader live validation is not yet connected to screenshot analysis',
+      };
+      const livePair = normalizePair(liveValidation.pair || '');
+      if (APPROVED_PAIRS.includes(livePair)) {
+        try {
+          const liveModule: any = await import('./server/live-market-feed.js');
+          const live = await liveModule.getLatestPrice(livePair);
+          liveValidation.livePrice = Number.isFinite(Number(live?.price)) ? Number(live.price) : null;
+          liveValidation.updatedAt = live?.timestamp ? new Date(live.timestamp).toISOString() : null;
+          if (liveValidation.livePrice !== null) {
+            const ageSeconds = Math.max(0, (Date.now() - Number(live.timestamp || Date.now())) / 1000);
+            if (ageSeconds <= 90) {
+              liveValidation.status = 'CONNECTED';
+              liveValidation.reason = 'cTrader demo price received; screenshot analysis remains the source of direction';
+            } else {
+              liveValidation.status = 'STALE';
+              liveValidation.reason = `cTrader price is ${Math.round(ageSeconds)} seconds old`;
+            }
+          } else {
+            liveValidation.status = 'ERROR';
+            liveValidation.reason = live?.error || 'cTrader did not return a live price';
+          }
+        } catch (liveError: any) {
+          liveValidation.status = 'ERROR';
+          liveValidation.reason = liveError?.message || 'cTrader live validation failed';
+        }
+      } else {
+        liveValidation.status = 'WAITING';
+        liveValidation.reason = 'Pair was not readable or is not supported by cTrader validation';
+      }
+      console.log('[ChartAnalyzer] cTrader live validation', {
+        pair: liveValidation.pair,
+        status: liveValidation.status,
+        livePrice: liveValidation.livePrice,
+        updatedAt: liveValidation.updatedAt,
+        reason: liveValidation.reason,
+      });
+
+      res.json({ success: true, analysis: { ...analysis, liveValidation } });
     } catch (e: any) {
       let errorMessage = 'Failed to analyze chart';
       
