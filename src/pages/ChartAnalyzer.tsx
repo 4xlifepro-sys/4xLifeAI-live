@@ -638,19 +638,39 @@ export default function ChartAnalyzer() {
 
             {result.liveValidation && (
               <div className="rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-3.5">
+                {(() => {
+                  const updatedAt = result.liveValidation.updatedAt ? new Date(result.liveValidation.updatedAt) : null;
+                  const utcHour = updatedAt ? updatedAt.getUTCHours() + updatedAt.getUTCMinutes() / 60 : null;
+                  const session = utcHour === null
+                    ? null
+                    : utcHour >= 12 && utcHour < 16
+                      ? 'London / New York overlap'
+                      : utcHour >= 7 && utcHour < 12
+                        ? 'London'
+                        : utcHour >= 16 && utcHour < 21
+                          ? 'New York'
+                          : utcHour >= 0 && utcHour < 7
+                            ? 'Tokyo'
+                            : 'New York';
+                  return (
+                    <>
                 <p className="text-sm font-bold text-cyan-200">
-                  cTrader DEMO validation: {result.liveValidation.status}
+                  ForexLifeAI Live Market: {result.liveValidation.status}
                 </p>
                 <p className="mt-1 text-xs text-slate-300">
                   {result.liveValidation.livePrice !== null
-                    ? `Live price: ${result.liveValidation.livePrice}`
+                    ? `Current price: ${result.liveValidation.livePrice}`
                     : result.liveValidation.reason}
                 </p>
+                {session && <p className="mt-1 text-xs text-slate-300">Market session: {session}</p>}
                 {result.liveValidation.updatedAt && (
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Updated: {new Date(result.liveValidation.updatedAt).toLocaleTimeString()}
+                    Updated: {new Date(result.liveValidation.updatedAt).toLocaleTimeString()} GMT+3
                   </p>
                 )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 
