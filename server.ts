@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from "express";
+import { buildHistoricalTargetPlan, calculateRr } from "./server/target-structure.js";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -2034,15 +2035,62 @@ Return the analysis in this exact JSON format:
         liveValidation.status = 'WAITING';
         liveValidation.reason = 'Pair was not readable or is not supported by cTrader validation';
       }
+      let targetValidation: any = {
+        status: 'WAITING',
+        tp1: null,
+        tp2: null,
+        tp3: null,
+        reasons: ['Target validation not completed.'],
+      };
+      const direction = String(analysis.trade || '').toUpperCase();
+      const entry = Number(analysis.entry);
+      const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
+      const tp1Candidate = Number(analysis.tp1);
+      if ((direction === 'BUY' || direction === 'SELL') && Number.isFinite(entry) && Number.isFinite(stopLoss) && Number.isFinite(tp1Candidate)) {
+        const liveModule: any = await import('./server/live-market-feed.js');
+        const historicalCandles = await liveModule.fetchCandles(livePair, '1h');
+        const tp1Rr = calculateRr(direction, entry, stopLoss, tp1Candidate);
+        const plan = buildHistoricalTargetPlan(
+          historicalCandles || [],
+          direction,
+          entry,
+          stopLoss,
+          tp1Candidate,
+        );
+        const tp1 = tp1Rr === null ? null : {
+          price: tp1Candidate,
+          source: 'uploaded screenshot structure',
+          rr: tp1Rr,
+        };
+        const reasons = [...plan.reasons];
+        if (!tp1) reasons.push('Screenshot TP1 is invalid or directionally inconsistent.');
+        if (tp1 && tp1.rr < 1) reasons.push('TP1 is below the minimum acceptable 1R.');
+        if (!plan.tp2) reasons.push('A valid cTrader 1H TP2 target was not found.');
+        if (!plan.tp3) reasons.push('A valid cTrader 1H TP3 target at 3R or higher was not found.');
+        targetValidation = {
+          status: tp1 && tp1.rr >= 1 && plan.tp2 && plan.tp3 ? 'READY' : 'WAITING',
+          tp1,
+          tp2: plan.tp2,
+          tp3: plan.tp3,
+          historicalTimeframe: '1H',
+          reasons: [...new Set(reasons)],
+        };
+      }
+      if (targetValidation.status !== 'READY' && direction !== 'WAIT') {
+        analysis.trade = 'WAIT';
+        analysis.warnings = `${targetValidation.reasons.join(' ')} ${analysis.warnings || ''}`.trim();
+      }
+
       console.log('[ChartAnalyzer] cTrader live validation', {
         pair: liveValidation.pair,
         status: liveValidation.status,
         livePrice: liveValidation.livePrice,
         updatedAt: liveValidation.updatedAt,
         reason: liveValidation.reason,
+        targetValidation,
       });
 
-      res.json({ success: true, analysis: { ...analysis, liveValidation } });
+      res.json({ success: true, analysis: { ...analysis, liveValidation, targetValidation } });
     } catch (e: any) {
       let errorMessage = 'Failed to analyze chart';
       

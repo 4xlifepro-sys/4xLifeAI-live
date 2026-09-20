@@ -8,10 +8,11 @@ const HTF_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 let ctClient: any = null;
 let connectingPromise: Promise<any> | null = null;
 
-function getPeriod(interval: '1min' | '5min' | '15min' | '4h') {
+function getPeriod(interval: '1min' | '5min' | '15min' | '1h' | '4h') {
   if (interval === '1min') return TrendbarPeriod.M1;
   if (interval === '5min') return TrendbarPeriod.M5;
   if (interval === '15min') return TrendbarPeriod.M15;
+  if (interval === '1h') return TrendbarPeriod.H1;
   return TrendbarPeriod.H4;
 }
 
@@ -152,7 +153,7 @@ export async function getLatestPrice(pair: string): Promise<{ pair: string; pric
   }
 }
 
-export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15min' | '4h'): Promise<Candle[] | null> {
+export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15min' | '1h' | '4h'): Promise<Candle[] | null> {
   if (interval === '4h' && htfCache[pair] && (Date.now() - htfCache[pair].timestamp < HTF_CACHE_TTL)) {
       return htfCache[pair].data;
   }

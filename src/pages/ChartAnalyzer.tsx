@@ -42,6 +42,14 @@ interface AnalysisResult {
     updatedAt: string | null;
     reason: string;
   };
+  targetValidation?: {
+    status: string;
+    historicalTimeframe?: string;
+    tp1: { price: number; source: string; rr: number } | null;
+    tp2: { price: number; source: string; rr: number } | null;
+    tp3: { price: number; source: string; rr: number } | null;
+    reasons: string[];
+  };
 }
 
 const ANALYSIS_STEPS = [
@@ -671,6 +679,26 @@ export default function ChartAnalyzer() {
                     </>
                   );
                 })()}
+              </div>
+            )}
+
+            {result.targetValidation && (
+              <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 px-5 py-4">
+                <p className="text-sm font-bold text-violet-200">
+                  Target structure: {result.targetValidation.status === 'READY' ? 'READY' : 'WAITING'}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  TP1: {result.targetValidation.tp1 ? `${result.targetValidation.tp1.price} (${result.targetValidation.tp1.rr.toFixed(2)}R) — screenshot structure` : 'not validated'}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  TP2: {result.targetValidation.tp2 ? `${result.targetValidation.tp2.price} (${result.targetValidation.tp2.rr.toFixed(2)}R) — 1H historical structure` : 'not available'}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  TP3: {result.targetValidation.tp3 ? `${result.targetValidation.tp3.price} (${result.targetValidation.tp3.rr.toFixed(2)}R) — 1H historical structure` : 'not available'}
+                </p>
+                {result.targetValidation.reasons.length > 0 && (
+                  <p className="mt-2 text-xs text-amber-200">{result.targetValidation.reasons.join(' ')}</p>
+                )}
               </div>
             )}
 
