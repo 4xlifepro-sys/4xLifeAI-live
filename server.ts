@@ -2048,7 +2048,7 @@ Return the analysis in this exact JSON format:
       const tp1Candidate = Number(analysis.tp1);
       if ((direction === 'BUY' || direction === 'SELL') && Number.isFinite(entry) && Number.isFinite(stopLoss) && Number.isFinite(tp1Candidate)) {
         const liveModule: any = await import('./server/live-market-feed.js');
-        const historicalCandles = await liveModule.fetchCandles(livePair, '1h');
+        const historicalCandles = await liveModule.fetchHistoricalCandles(livePair, '1h', 240);
         const tp1Rr = calculateRr(direction, entry, stopLoss, tp1Candidate);
         const plan = buildHistoricalTargetPlan(
           historicalCandles || [],
@@ -2078,6 +2078,7 @@ Return the analysis in this exact JSON format:
       }
       if (targetValidation.status !== 'READY' && direction !== 'WAIT') {
         analysis.trade = 'WAIT';
+        analysis.status = 'WAITING';
         analysis.warnings = `${targetValidation.reasons.join(' ')} ${analysis.warnings || ''}`.trim();
       }
 

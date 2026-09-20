@@ -197,7 +197,7 @@ export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15
  */
 export async function fetchHistoricalCandles(
   pair: string,
-  interval: '5min' | '4h',
+  interval: '5min' | '15min' | '1h' | '4h',
   count: number
 ): Promise<Candle[] | null> {
   try {
