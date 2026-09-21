@@ -706,18 +706,22 @@ export default function ChartAnalyzer() {
 
             <div className={cn(
               "rounded-2xl border px-5 py-4",
-              result.status === 'WAITING' || result.trade.toUpperCase() === 'WAIT'
+              result.trade.toUpperCase() === 'WAIT' && Number(result.confidence) < 65
                 ? "border-amber-400/30 bg-amber-500/10"
                 : "border-emerald-400/30 bg-emerald-500/10"
             )}>
               <p className="text-sm font-bold text-white">
-                Decision: {result.status === 'WAITING' || result.trade.toUpperCase() === 'WAIT'
+                Decision: {result.trade.toUpperCase() === 'WAIT' && Number(result.confidence) < 65
                   ? 'WAITING'
+                  : result.trade.toUpperCase() === 'WAIT'
+                    ? 'PLANNED — WAIT FOR TRIGGER'
                   : (result.entryType || `IMMEDIATE ${result.trade.toUpperCase()}`)}
               </p>
               <p className="mt-1 text-xs text-slate-300">
-                {result.status === 'WAITING' || result.trade.toUpperCase() === 'WAIT'
-                  ? 'The setup is not ready to enter now. A stop entry requires a confirmed candle close beyond the trigger.'
+                {result.trade.toUpperCase() === 'WAIT' && Number(result.confidence) < 65
+                  ? 'The setup is below the minimum confidence threshold and is not ready.'
+                  : result.trade.toUpperCase() === 'WAIT'
+                    ? 'The setup is strong enough to plan, but wait for the specified trigger before entering.'
                   : 'The setup is confirmed and the live price is still close enough to the valid entry.'}
               </p>
             </div>

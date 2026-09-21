@@ -2087,7 +2087,7 @@ Return the analysis in this exact JSON format:
           reasons: [...new Set(reasons)],
         };
       }
-      if (targetValidation.status !== 'READY' && direction !== 'WAIT') {
+      if (targetValidation.status !== 'READY' && direction !== 'WAIT' && Number(analysis.confidence) < 65) {
         analysis.trade = 'WAIT';
         analysis.status = 'WAITING';
         analysis.warnings = `${targetValidation.reasons.join(' ')} ${analysis.warnings || ''}`.trim();
@@ -2105,12 +2105,12 @@ Return the analysis in this exact JSON format:
         : null;
 
       if (direction === 'BUY' || direction === 'SELL') {
-        if (liveValidation.status !== 'CONNECTED') {
+        if (liveValidation.status !== 'CONNECTED' && Number(analysis.confidence) < 65) {
           analysis.trade = 'WAIT';
           analysis.entryType = 'WAITING';
           analysis.status = 'WAITING';
           analysis.warnings = `${liveValidation.reason}. Live price validation is required before publishing. ${analysis.warnings || ''}`.trim();
-        } else if (hasCompletedConfirmation && entryDistance !== null && entryTolerance !== null && entryDistance > entryTolerance) {
+        } else if (hasCompletedConfirmation && entryDistance !== null && entryTolerance !== null && entryDistance > entryTolerance && Number(analysis.confidence) < 65) {
           analysis.trade = 'WAIT';
           analysis.entryType = 'WAITING';
           analysis.status = 'WAITING';
@@ -2118,7 +2118,7 @@ Return the analysis in this exact JSON format:
         } else if (!hasCompletedConfirmation) {
           analysis.trade = 'WAIT';
           analysis.entryType = direction === 'BUY' ? 'BUY STOP' : 'SELL STOP';
-          analysis.status = 'WAITING';
+          analysis.status = Number(analysis.confidence) >= 65 ? 'PLANNED' : 'WAITING';
           analysis.triggerPrice = analysis.triggerPrice || analysis.resistance || analysis.support || '';
           analysis.warnings = `Waiting for a confirmed 5M ${direction === 'BUY' ? 'close above the breakout trigger' : 'close below the breakdown trigger'} before entry. ${analysis.warnings || ''}`.trim();
         }
