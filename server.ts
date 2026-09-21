@@ -1838,7 +1838,7 @@ Determine:
 7. Entry Type (BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL)
 8. Entry Price (see entry-type rule below)
 8. Stop Loss (beyond nearest swing)
-9. TP1, TP2, TP3 (logical levels, TP1 min 1:1.5 RR)
+9. TP1, TP2, TP3 (logical levels, TP1 RR must be between 1R and 1.5R)
 10. Risk:Reward ratio
 11. Confidence Score (0-80%) — never return more than 80
 12. Reasoning (why this trade exists)
@@ -2076,10 +2076,11 @@ Return the analysis in this exact JSON format:
         const reasons = [...plan.reasons];
         if (!tp1) reasons.push('Screenshot TP1 is invalid or directionally inconsistent.');
         if (tp1 && tp1.rr < 1) reasons.push('TP1 is below the minimum acceptable 1R.');
+        if (tp1 && tp1.rr > 1.5) reasons.push('TP1 is above the maximum acceptable 1.5R; select the nearest valid structure target.');
         if (!plan.tp2) reasons.push('A valid cTrader 1H TP2 target was not found.');
         if (!plan.tp3) reasons.push('A valid cTrader 1H TP3 target at 3R or higher was not found.');
         targetValidation = {
-          status: tp1 && tp1.rr >= 1 && plan.tp2 && plan.tp3 ? 'READY' : 'WAITING',
+          status: tp1 && tp1.rr >= 1 && tp1.rr <= 1.5 && plan.tp2 && plan.tp3 ? 'READY' : 'WAITING',
           tp1,
           tp2: plan.tp2,
           tp3: plan.tp3,
