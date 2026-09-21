@@ -2087,7 +2087,7 @@ Return the analysis in this exact JSON format:
           reasons: [...new Set(reasons)],
         };
       }
-      if (targetValidation.status !== 'READY' && direction !== 'WAIT' && Number(analysis.confidence) < 65) {
+      if (targetValidation.status !== 'READY' && direction !== 'WAIT') {
         analysis.trade = 'WAIT';
         analysis.status = 'WAITING';
         analysis.warnings = `${targetValidation.reasons.join(' ')} ${analysis.warnings || ''}`.trim();
@@ -2116,7 +2116,6 @@ Return the analysis in this exact JSON format:
           analysis.status = 'WAITING';
           analysis.warnings = `The confirmed move is too far from the valid entry; do not chase it. Wait for a new setup. ${analysis.warnings || ''}`.trim();
         } else if (!hasCompletedConfirmation) {
-          analysis.trade = 'WAIT';
           analysis.entryType = direction === 'BUY' ? 'BUY STOP' : 'SELL STOP';
           analysis.status = Number(analysis.confidence) >= 65 ? 'PLANNED' : 'WAITING';
           analysis.triggerPrice = analysis.triggerPrice || analysis.resistance || analysis.support || '';
