@@ -1835,7 +1835,8 @@ Determine:
 4. Momentum (Strong/Weak/Exhausted)
 5. Setup Quality (Breakout/Pullback/Rejection/Continuation)
 6. Trade Decision (BUY/SELL/WAIT)
-7. Entry Price (see IMMEDIATE ENTRY RULE below)
+7. Entry Type (BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL)
+8. Entry Price (see entry-type rule below)
 8. Stop Loss (beyond nearest swing)
 9. TP1, TP2, TP3 (logical levels, TP1 min 1:1.5 RR)
 10. Risk:Reward ratio
@@ -1873,7 +1874,8 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
-- IMMEDIATE ENTRY RULE: when trade is BUY or SELL, the signal is meant to be executed NOW — entry MUST be the current market price (the last traded price at the right edge of the chart), NOT a future pullback or resistance level. Set SL and TPs relative to that current price. Only quote a pullback/zone entry when the trade decision is WAIT (e.g. "sell limit at resistance if price returns").
+- ENTRY TYPE RULE: use BUY STOP or SELL STOP when the setup is valid but the breakout/breakdown close has not happened. Use IMMEDIATE BUY or IMMEDIATE SELL only when the screenshot or entry-timeframe evidence shows a completed directional close and live price remains near the valid entry. A wick, touch, bias, or confidence score is not confirmation.
+- IMMEDIATE ENTRY RULE: when confirmation is complete, entry MUST be the current market price. For an unconfirmed setup, use WAIT with a BUY STOP or SELL STOP entry type and a visible trigger level.
 - Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
 - ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades
 - For WAIT trades, still show hypothetical levels based on nearest swing points
@@ -1889,6 +1891,8 @@ Return the analysis in this exact JSON format:
   "support": "price level",
   "resistance": "price level",
   "trade": "BUY/SELL/WAIT",
+  "entryType": "BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL/WAITING",
+  "triggerPrice": "price or empty",
   "entry": "price",
   "stopLoss": "price",
   "tp1": "price",
@@ -1992,6 +1996,13 @@ Return the analysis in this exact JSON format:
           analysis.trade = 'WAIT';
           analysis.warnings = `Confidence below 65 — setup is too weak to publish. ${analysis.warnings || ''}`;
         }
+        const trade = String(analysis.trade || '').toUpperCase();
+        const entryType = String(analysis.entryType || '').toUpperCase();
+        analysis.entryType = trade === 'BUY'
+          ? (entryType === 'IMMEDIATE BUY' || entryType === 'BUY STOP' ? entryType : 'BUY STOP')
+          : trade === 'SELL'
+            ? (entryType === 'IMMEDIATE SELL' || entryType === 'SELL STOP' ? entryType : 'SELL STOP')
+            : 'WAITING';
       }
 
       const liveValidation: {
@@ -2081,6 +2092,44 @@ Return the analysis in this exact JSON format:
         analysis.status = 'WAITING';
         analysis.warnings = `${targetValidation.reasons.join(' ')} ${analysis.warnings || ''}`.trim();
       }
+
+      const requestedEntryType = String(analysis.entryType || '').toUpperCase();
+      const hasCompletedConfirmation = requestedEntryType === 'IMMEDIATE BUY' || requestedEntryType === 'IMMEDIATE SELL';
+      const livePrice = liveValidation.livePrice;
+      const numericEntry = Number(analysis.entry);
+      const entryDistance = Number.isFinite(livePrice) && Number.isFinite(numericEntry)
+        ? Math.abs(livePrice - numericEntry)
+        : null;
+      const entryTolerance = Number.isFinite(numericEntry)
+        ? Math.max(Math.abs(numericEntry) * 0.0015, 0.0001)
+        : null;
+
+      if (direction === 'BUY' || direction === 'SELL') {
+        if (liveValidation.status !== 'CONNECTED') {
+          analysis.trade = 'WAIT';
+          analysis.entryType = 'WAITING';
+          analysis.status = 'WAITING';
+          analysis.warnings = `${liveValidation.reason}. Live price validation is required before publishing. ${analysis.warnings || ''}`.trim();
+        } else if (hasCompletedConfirmation && entryDistance !== null && entryTolerance !== null && entryDistance > entryTolerance) {
+          analysis.trade = 'WAIT';
+          analysis.entryType = 'WAITING';
+          analysis.status = 'WAITING';
+          analysis.warnings = `The confirmed move is too far from the valid entry; do not chase it. Wait for a new setup. ${analysis.warnings || ''}`.trim();
+        } else if (!hasCompletedConfirmation) {
+          analysis.trade = 'WAIT';
+          analysis.entryType = direction === 'BUY' ? 'BUY STOP' : 'SELL STOP';
+          analysis.status = 'WAITING';
+          analysis.triggerPrice = analysis.triggerPrice || analysis.resistance || analysis.support || '';
+          analysis.warnings = `Waiting for a confirmed 5M ${direction === 'BUY' ? 'close above the breakout trigger' : 'close below the breakdown trigger'} before entry. ${analysis.warnings || ''}`.trim();
+        }
+      } else {
+        analysis.entryType = 'WAITING';
+        analysis.status = 'WAITING';
+      }
+
+      analysis.entry = liveValidation.status === 'CONNECTED' && hasCompletedConfirmation
+        ? liveValidation.livePrice
+        : analysis.entry;
 
       console.log('[ChartAnalyzer] cTrader live validation', {
         pair: liveValidation.pair,

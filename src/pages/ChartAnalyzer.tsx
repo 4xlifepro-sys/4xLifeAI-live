@@ -18,6 +18,8 @@ interface AnalysisResult {
   support: string;
   resistance: string;
   trade: string;
+  status?: string;
+  entryType?: string;
   entry: string;
   stopLoss: string;
   tp1: string;
@@ -701,6 +703,24 @@ export default function ChartAnalyzer() {
                 )}
               </div>
             )}
+
+            <div className={cn(
+              "rounded-2xl border px-5 py-4",
+              result.status === 'WAITING' || result.trade.toUpperCase() === 'WAIT'
+                ? "border-amber-400/30 bg-amber-500/10"
+                : "border-emerald-400/30 bg-emerald-500/10"
+            )}>
+              <p className="text-sm font-bold text-white">
+                Decision: {result.status === 'WAITING' || result.trade.toUpperCase() === 'WAIT'
+                  ? 'WAITING'
+                  : (result.entryType || `IMMEDIATE ${result.trade.toUpperCase()}`)}
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                {result.status === 'WAITING' || result.trade.toUpperCase() === 'WAIT'
+                  ? 'The setup is not ready to enter now. A stop entry requires a confirmed candle close beyond the trigger.'
+                  : 'The setup is confirmed and the live price is still close enough to the valid entry.'}
+              </p>
+            </div>
 
             {/* Reasoning & Warnings */}
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">
