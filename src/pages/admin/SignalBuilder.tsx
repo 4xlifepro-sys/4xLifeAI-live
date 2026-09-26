@@ -13,6 +13,7 @@ const STRATEGIES = ['Classic V', 'Classic A'];
 const DIRECTIONS = ['BUY', 'SELL'];
 const OCL_OPTIONS = ['OCL Support', 'OCL Resistance'];
 const TP_MULTIPLES = [
+  { label: '1R', value: 1 },
   { label: '2.1R', value: 2.1 },
   { label: '3.1R', value: 3.1 },
   { label: '4.1R', value: 4.1 },
