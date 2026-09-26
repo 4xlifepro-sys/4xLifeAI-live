@@ -1,6 +1,12 @@
 import 'dotenv/config';
 import express from "express";
 import { buildHistoricalTargetPlan, calculateRr } from "./server/target-structure.js";
+import {
+  publishBuiltSignal,
+  listDrafts,
+  saveDraft,
+  deleteDraft,
+} from "./server/signal-builder.js";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -1100,6 +1106,8 @@ async function startServer() {
         tp1: d.tp1,
         tp2: d.tp2,
         tp3: d.tp3,
+        tp4: d.tp4,
+        tp5: d.tp5,
         news_event: d.news_event,
         news_impact: d.news_impact,
         news_time: d.news_time,
@@ -1157,6 +1165,8 @@ async function startServer() {
         tp1: d.tp1,
         tp2: d.tp2,
         tp3: d.tp3,
+        tp4: d.tp4,
+        tp5: d.tp5,
         confidence: d.confidence,
         aiConfidence: (d.confidence || 0) * 10,
         score: d.score || d.confidence,
@@ -2203,6 +2213,55 @@ Return the analysis in this exact JSON format:
     } catch (e: any) {
       console.error('[manual-signal/send] error:', e);
       res.status(500).json({ error: e.message || 'Failed to publish manual signal' });
+    }
+  });
+
+  // Admin Signal Builder routes
+  app.get("/api/admin/signal-builder/drafts", requireAdmin, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await listDrafts(String(user?.email || ''));
+      if (!result.ok) return res.status(500).json({ error: result.error });
+      res.json({ success: true, drafts: result.drafts });
+    } catch (e: any) {
+      console.error('[signal-builder/drafts] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to load drafts' });
+    }
+  });
+
+  app.post("/api/admin/signal-builder/drafts", requireAdmin, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await saveDraft(String(user?.email || ''), req.body);
+      if (!result.ok) return res.status(500).json({ error: result.error });
+      res.json({ success: true, draft: result.draft });
+    } catch (e: any) {
+      console.error('[signal-builder/drafts save] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to save draft' });
+    }
+  });
+
+  app.delete("/api/admin/signal-builder/drafts/:id", requireAdmin, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await deleteDraft(req.params.id, String(user?.email || ''));
+      if (!result.ok) return res.status(500).json({ error: result.error });
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[signal-builder/drafts delete] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to delete draft' });
+    }
+  });
+
+  app.post("/api/admin/signal-builder/publish", requireAdmin, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const result = await publishBuiltSignal(req.body, String(user?.email || ''));
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      res.json({ success: true, signal: result.signal });
+    } catch (e: any) {
+      console.error('[signal-builder/publish] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to publish signal' });
     }
   });
 

@@ -6,6 +6,7 @@ import {
   Send, Award, ShieldAlert, RefreshCw, Check, X, ExternalLink, 
   CircleDollarSign, Database, Play, Activity, LayoutList, Cpu,
   Upload, Image as ImageIcon, TrendingUp, TrendingDown, AlertTriangle,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../components/ConfirmDialog';
@@ -43,6 +44,7 @@ interface PayoutRequest {
 const TABS = [
   { id: 'analytics', label: 'ANALYTICS', icon: BarChart2 },
   { id: 'manual-signal', label: 'SEND SIGNAL', icon: Send },
+  { id: 'signal-builder', label: 'SIGNAL BUILDER', icon: SlidersHorizontal },
   { id: 'users', label: 'USERS', icon: Users },
   { id: 'plans', label: 'PLANS', icon: LayoutList },
   { id: 'payments', label: 'PAYMENTS', icon: CreditCard },
@@ -56,6 +58,7 @@ const TABS = [
 ];
 
 import PlansManager from './admin/PlansManager';
+import SignalBuilder from './admin/SignalBuilder';
 
 export default function Admin() {
   const dialog = useDialog();
@@ -1593,6 +1596,7 @@ export default function Admin() {
           <div className="pb-10">
             {activeTab === 'analytics' && renderAnalyticsTab()}
             {activeTab === 'manual-signal' && renderManualSignalTab()}
+            {activeTab === 'signal-builder' && <SignalBuilder />}
             {activeTab === 'users' && renderUsersTab()}
             {activeTab === 'plans' && <PlansManager />}
             {activeTab === 'payments' && renderPaymentsTab()}
@@ -1604,7 +1608,7 @@ export default function Admin() {
             {activeTab === 'limits' && renderLimitsTab()}
             
             {/* Placeholder for un-implemented tabs */}
-            {!['analytics', 'users', 'plans', 'payments', 'signals', 'referrals', 'tickets', 'history', 'prompts', 'limits'].includes(activeTab) && (
+            {!['analytics', 'manual-signal', 'signal-builder', 'users', 'plans', 'payments', 'signals', 'referrals', 'tickets', 'history', 'prompts', 'limits'].includes(activeTab) && (
               <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-12 text-center shadow-sm">
                 <ShieldAlert className="w-12 h-12 text-[#202735] mx-auto mb-4" />
                 <h3 className="text-white text-lg font-bold tracking-widest uppercase mb-2">{TABS.find(t=>t.id === activeTab)?.label} Module</h3>

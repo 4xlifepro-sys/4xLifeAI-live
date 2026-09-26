@@ -54,13 +54,16 @@ export default function TodaySignals() {
   }, []);
 
   const handleCopy = (signal: any) => {
+    const tpLines = [1, 2, 3, 4, 5]
+      .map((i) => ({ key: `TP${i}`, value: signal[`tp${i}`] }))
+      .filter((item) => item.value != null)
+      .map((item) => `${item.key}: ${item.value}`)
+      .join('\n');
     const text = `PAIR: ${signal.pair}
 DIRECTION: ${signal.direction}
 ENTRY: ${signal.entry}
 SL: ${signal.sl}
-TP1: ${signal.tp1}
-TP2: ${signal.tp2}
-TP3: ${signal.tp3}
+${tpLines}
 CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
     
     navigator.clipboard.writeText(text);
@@ -258,18 +261,16 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">Stop Loss</p>
                     {renderCopyableValue(`${signal.id}:sl`, signal.sl, "text-[#FF4D6D]")}
                   </div>
-                  <div>
-                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP1 (1:1.5)</p>
-                    {renderCopyableValue(`${signal.id}:tp1`, signal.tp1, "text-[#00E08A]")}
-                  </div>
-                  <div>
-                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP2 (1:3)</p>
-                    {renderCopyableValue(`${signal.id}:tp2`, signal.tp2, "text-[#00E08A]")}
-                  </div>
-                  <div>
-                    <p className="text-[#5D6B80] text-xs font-medium mb-1">TP3 (1:5)</p>
-                    {renderCopyableValue(`${signal.id}:tp3`, signal.tp3, "text-[#00E08A]")}
-                  </div>
+                  {[1, 2, 3, 4, 5].map((i) => {
+                    const price = (signal as any)[`tp${i}`];
+                    if (price == null) return null;
+                    return (
+                      <div key={i}>
+                        <p className="text-[#5D6B80] text-xs font-medium mb-1">TP{i}</p>
+                        {renderCopyableValue(`${signal.id}:tp${i}`, price, "text-[#00E08A]")}
+                      </div>
+                    );
+                  })}
                   <div>
                     <p className="text-[#5D6B80] text-xs font-medium mb-1">Confidence</p>
                     <p className="text-[#F5A524] font-medium">{signal.aiConfidence ? `${signal.aiConfidence}%` : '-'}</p>
