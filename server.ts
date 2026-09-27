@@ -6,6 +6,9 @@ import {
   listDrafts,
   saveDraft,
   deleteDraft,
+  listAdminSignals,
+  calculateConfidence,
+  generateReason,
 } from "./server/signal-builder.js";
 import path from "path";
 import fs from "fs";
@@ -2253,6 +2256,17 @@ Return the analysis in this exact JSON format:
     }
   });
 
+  app.post("/api/admin/signal-builder/preview", requireAdmin, async (req, res) => {
+    try {
+      const { score, breakdown } = calculateConfidence(req.body);
+      const reason = generateReason(req.body);
+      res.json({ success: true, confidence: score, breakdown, reason });
+    } catch (e: any) {
+      console.error('[signal-builder/preview] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to preview' });
+    }
+  });
+
   app.post("/api/admin/signal-builder/publish", requireAdmin, async (req, res) => {
     try {
       const user = (req as any).user;
@@ -2262,6 +2276,17 @@ Return the analysis in this exact JSON format:
     } catch (e: any) {
       console.error('[signal-builder/publish] error:', e);
       res.status(500).json({ error: e.message || 'Failed to publish signal' });
+    }
+  });
+
+  app.get("/api/admin/signal-builder/history", requireAdmin, async (req, res) => {
+    try {
+      const result = await listAdminSignals(200);
+      if (!result.ok) return res.status(500).json({ error: result.error });
+      res.json({ success: true, signals: result.signals });
+    } catch (e: any) {
+      console.error('[signal-builder/history] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to load history' });
     }
   });
 

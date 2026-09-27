@@ -87,3 +87,20 @@ CREATE TABLE IF NOT EXISTS public.signal_drafts (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
     updated_at timestamp with time zone DEFAULT timezone('utc'::text, now())
 );
+
+-- 8. New manual analysis fields on signals
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS timeframe text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS market_structure text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS liquidity text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS asian_high_low text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS trade_type text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS asian_reaction text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS confirmation_mss boolean DEFAULT false;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS confirmation_ocl boolean DEFAULT false;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS confirmation_qml boolean DEFAULT false;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS confirmation_rbs boolean DEFAULT false;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS confirmation_sbr boolean DEFAULT false;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS auto_confidence integer;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS auto_confidence_breakdown jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS auto_reason text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS admin_email text;
