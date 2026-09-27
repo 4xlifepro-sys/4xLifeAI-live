@@ -501,8 +501,8 @@ export default function SignalBuilder() {
             <div className="space-y-2">
               <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">Entry</label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 value={analysis.entry}
                 onChange={(e) => updateAnalysis({ entry: e.target.value })}
                 placeholder="0.00000"
@@ -512,8 +512,8 @@ export default function SignalBuilder() {
             <div className="space-y-2">
               <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">SL</label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 value={analysis.sl}
                 onChange={(e) => updateAnalysis({ sl: e.target.value })}
                 placeholder="0.00000"
