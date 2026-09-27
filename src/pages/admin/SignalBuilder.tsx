@@ -3,7 +3,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
   SlidersHorizontal, Save, Send, X, Trash2, Loader2, CheckCircle2, AlertTriangle,
-  Copy, Check, RotateCcw, History, ChevronDown, ChevronUp, Eye,
+  Copy, Check, RotateCcw, History, ChevronDown, ChevronUp, Eye, Newspaper,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -75,6 +75,14 @@ interface Draft {
   updated_at: string;
 }
 
+interface NewsPrediction {
+  newsHasEvent: boolean;
+  newsEvent: string;
+  newsPrediction: 'BUY' | 'SELL' | 'NEUTRAL';
+  newsProbability: number;
+  newsReason: string;
+}
+
 interface HistorySignal {
   id: string;
   pair: string;
@@ -99,6 +107,10 @@ interface HistorySignal {
   confirmation_rbs: boolean;
   confirmation_sbr: boolean;
   auto_reason: string;
+  news_event?: string;
+  news_prediction?: string;
+  news_probability?: number;
+  news_reason?: string;
 }
 
 function formatPrice(value: number, pair: string): string {
@@ -162,6 +174,11 @@ export default function SignalBuilder() {
   const [message, setMessage] = useState('');
   const [copiedAll, setCopiedAll] = useState(false);
 
+  const [newsEnabled, setNewsEnabled] = useState(false);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsPrediction, setNewsPrediction] = useState<NewsPrediction | null>(null);
+  const [newsError, setNewsError] = useState('');
+
   const { pair, direction, entry, sl } = analysis;
   const numericEntry = Number(entry);
   const numericSlRaw = Number(sl);
@@ -177,10 +194,45 @@ export default function SignalBuilder() {
 
   const numericSl = effectiveSl;
 
+  const finalConfidence = useMemo(() => {
+    let base = confidence;
+    if (newsEnabled && newsPrediction?.newsHasEvent) {
+      if (newsPrediction.newsPrediction === direction) base += 5;
+      else if (newsPrediction.newsPrediction !== 'NEUTRAL') base -= 5;
+    }
+    return Math.max(0, Math.min(80, base));
+  }, [confidence, newsEnabled, newsPrediction, direction]);
+
   useEffect(() => {
-    fetchDrafts();
-    fetchHistory();
-  }, []);
+    if (!newsEnabled || !direction || !pair) {
+      setNewsPrediction(null);
+      setNewsError('');
+      return;
+    }
+    setNewsLoading(true);
+    setNewsError('');
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetch('/api/admin/signal-builder/news-predict', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ pair, direction, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.success) throw new Error(data.error || 'News prediction failed');
+          setNewsPrediction(data.prediction);
+        })
+        .catch((e: any) => {
+          setNewsError(e.message || 'News prediction failed');
+          setNewsPrediction(null);
+        })
+        .finally(() => setNewsLoading(false));
+    });
+  }, [newsEnabled, pair, direction]);
+
 
   useEffect(() => {
     const payload = buildPayload();
@@ -292,9 +344,16 @@ export default function SignalBuilder() {
     entry: numericEntry,
     sl: numericSl,
     tpMultiples: Array.from(selectedMultiples),
-    confidence,
+    confidence: finalConfidence,
     autoReason: reason,
     autoConfidenceBreakdown: breakdown,
+    news: newsEnabled && newsPrediction ? {
+      newsHasEvent: newsPrediction.newsHasEvent,
+      newsEvent: newsPrediction.newsEvent,
+      newsPrediction: newsPrediction.newsPrediction,
+      newsProbability: newsPrediction.newsProbability,
+      newsReason: newsPrediction.newsReason,
+    } : undefined,
   });
 
   const resetForm = () => {
@@ -302,6 +361,9 @@ export default function SignalBuilder() {
     setSelectedMultiples(new Set([1, 2.1, 3.1, 4.1]));
     setSlMode('price');
     setSlPips('');
+    setNewsEnabled(false);
+    setNewsPrediction(null);
+    setNewsError('');
     setStatus('idle');
     setMessage('');
   };
@@ -407,7 +469,7 @@ export default function SignalBuilder() {
       `Entry: ${formatPrice(numericEntry, pair)}`,
       `SL: ${formatPrice(numericSl, pair)}`,
       ...selectedTps.map((tp, i) => `TP${i + 1}: ${formatPrice(tp.price, pair)}`),
-      `Confidence: ${confidence}/100`,
+      `Confidence: ${finalConfidence}/100`,
       '',
       reason,
     ];
@@ -624,11 +686,91 @@ export default function SignalBuilder() {
             </div>
           </div>
 
+          {/* News analysis */}
+          <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Newspaper className={cn('w-4 h-4', newsEnabled ? 'text-[#00E08A]' : 'text-[#8A95A5]')} />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">News Analysis</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewsEnabled((v) => !v)}
+                className={cn(
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  newsEnabled ? 'bg-[#00E08A]' : 'bg-[#202735]'
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                    newsEnabled ? 'translate-x-6' : 'translate-x-1'
+                  )}
+                />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#8A95A5]">
+              When enabled, Gemini checks the Forex Factory calendar for high-impact events affecting this pair and adjusts confidence if the predicted news bias aligns or conflicts with the trade direction.
+            </p>
+
+            {newsEnabled && (
+              <div className="space-y-3">
+                {newsLoading && (
+                  <div className="flex items-center gap-2 text-sm text-[#8A95A5]">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#00E08A]" />
+                    Checking economic calendar...
+                  </div>
+                )}
+
+                {newsError && !newsLoading && (
+                  <div className="rounded-xl p-3 text-xs font-bold flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400">
+                    <AlertTriangle className="w-4 h-4" />
+                    {newsError}
+                  </div>
+                )}
+
+                {!newsLoading && newsPrediction?.newsHasEvent && (
+                  <div className="bg-[#11141A] rounded-xl p-4 border border-[#202735] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#8A95A5]">Upcoming event</span>
+                      <span className="text-xs font-bold text-[#F5A524]">{newsPrediction.newsEvent}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#8A95A5]">News bias</span>
+                      <span className={cn(
+                        'text-xs font-bold uppercase',
+                        newsPrediction.newsPrediction === direction ? 'text-[#00E08A]' : newsPrediction.newsPrediction === 'NEUTRAL' ? 'text-[#8A95A5]' : 'text-red-400'
+                      )}>
+                        {newsPrediction.newsPrediction} ({newsPrediction.newsProbability}%)
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#8A95A5]">{newsPrediction.newsReason}</p>
+                    {direction && newsPrediction.newsPrediction !== 'NEUTRAL' && (
+                      <div className={cn(
+                        'text-xs font-bold',
+                        newsPrediction.newsPrediction === direction ? 'text-[#00E08A]' : 'text-red-400'
+                      )}>
+                        Confidence {newsPrediction.newsPrediction === direction ? '+5' : '-5'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!newsLoading && newsPrediction && !newsPrediction.newsHasEvent && (
+                  <div className="bg-[#11141A] rounded-xl p-4 border border-[#202735] text-xs text-[#8A95A5]">
+                    No high-impact events found for this pair in the next 5 days. No confidence adjustment applied.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Confidence + reason */}
           <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">Automatic Confidence</h3>
-              <span className="text-2xl font-black text-[#00E08A]">{confidence}/100</span>
+              <span className="text-2xl font-black text-[#00E08A]">{finalConfidence}/100</span>
             </div>
             <button
               type="button"
@@ -674,7 +816,7 @@ export default function SignalBuilder() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-white font-bold text-lg">{pair} — {direction || '—'}</span>
-                <span className="text-[#F5A524] font-mono font-bold">{confidence}/100</span>
+                <span className="text-[#F5A524] font-mono font-bold">{finalConfidence}/100</span>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="bg-[#11141A] rounded-xl p-3 border border-[#202735]">
@@ -697,6 +839,18 @@ export default function SignalBuilder() {
                 )}
               </div>
               <p className="text-sm text-[#8A95A5] pt-2 italic">{reason}</p>
+              {newsEnabled && newsPrediction?.newsHasEvent && (
+                <p className={cn(
+                  'text-xs pt-1 italic',
+                  newsPrediction.newsPrediction === direction ? 'text-[#00E08A]' : newsPrediction.newsPrediction === 'NEUTRAL' ? 'text-[#8A95A5]' : 'text-red-400'
+                )}>
+                  {newsPrediction.newsPrediction === direction
+                    ? 'News outlook supports this trade direction.'
+                    : newsPrediction.newsPrediction === 'NEUTRAL'
+                    ? 'News outlook is neutral for this pair.'
+                    : 'News outlook conflicts with this trade direction.'}
+                </p>
+              )}
             </div>
           </div>
 

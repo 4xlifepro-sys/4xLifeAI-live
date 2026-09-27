@@ -199,6 +199,10 @@ ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS tp1_hit_at timestamp with ti
 ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS tp2_hit_at timestamp with time zone;
 ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS tp3_hit_at timestamp with time zone;
 ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS original_sl double precision;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_event text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_prediction text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_probability integer;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_reason text;
 
 ALTER TABLE public.signal_audit_log ADD COLUMN IF NOT EXISTS tp1_hit_at timestamp with time zone;
 ALTER TABLE public.signal_audit_log ADD COLUMN IF NOT EXISTS tp2_hit_at timestamp with time zone;

@@ -106,3 +106,9 @@ ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS auto_confidence integer;
 ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS auto_confidence_breakdown jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS auto_reason text;
 ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS admin_email text;
+
+-- 9. News analysis fields for signal builder
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_event text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_prediction text;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_probability integer;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS news_reason text;

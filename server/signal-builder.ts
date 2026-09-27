@@ -68,6 +68,13 @@ export interface BuiltSignalPayload extends SignalAnalysis {
   confidence: number;
   autoReason: string;
   autoConfidenceBreakdown: Record<string, number>;
+  news?: {
+    newsHasEvent?: boolean;
+    newsEvent?: string;
+    newsPrediction?: 'BUY' | 'SELL' | 'NEUTRAL';
+    newsProbability?: number;
+    newsReason?: string;
+  };
 }
 
 export interface DraftPayload extends SignalAnalysis {
@@ -278,6 +285,10 @@ export async function publishBuiltSignal(
     auto_reason: payload.autoReason || generateReason(payload),
     admin_email: adminEmail || null,
     reason: payload.autoReason || generateReason(payload),
+    news_event: payload.news?.newsHasEvent ? (payload.news.newsEvent || null) : null,
+    news_prediction: payload.news?.newsPrediction || null,
+    news_probability: Number.isFinite(payload.news?.newsProbability) ? payload.news?.newsProbability : null,
+    news_reason: payload.news?.newsReason || null,
   };
 
   const { data: inserted, error: insertError } = await supabase.from('signals').insert([signalPayload]).select('*').maybeSingle();

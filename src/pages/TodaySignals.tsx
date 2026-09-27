@@ -276,6 +276,16 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     <p className="text-[#F5A524] font-medium">{signal.aiConfidence ? `${signal.aiConfidence}%` : '-'}</p>
                   </div>
                 </div>
+                {signal.news_event && signal.news_prediction && (
+                  <div className={cn(
+                    'text-xs italic border rounded-lg px-3 py-2',
+                    signal.news_prediction === signal.direction
+                      ? 'border-[#00E08A]/20 bg-[#00E08A]/5 text-[#00E08A]'
+                      : 'border-red-500/20 bg-red-500/5 text-red-400'
+                  )}>
+                    News outlook: {signal.news_prediction === signal.direction ? 'supports' : 'conflicts with'} {signal.direction} ({signal.news_event})
+                  </div>
+                )}
               </div>
               
               <div className="p-4 border-t border-[#1A2332] bg-[#070B12] flex items-center justify-between">

@@ -10,6 +10,7 @@ import {
   calculateConfidence,
   generateReason,
 } from "./server/signal-builder.js";
+import { predictNewsFromCalendar } from "./server/news-prediction.js";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -1114,6 +1115,9 @@ async function startServer() {
         news_event: d.news_event,
         news_impact: d.news_impact,
         news_time: d.news_time,
+        news_prediction: d.news_prediction,
+        news_probability: d.news_probability,
+        news_reason: d.news_reason,
         confidence: d.confidence,
         aiConfidence: (d.confidence || 0) * 10,
         score: d.score || d.confidence,
@@ -2264,6 +2268,20 @@ Return the analysis in this exact JSON format:
     } catch (e: any) {
       console.error('[signal-builder/preview] error:', e);
       res.status(500).json({ error: e.message || 'Failed to preview' });
+    }
+  });
+
+  app.post("/api/admin/signal-builder/news-predict", requireAdmin, async (req, res) => {
+    try {
+      const { pair, direction, timezone } = req.body || {};
+      if (!pair || !direction) return res.status(400).json({ error: 'Pair and direction required' });
+      const events = await getEconomicCalendar();
+      const result = await predictNewsFromCalendar(String(pair), String(direction) as 'BUY' | 'SELL', events, timezone ? String(timezone) : undefined);
+      if ('error' in result) return res.status(500).json({ error: result.error });
+      res.json({ success: true, prediction: result });
+    } catch (e: any) {
+      console.error('[signal-builder/news-predict] error:', e);
+      res.status(500).json({ error: e.message || 'News prediction failed' });
     }
   });
 
