@@ -27,12 +27,26 @@ const CONFIRMATIONS = [
   { key: 'sbr', label: 'SBR' },
 ];
 const TP_MULTIPLES = [
+  { label: '1R', value: 1 },
   { label: '2.1R', value: 2.1 },
   { label: '3.1R', value: 3.1 },
   { label: '4.1R', value: 4.1 },
   { label: '5R', value: 5 },
   { label: '6R', value: 6 },
 ];
+
+const PIP_SIZE: Record<string, number> = {
+  XAUUSD: 0.1,
+  XAGUSD: 0.01,
+  EURUSD: 0.0001,
+  GBPUSD: 0.0001,
+  AUDUSD: 0.0001,
+  USDCAD: 0.0001,
+  USDJPY: 0.01,
+  BTCUSD: 1,
+  ETHUSD: 1,
+  SOLUSD: 1,
+};
 
 interface Draft {
   id: string;
@@ -52,6 +66,8 @@ interface Draft {
   confirmation_sbr: boolean;
   entry: number;
   sl: number;
+  sl_mode?: 'price' | 'pips';
+  sl_pips?: number;
   tp_multiples: number[];
   confidence: number;
   auto_confidence_breakdown: Record<string, number>;
@@ -116,6 +132,10 @@ function emptyAnalysis() {
   };
 }
 
+function getPipSize(pair: string): number {
+  return PIP_SIZE[pair.toUpperCase()] || 0.0001;
+}
+
 function classForToggle(selected: boolean, color: 'green' | 'red' | 'neutral' = 'neutral') {
   if (selected) {
     if (color === 'green') return 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]';
@@ -127,7 +147,9 @@ function classForToggle(selected: boolean, color: 'green' | 'red' | 'neutral' = 
 
 export default function SignalBuilder() {
   const [analysis, setAnalysis] = useState(emptyAnalysis());
-  const [selectedMultiples, setSelectedMultiples] = useState<Set<number>>(new Set([2.1, 3.1, 4.1]));
+  const [selectedMultiples, setSelectedMultiples] = useState<Set<number>>(new Set([1, 2.1, 3.1, 4.1]));
+  const [slMode, setSlMode] = useState<'price' | 'pips'>('price');
+  const [slPips, setSlPips] = useState('');
   const [confidence, setConfidence] = useState(0);
   const [breakdown, setBreakdown] = useState<Record<string, number>>({});
   const [reason, setReason] = useState('');
@@ -142,7 +164,18 @@ export default function SignalBuilder() {
 
   const { pair, direction, entry, sl } = analysis;
   const numericEntry = Number(entry);
-  const numericSl = Number(sl);
+  const numericSlRaw = Number(sl);
+  const numericSlPips = Number(slPips);
+
+  const effectiveSl = useMemo(() => {
+    if (slMode === 'price') return numericSlRaw;
+    if (!Number.isFinite(numericEntry) || !Number.isFinite(numericSlPips) || !direction) return NaN;
+    const pipSize = getPipSize(pair);
+    if (direction === 'BUY') return numericEntry - numericSlPips * pipSize;
+    return numericEntry + numericSlPips * pipSize;
+  }, [slMode, numericSlRaw, numericSlPips, numericEntry, direction, pair]);
+
+  const numericSl = effectiveSl;
 
   useEffect(() => {
     fetchDrafts();
@@ -266,7 +299,9 @@ export default function SignalBuilder() {
 
   const resetForm = () => {
     setAnalysis(emptyAnalysis());
-    setSelectedMultiples(new Set([2.1, 3.1, 4.1]));
+    setSelectedMultiples(new Set([1, 2.1, 3.1, 4.1]));
+    setSlMode('price');
+    setSlPips('');
     setStatus('idle');
     setMessage('');
   };
@@ -345,6 +380,8 @@ export default function SignalBuilder() {
       entry: Number.isFinite(draft.entry) ? String(draft.entry) : '',
       sl: Number.isFinite(draft.sl) ? String(draft.sl) : '',
     });
+    setSlMode(draft.sl_mode || 'price');
+    setSlPips(Number.isFinite(Number(draft.sl_pips)) ? String(draft.sl_pips) : '');
     setSelectedMultiples(new Set((draft.tp_multiples || []).map(Number)));
     setActiveView('builder');
     setStatus('idle');
@@ -497,28 +534,62 @@ export default function SignalBuilder() {
           </div>
 
           {/* Entry / SL */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">Entry</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={analysis.entry}
-                onChange={(e) => updateAnalysis({ entry: e.target.value })}
-                placeholder="0.00000"
-                className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white font-mono focus:outline-none focus:border-[#00E08A]/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">SL</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={analysis.sl}
-                onChange={(e) => updateAnalysis({ sl: e.target.value })}
-                placeholder="0.00000"
-                className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white font-mono focus:outline-none focus:border-[#00E08A]/50"
-              />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">Entry</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={analysis.entry}
+                  onChange={(e) => updateAnalysis({ entry: e.target.value })}
+                  placeholder="0.00000"
+                  className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white font-mono focus:outline-none focus:border-[#00E08A]/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">SL</label>
+                  <div className="flex items-center gap-1 bg-[#0D1017] rounded-lg p-0.5 border border-[#202735]">
+                    <button
+                      type="button"
+                      onClick={() => setSlMode('price')}
+                      className={cn(
+                        'px-2 py-1 rounded text-[10px] font-bold uppercase transition-all',
+                        slMode === 'price' ? 'bg-[#00E08A]/10 text-[#00E08A]' : 'text-[#8A95A5] hover:text-white'
+                      )}
+                    >
+                      Price
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSlMode('pips')}
+                      className={cn(
+                        'px-2 py-1 rounded text-[10px] font-bold uppercase transition-all',
+                        slMode === 'pips' ? 'bg-[#00E08A]/10 text-[#00E08A]' : 'text-[#8A95A5] hover:text-white'
+                      )}
+                    >
+                      Pips
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={slMode === 'price' ? analysis.sl : slPips}
+                  onChange={(e) => {
+                    if (slMode === 'price') updateAnalysis({ sl: e.target.value });
+                    else setSlPips(e.target.value);
+                  }}
+                  placeholder={slMode === 'price' ? '0.00000' : '20'}
+                  className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white font-mono focus:outline-none focus:border-[#00E08A]/50"
+                />
+                {slMode === 'pips' && Number.isFinite(numericSl) && (
+                  <div className="text-xs text-[#8A95A5]">
+                    Computed SL: <span className="text-red-400 font-mono font-bold">{formatPrice(numericSl, pair)}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

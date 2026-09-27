@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS public.signal_drafts (
     ocl text,
     entry double precision,
     sl double precision,
+    sl_mode text,
+    sl_pips double precision,
     tp_multiples jsonb DEFAULT '[]'::jsonb,
     confidence integer,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),

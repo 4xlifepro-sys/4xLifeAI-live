@@ -71,6 +71,8 @@ export interface BuiltSignalPayload extends SignalAnalysis {
 }
 
 export interface DraftPayload extends SignalAnalysis {
+  slMode?: 'price' | 'pips';
+  slPips?: number;
   confidence?: number;
   autoReason?: string;
   autoConfidenceBreakdown?: Record<string, number>;
@@ -334,6 +336,8 @@ export async function saveDraft(adminEmail: string, payload: DraftPayload) {
     ocl: null,
     entry: Number.isFinite(Number(payload.entry)) ? Number(payload.entry) : null,
     sl: Number.isFinite(Number(payload.sl)) ? Number(payload.sl) : null,
+    sl_mode: payload.slMode || null,
+    sl_pips: Number.isFinite(Number(payload.slPips)) ? Number(payload.slPips) : null,
     tp_multiples: Array.isArray(payload.tpMultiples) ? payload.tpMultiples.map((m) => Number(m)) : [],
     confidence: score,
     timeframe: payload.timeframe || null,
