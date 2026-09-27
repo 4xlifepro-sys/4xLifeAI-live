@@ -291,7 +291,7 @@ export async function publishBuiltSignal(
     + `Entry: ${entry}\n`
     + `SL: ${sl}\n`
     + `${tpLines}\n`
-    + `Confidence: ${confidence}/80\n\n`
+    + `Confidence: ${confidence}/100\n\n`
     + `${signalPayload.reason}`;
 
   await sendTelegramMessage(msg, process.env.TELEGRAM_VIP_CHAT_ID || undefined);

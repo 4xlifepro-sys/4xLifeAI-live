@@ -407,7 +407,7 @@ export default function SignalBuilder() {
       `Entry: ${formatPrice(numericEntry, pair)}`,
       `SL: ${formatPrice(numericSl, pair)}`,
       ...selectedTps.map((tp, i) => `TP${i + 1}: ${formatPrice(tp.price, pair)}`),
-      `Confidence: ${confidence}/80`,
+      `Confidence: ${confidence}/100`,
       '',
       reason,
     ];
@@ -628,7 +628,7 @@ export default function SignalBuilder() {
           <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">Automatic Confidence</h3>
-              <span className="text-2xl font-black text-[#00E08A]">{confidence}/80</span>
+              <span className="text-2xl font-black text-[#00E08A]">{confidence}/100</span>
             </div>
             <button
               type="button"
@@ -674,7 +674,7 @@ export default function SignalBuilder() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-white font-bold text-lg">{pair} — {direction || '—'}</span>
-                <span className="text-[#F5A524] font-mono font-bold">{confidence}/80</span>
+                <span className="text-[#F5A524] font-mono font-bold">{confidence}/100</span>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="bg-[#11141A] rounded-xl p-3 border border-[#202735]">
@@ -781,7 +781,7 @@ export default function SignalBuilder() {
                     <span className="text-[#8A95A5] text-xs">{draft.strategy} · {draft.trade_type}</span>
                   </div>
                   <div className="text-[#5D6B80] text-xs mt-1 font-mono">
-                    E {formatPrice(draft.entry, draft.pair)} · SL {formatPrice(draft.sl, draft.pair)} · TPs {(draft.tp_multiples || []).join(', ')}R · Conf {draft.confidence}/80
+                    E {formatPrice(draft.entry, draft.pair)} · SL {formatPrice(draft.sl, draft.pair)} · TPs {(draft.tp_multiples || []).join(', ')}R · Conf {draft.confidence}/100
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -859,7 +859,7 @@ export default function SignalBuilder() {
                       <span key={i} className="inline-block mr-2 text-[#00E08A]">TP{i + 1}: {formatPrice(Number(tp), s.pair)}</span>
                     ))}
                   </td>
-                  <td className="px-4 py-3 text-[#F5A524] font-mono">{s.auto_confidence}/80</td>
+                  <td className="px-4 py-3 text-[#F5A524] font-mono">{s.auto_confidence}/100</td>
                   <td className="px-4 py-3 text-[#8A95A5]">{s.status}</td>
                   <td className="px-4 py-3 text-[#5D6B80] text-xs">{new Date(s.created_at).toLocaleString()}</td>
                 </tr>
