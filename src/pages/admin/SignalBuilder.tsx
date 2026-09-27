@@ -151,20 +151,25 @@ export default function SignalBuilder() {
 
   useEffect(() => {
     const payload = buildPayload();
-    fetch('/api/admin/signal-builder/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success) {
-          setConfidence(data.confidence);
-          setBreakdown(data.breakdown);
-          setReason(data.reason);
-        }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetch('/api/admin/signal-builder/preview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify(payload),
       })
-      .catch(() => {});
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success) {
+            setConfidence(data.confidence);
+            setBreakdown(data.breakdown);
+            setReason(data.reason);
+          }
+        })
+        .catch(() => {});
+    });
   }, [analysis, selectedMultiples]);
 
   const fetchDrafts = async () => {
