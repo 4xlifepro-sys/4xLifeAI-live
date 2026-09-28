@@ -805,6 +805,13 @@ export default function SignalBuilder() {
                   {newsLoading ? 'Analyzing news...' : 'Analyze News'}
                 </button>
 
+                {!direction && (
+                  <div className="rounded-xl p-3 text-xs font-bold flex items-center gap-2 bg-[#F5A524]/10 border border-[#F5A524]/30 text-[#F5A524]">
+                    <AlertTriangle className="w-4 h-4" />
+                    Select BUY or SELL direction first.
+                  </div>
+                )}
+
                 {newsLoading && (
                   <div className="flex items-center gap-2 text-sm text-[#8A95A5]">
                     <Loader2 className="w-4 h-4 animate-spin text-[#00E08A]" />
