@@ -2594,8 +2594,10 @@ Return the analysis in this exact JSON format:
     app.use(express.static(distPath));
 
     const injectSupabaseConfig = (html: string) => {
-      const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/^["']|["']$/g, '').trim();
+      let url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/^["']|["']$/g, '').trim();
       const key = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').replace(/^["']|["']$/g, '').trim();
+      // Supabase client expects the base URL only, not /rest/v1/ or /auth/v1/
+      url = url.replace(/\/(rest|auth)\/v1\/?$/i, '').replace(/\/$/, '');
       if (!url || !key) return html;
       const script = `<script>window.__SUPABASE_CONFIG__={url:${JSON.stringify(url)},key:${JSON.stringify(key)}}</script>`;
       return html.replace('<head>', `<head>${script}`);
