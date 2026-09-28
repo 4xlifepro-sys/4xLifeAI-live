@@ -1,5 +1,4 @@
 import { GoogleGenAI } from '@google/genai';
-import JSON5 from 'json5';
 
 export interface FFEvent {
   title: string;
@@ -110,7 +109,16 @@ Return ONLY a JSON object exactly like this:
     const text = response.text || '';
     const match = text.match(/\{[\s\S]*\}/);
     const raw = match ? match[0] : text;
-    const parsed = JSON5.parse(raw) as NewsPrediction;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Some Gemini replies use single quotes or trailing commas; sanitize lightly
+      const sanitized = raw
+        .replace(/([''])(?=(?:[^"]*"[^"]*")*[^"]*$)/g, '"')
+        .replace(/,\s*([}\]])/g, '$1');
+      parsed = JSON.parse(sanitized);
+    }
 
     const prediction = String(parsed.newsPrediction || '').toUpperCase();
     const validPrediction = prediction === 'BUY' || prediction === 'SELL' ? prediction : 'NEUTRAL';
