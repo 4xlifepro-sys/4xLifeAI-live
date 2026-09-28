@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-const rawSupabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || '';
-const rawSupabaseKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || '';
+const runtimeConfig = (typeof window !== 'undefined' && (window as any).__SUPABASE_CONFIG__) || {};
+
+const rawSupabaseUrl = runtimeConfig.url || (import.meta as any).env.VITE_SUPABASE_URL || '';
+const rawSupabaseKey = runtimeConfig.key || (import.meta as any).env.VITE_SUPABASE_ANON_KEY || '';
 
 // Sanitize inputs to prevent wrapping quotes from breaking the client
 const supabaseUrl = rawSupabaseUrl.replace(/^["']|["']$/g, '').trim();

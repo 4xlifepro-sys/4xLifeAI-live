@@ -2592,9 +2592,25 @@ Return the analysis in this exact JSON format:
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+
+    const injectSupabaseConfig = (html: string) => {
+      const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/^["']|["']$/g, '').trim();
+      const key = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').replace(/^["']|["']$/g, '').trim();
+      if (!url || !key) return html;
+      const script = `<script>window.__SUPABASE_CONFIG__={url:${JSON.stringify(url)},key:${JSON.stringify(key)}}</script>`;
+      return html.replace('<head>', `<head>${script}`);
+    };
+
     // For Express 4.x
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      fs.readFile(indexPath, 'utf8', (err, html) => {
+        if (err) {
+          console.error('Failed to read index.html:', err);
+          return res.status(500).send('Server error');
+        }
+        res.send(injectSupabaseConfig(html));
+      });
     });
   }
 
