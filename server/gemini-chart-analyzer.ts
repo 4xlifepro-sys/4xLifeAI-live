@@ -91,7 +91,7 @@ Return ONLY this JSON structure, no markdown, no explanation:
     const base64 = imageBuffer.toString('base64');
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       contents: [
         { text: prompt },
         {
