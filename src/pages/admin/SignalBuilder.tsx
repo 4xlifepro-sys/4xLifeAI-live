@@ -208,35 +208,41 @@ export default function SignalBuilder() {
     return Math.max(0, Math.min(80, base));
   }, [confidence, newsEnabled, newsPrediction, direction]);
 
-  useEffect(() => {
-    if (!newsEnabled || !direction || !pair) {
-      setNewsPrediction(null);
-      setNewsError('');
+  const runNewsAnalysis = async () => {
+    if (!direction || !pair) {
+      setNewsError('Select pair and direction first.');
       return;
     }
     setNewsLoading(true);
     setNewsError('');
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      fetch('/api/admin/signal-builder/news-predict', {
+    setNewsPrediction(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/signal-builder/news-predict', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({ pair, direction, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (!data.success) throw new Error(data.error || 'News prediction failed');
-          setNewsPrediction(data.prediction);
-        })
-        .catch((e: any) => {
-          setNewsError(e.message || 'News prediction failed');
-          setNewsPrediction(null);
-        })
-        .finally(() => setNewsLoading(false));
-    });
-  }, [newsEnabled, pair, direction]);
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'News prediction failed');
+      setNewsPrediction(data.prediction);
+    } catch (e: any) {
+      setNewsError(e.message || 'News prediction failed');
+      setNewsPrediction(null);
+    } finally {
+      setNewsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!newsEnabled) {
+      setNewsPrediction(null);
+      setNewsError('');
+    }
+  }, [newsEnabled]);
 
 
   useEffect(() => {
@@ -789,6 +795,16 @@ export default function SignalBuilder() {
 
             {newsEnabled && (
               <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={runNewsAnalysis}
+                  disabled={newsLoading || !direction || !pair}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#11141A] hover:bg-[#00E08A]/10 border border-[#202735] hover:border-[#00E08A]/30 text-[#00E08A] font-bold text-sm transition-all disabled:opacity-50"
+                >
+                  {newsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Newspaper className="w-4 h-4" />}
+                  {newsLoading ? 'Analyzing news...' : 'Analyze News'}
+                </button>
+
                 {newsLoading && (
                   <div className="flex items-center gap-2 text-sm text-[#8A95A5]">
                     <Loader2 className="w-4 h-4 animate-spin text-[#00E08A]" />
