@@ -3,7 +3,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import {
   SlidersHorizontal, Save, Send, X, Trash2, Loader2, CheckCircle2, AlertTriangle,
-  Copy, Check, RotateCcw, History, ChevronDown, ChevronUp, Eye, Newspaper,
+  Copy, Check, RotateCcw, History, ChevronDown, ChevronUp, Eye, Newspaper, Upload,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -166,7 +166,7 @@ export default function SignalBuilder() {
   const [breakdown, setBreakdown] = useState<Record<string, number>>({});
   const [reason, setReason] = useState('');
   const [showBreakdown, setShowBreakdown] = useState(true);
-  const [activeView, setActiveView] = useState<'builder' | 'history'>('builder');
+  const [activeView, setActiveView] = useState<'builder' | 'history' | 'analyzer'>('builder');
 
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [history, setHistory] = useState<HistorySignal[]>([]);
@@ -178,6 +178,11 @@ export default function SignalBuilder() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsPrediction, setNewsPrediction] = useState<NewsPrediction | null>(null);
   const [newsError, setNewsError] = useState('');
+
+  const [chartFile, setChartFile] = useState<File | null>(null);
+  const [chartAnalyzing, setChartAnalyzing] = useState(false);
+  const [chartError, setChartError] = useState('');
+  const [chartAnalyzed, setChartAnalyzed] = useState(false);
 
   const { pair, direction, entry, sl } = analysis;
   const numericEntry = Number(entry);
@@ -280,6 +285,67 @@ export default function SignalBuilder() {
       if (res.ok && data.success) setHistory(data.signals || []);
     } catch (e) {
       console.error('Failed to load history', e);
+    }
+  };
+
+  const analyzeChart = async () => {
+    if (!chartFile) return;
+    setChartAnalyzing(true);
+    setChartError('');
+    setChartAnalyzed(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const formData = new FormData();
+      formData.append('image', chartFile);
+      formData.append('pair', analysis.pair);
+      formData.append('timeframe', analysis.timeframe);
+      const res = await fetch('/api/admin/signal-builder/analyze-chart', {
+        method: 'POST',
+        headers: { ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Chart analysis failed');
+      const s = data.suggestion;
+      setAnalysis({
+        pair: s.pair || analysis.pair,
+        timeframe: s.timeframe || analysis.timeframe,
+        direction: s.direction || '',
+        marketStructure: s.marketStructure || '',
+        liquidity: s.liquidity || '',
+        asianHighLow: s.asianHighLow || '',
+        strategy: s.strategy || '',
+        tradeType: s.tradeType || '',
+        asianReaction: s.asianReaction || '',
+        confirmations: {
+          mss: s.confirmations?.includes('MSS') || false,
+          ocl: s.confirmations?.includes('OCL') || false,
+          qml: s.confirmations?.includes('QML') || false,
+          rbs: s.confirmations?.includes('RBS') || false,
+          sbr: s.confirmations?.includes('SBR') || false,
+        },
+        entry: Number.isFinite(s.entry) ? String(s.entry) : '',
+        sl: Number.isFinite(s.sl) ? String(s.sl) : '',
+      });
+      if (s.slMode === 'pips' && Number.isFinite(s.slPips)) {
+        setSlMode('pips');
+        setSlPips(String(s.slPips));
+      } else {
+        setSlMode('price');
+        setSlPips('');
+      }
+      if (Array.isArray(s.tpMultiples) && s.tpMultiples.length > 0) {
+        setSelectedMultiples(new Set(s.tpMultiples));
+      }
+      setChartAnalyzed(true);
+      setActiveView('builder');
+      setMessage('Chart analyzed. Review and edit all fields before publishing.');
+      setStatus('success');
+      setTimeout(() => setStatus('idle'), 4000);
+    } catch (e: any) {
+      setChartError(e.message || 'Chart analysis failed');
+    } finally {
+      setChartAnalyzing(false);
     }
   };
 
@@ -516,6 +582,13 @@ export default function SignalBuilder() {
         </div>
 
         <div className="p-4 sm:p-6 space-y-8">
+          {chartAnalyzed && (
+            <div className="rounded-xl p-4 text-sm font-bold flex items-center gap-2 bg-[#00E08A]/10 border border-[#00E08A]/30 text-[#00E08A]">
+              <CheckCircle2 className="w-4 h-4" />
+              Chart analyzed. Review and edit every field before publishing.
+            </div>
+          )}
+
           {/* Basic info */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -1025,6 +1098,106 @@ export default function SignalBuilder() {
     </div>
   );
 
+  const renderChartAnalyzer = () => (
+    <div className="space-y-6">
+      <div className="bg-[#11141A] border border-[#202735] rounded-2xl overflow-hidden shadow-2xl">
+        <div className="p-4 sm:p-6 border-b border-[#202735]">
+          <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+            <Upload className="w-5 h-5 text-[#00E08A]" />
+            Gemini Chart Analyzer
+          </h2>
+          <p className="text-sm text-[#8A95A5] mt-1">
+            Upload a chart screenshot. Gemini will read it and pre-fill the Signal Builder analysis for your review.
+          </p>
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">Pair</label>
+              <select
+                value={analysis.pair}
+                onChange={(e) => updateAnalysis({ pair: e.target.value })}
+                className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white focus:outline-none focus:border-[#00E08A]/50"
+              >
+                {APPROVED_PAIRS.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">Timeframe</label>
+              <select
+                value={analysis.timeframe}
+                onChange={(e) => updateAnalysis({ timeframe: e.target.value })}
+                className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white focus:outline-none focus:border-[#00E08A]/50"
+              >
+                {TIMEFRAMES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-[#202735] rounded-2xl cursor-pointer bg-[#0D1017] hover:border-[#00E08A]/50 hover:bg-[#00E08A]/5 transition-all">
+            <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center">
+              {chartFile ? (
+                <>
+                  <CheckCircle2 className="w-10 h-10 text-[#00E08A] mb-3" />
+                  <p className="text-sm text-white font-bold">{chartFile.name}</p>
+                  <p className="text-xs text-[#8A95A5]">Click or drop to change image</p>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-10 h-10 text-[#8A95A5] mb-3" />
+                  <p className="text-sm text-white font-bold">Click to upload chart screenshot</p>
+                  <p className="text-xs text-[#8A95A5]">PNG, JPG up to 5MB</p>
+                </>
+              )}
+            </div>
+            <input
+              type="file"
+              className="hidden"
+              accept="image/png,image/jpeg,image/jpg"
+              onChange={(e) => {
+                const f = e.target.files?.[0] || null;
+                setChartFile(f);
+                setChartError('');
+              }}
+            />
+          </label>
+
+          {chartError && (
+            <div className="rounded-xl p-4 text-sm font-bold flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400">
+              <AlertTriangle className="w-4 h-4" />
+              {chartError}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={analyzeChart}
+              disabled={!chartFile || chartAnalyzing}
+              className="flex-[2] flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#00E08A] hover:bg-[#00C278] text-[#0A0D12] font-black text-sm uppercase tracking-wider transition-all disabled:opacity-50"
+            >
+              {chartAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {chartAnalyzing ? 'Analyzing...' : 'Analyze Chart'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('builder')}
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#0D1017] hover:bg-white/5 border border-[#202735] text-[#8A95A5] hover:text-white font-bold text-sm transition-all"
+            >
+              <X className="w-4 h-4" />
+              Back to Manual Builder
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 bg-[#11141A] border border-[#202735] rounded-xl p-2 w-fit">
@@ -1040,6 +1213,16 @@ export default function SignalBuilder() {
         </button>
         <button
           type="button"
+          onClick={() => setActiveView('analyzer')}
+          className={cn(
+            'px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all',
+            activeView === 'analyzer' ? 'bg-[#00E08A]/10 text-[#00E08A] border border-[#00E08A]/20' : 'text-[#8A95A5] hover:text-white'
+          )}
+        >
+          Analyze Chart
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveView('history')}
           className={cn(
             'px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all',
@@ -1049,7 +1232,9 @@ export default function SignalBuilder() {
           History
         </button>
       </div>
-      {activeView === 'builder' ? renderBuilder() : renderHistory()}
+      {activeView === 'builder' && renderBuilder()}
+      {activeView === 'analyzer' && renderChartAnalyzer()}
+      {activeView === 'history' && renderHistory()}
     </div>
   );
 }

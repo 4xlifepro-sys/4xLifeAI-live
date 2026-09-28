@@ -11,6 +11,8 @@ import {
   generateReason,
 } from "./server/signal-builder.js";
 import { predictNewsFromCalendar } from "./server/news-prediction.js";
+import { analyzeChartWithGemini } from "./server/gemini-chart-analyzer.js";
+import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
@@ -2282,6 +2284,21 @@ Return the analysis in this exact JSON format:
     } catch (e: any) {
       console.error('[signal-builder/news-predict] error:', e);
       res.status(500).json({ error: e.message || 'News prediction failed' });
+    }
+  });
+
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+  app.post("/api/admin/signal-builder/analyze-chart", requireAdmin, upload.single('image'), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'Chart image required' });
+      const { pair, timeframe } = req.body || {};
+      const result = await analyzeChartWithGemini(req.file.buffer, pair ? String(pair) : undefined, timeframe ? String(timeframe) : undefined);
+      if ('error' in result) return res.status(500).json({ error: result.error });
+      res.json({ success: true, suggestion: result });
+    } catch (e: any) {
+      console.error('[signal-builder/analyze-chart] error:', e);
+      res.status(500).json({ error: e.message || 'Chart analysis failed' });
     }
   });
 
