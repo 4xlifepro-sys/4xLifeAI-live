@@ -283,12 +283,7 @@ export async function publishBuiltSignal(
     auto_confidence: confidence,
     auto_confidence_breakdown: payload.autoConfidenceBreakdown || {},
     auto_reason: payload.autoReason || generateReason(payload),
-    admin_email: adminEmail || null,
     reason: payload.autoReason || generateReason(payload),
-    news_event: payload.news?.newsHasEvent ? (payload.news.newsEvent || null) : null,
-    news_prediction: payload.news?.newsPrediction || null,
-    news_probability: Number.isFinite(payload.news?.newsProbability) ? payload.news?.newsProbability : null,
-    news_reason: payload.news?.newsReason || null,
   };
 
   const { data: inserted, error: insertError } = await supabase.from('signals').insert([signalPayload]).select('*').maybeSingle();
