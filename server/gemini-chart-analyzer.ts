@@ -10,6 +10,8 @@ export interface ChartAnalysisSuggestion {
   tradeType?: 'Main Trend' | 'Counter Trend';
   asianReaction?: 'Wick Taken' | 'Body Taken' | 'Not Taken';
   confirmations?: ('MSS' | 'OCL' | 'QML' | 'RBS' | 'SBR')[];
+  confirmations5m?: ('MSS' | 'OCL' | 'QML' | 'RBS' | 'SBR')[];
+  confirmations1m?: ('MSS' | 'OCL' | 'QML' | 'RBS' | 'SBR')[];
   direction?: 'BUY' | 'SELL';
   entry?: number;
   sl?: number;
@@ -52,13 +54,19 @@ export async function analyzeChartWithGemini(
 - tradeType: "Main Trend" if the setup aligns with the 1H structure, "Counter Trend" if it goes against it.
 - asianReaction: "Wick Taken" if only the wick swept the Asian level, "Body Taken" if the body closed through it, "Not Taken" if no interaction.
 
-15M Confirmation (return all that are clearly visible):
+15M Confirmation (return all that are clearly visible on 15M):
 - confirmations: array containing any of "MSS", "OCL", "QML", "RBS", "SBR".
   - MSS = Market Structure Shift
   - OCL = Order Block / level reaction
   - QML = Quasimodo level
   - RBS = Resistance become Support
   - SBR = Support become Resistance
+
+5M Confirmation (return all that are clearly visible on 5M):
+- confirmations5m: array containing any of "MSS", "OCL", "QML", "RBS", "SBR".
+
+1M Confirmation (return all that are clearly visible on 1M):
+- confirmations1m: array containing any of "MSS", "OCL", "QML", "RBS", "SBR".
 
 Trade Levels:
 - pair: the trading pair shown on the chart (e.g. "EURUSD", "XAUUSD").
@@ -79,6 +87,8 @@ Return ONLY this JSON structure, no markdown, no explanation:
   "tradeType": "Main Trend",
   "asianReaction": "Body Taken",
   "confirmations": ["MSS", "OCL"],
+  "confirmations5m": ["OCL"],
+  "confirmations1m": ["MSS"],
   "direction": "BUY",
   "entry": 1.08500,
   "sl": 1.08450,
@@ -128,6 +138,16 @@ Return ONLY this JSON structure, no markdown, no explanation:
       asianReaction: clampToEnum(parsed.asianReaction, VALID_REACTION),
       confirmations: Array.isArray(parsed.confirmations)
         ? parsed.confirmations
+            .map((c: any) => clampToEnum(String(c).toUpperCase(), VALID_CONFIRMATIONS as any))
+            .filter(Boolean) as any
+        : [],
+      confirmations5m: Array.isArray(parsed.confirmations5m)
+        ? parsed.confirmations5m
+            .map((c: any) => clampToEnum(String(c).toUpperCase(), VALID_CONFIRMATIONS as any))
+            .filter(Boolean) as any
+        : [],
+      confirmations1m: Array.isArray(parsed.confirmations1m)
+        ? parsed.confirmations1m
             .map((c: any) => clampToEnum(String(c).toUpperCase(), VALID_CONFIRMATIONS as any))
             .filter(Boolean) as any
         : [],
