@@ -27,7 +27,10 @@ function parseForexFactoryEventUtc(event: FFEvent): string | null {
 }
 
 function buildCalendarPromptBlock(events: FFEvent[], pair: string, timeZone?: string): string {
-  const now = Date.now();
+  const now = new Date();
+  const todayStr = timeZone
+    ? now.toLocaleDateString('en-CA', { timeZone })
+    : now.toISOString().slice(0, 10);
   const relevantCurrencies = pairCurrencies(pair);
   const highImpact = events.filter((e) => {
     const impact = (e.impact || '').toLowerCase();
@@ -36,9 +39,12 @@ function buildCalendarPromptBlock(events: FFEvent[], pair: string, timeZone?: st
     const t = normalizedUtc ? new Date(normalizedUtc).getTime() : NaN;
     if (isNaN(t)) return false;
     if (!relevantCurrencies.has(e.country.toUpperCase())) return false;
-    return t > now && t < now + 5 * 24 * 60 * 60 * 1000;
+    const eventDateStr = timeZone
+      ? new Date(t).toLocaleDateString('en-CA', { timeZone })
+      : new Date(t).toISOString().slice(0, 10);
+    return eventDateStr === todayStr;
   });
-  if (highImpact.length === 0) return 'NONE (no high-impact red-folder events this week for this pair).\n';
+  if (highImpact.length === 0) return 'NONE (no high-impact red-folder events today for this pair).\n';
   return highImpact
     .slice(0, 20)
     .map((e) => {
