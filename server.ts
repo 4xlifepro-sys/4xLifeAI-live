@@ -497,12 +497,7 @@ async function startServer() {
   app.use((req, res, next) => {
     res.on('finish', () => {
       if (req.path.startsWith('/api/') && res.statusCode >= 500) {
-        notifyAdmin(
-          'API Error',
-          `${req.method} ${req.path} returned ${res.statusCode}`,
-          'api_error',
-          `api-error:${req.method}:${req.path}:${res.statusCode}`
-        ).catch(error => console.error('[ADMIN NOTIFY] API error alert failed:', error?.message || error));
+        console.error(`[API ERROR] ${req.method} ${req.path} returned ${res.statusCode}`);
       }
     });
     next();
