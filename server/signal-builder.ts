@@ -249,7 +249,6 @@ export async function publishBuiltSignal(
   const conf = payload.confirmations;
   const now = new Date().toISOString();
   const signalPayload: any = {
-    id: randomUUID(),
     pair,
     direction,
     bias: isLong ? 'BULLISH' : 'BEARISH',
