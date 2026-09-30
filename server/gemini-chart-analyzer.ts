@@ -10,8 +10,6 @@ export interface ChartAnalysisSuggestion {
   tradeType?: 'Main Trend' | 'Counter Trend';
   asianReaction?: 'Wick Taken' | 'Body Taken' | 'Not Taken';
   confirmations?: ('MSS' | 'OCL' | 'QML' | 'RBS' | 'SBR')[];
-  confirmations5m?: ('MSS' | 'OCL' | 'QML' | 'RBS' | 'SBR')[];
-  confirmations1m?: ('MSS' | 'OCL' | 'QML' | 'RBS' | 'SBR')[];
   direction?: 'BUY' | 'SELL';
   entry?: number;
   sl?: number;
@@ -46,15 +44,15 @@ export async function analyzeChartWithGemini(
 
   const prompt = `You are an expert price-action analyst for forex and crypto. Analyze the provided chart image using the following strict methodology and return ONLY a JSON object.
 
-1H High-Timeframe Analysis:
+15M High-Timeframe Analysis:
 - marketStructure: "HH + HL" if bullish structure, "LL + LH" if bearish, "Mixed / Unclear" if not clear.
 - liquidity: "Liquidity Taken" if a recent swing high/low liquidity sweep is visible, otherwise "Liquidity Not Taken".
 - asianHighLow: "Asian High Taken" if price took the Asian session high, "Asian Low Taken" if it took the Asian low, otherwise "Neither Taken".
 - strategy: "Classic A" if the setup shows an A-shaped reversal pattern, "Classic V" if it shows a V-shaped reversal pattern. Strategy does NOT determine direction.
-- tradeType: "Main Trend" if the setup aligns with the 1H structure, "Counter Trend" if it goes against it.
+- tradeType: "Main Trend" if the setup aligns with the 15M structure, "Counter Trend" if it goes against it.
 - asianReaction: "Wick Taken" if only the wick swept the Asian level, "Body Taken" if the body closed through it, "Not Taken" if no interaction.
 
-15M Confirmation (return all that are clearly visible on 15M):
+1M Confirmation (return all that are clearly visible on 1M):
 - confirmations: array containing any of "MSS", "OCL", "QML", "RBS", "SBR".
   - MSS = Market Structure Shift
   - OCL = Order Block / level reaction
@@ -62,16 +60,10 @@ export async function analyzeChartWithGemini(
   - RBS = Resistance become Support
   - SBR = Support become Resistance
 
-5M Confirmation (return all that are clearly visible on 5M):
-- confirmations5m: array containing any of "MSS", "OCL", "QML", "RBS", "SBR".
-
-1M Confirmation (return all that are clearly visible on 1M):
-- confirmations1m: array containing any of "MSS", "OCL", "QML", "RBS", "SBR".
-
 Trade Levels:
 - pair: the trading pair shown on the chart (e.g. "EURUSD", "XAUUSD").
 - timeframe: the chart timeframe if visible (e.g. "15M", "1H").
-- direction: "BUY" or "SELL" based on the current setup and 15M confirmation.
+- direction: "BUY" or "SELL" based on the current setup and 1M confirmation.
 - entry: the most logical immediate entry price shown on the chart.
 - sl: the stop-loss price that respects the setup (below entry for BUY, above entry for SELL).
 - tpMultiples: array of R-multiples to use, choose from [1, 2.1, 3.1, 4.1, 5, 6]. Use 2.1 minimum for a normal setup.
@@ -87,8 +79,6 @@ Return ONLY this JSON structure, no markdown, no explanation:
   "tradeType": "Main Trend",
   "asianReaction": "Body Taken",
   "confirmations": ["MSS", "OCL"],
-  "confirmations5m": ["OCL"],
-  "confirmations1m": ["MSS"],
   "direction": "BUY",
   "entry": 1.08500,
   "sl": 1.08450,
@@ -138,16 +128,6 @@ Return ONLY this JSON structure, no markdown, no explanation:
       asianReaction: clampToEnum(parsed.asianReaction, VALID_REACTION),
       confirmations: Array.isArray(parsed.confirmations)
         ? parsed.confirmations
-            .map((c: any) => clampToEnum(String(c).toUpperCase(), VALID_CONFIRMATIONS as any))
-            .filter(Boolean) as any
-        : [],
-      confirmations5m: Array.isArray(parsed.confirmations5m)
-        ? parsed.confirmations5m
-            .map((c: any) => clampToEnum(String(c).toUpperCase(), VALID_CONFIRMATIONS as any))
-            .filter(Boolean) as any
-        : [],
-      confirmations1m: Array.isArray(parsed.confirmations1m)
-        ? parsed.confirmations1m
             .map((c: any) => clampToEnum(String(c).toUpperCase(), VALID_CONFIRMATIONS as any))
             .filter(Boolean) as any
         : [],

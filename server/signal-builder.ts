@@ -33,20 +33,6 @@ export const CONFIDENCE_WEIGHTS = {
     'Body Taken': 5,
     'Not Taken': 0,
   },
-  confirmations15m: {
-    mss: 10,
-    ocl: 5,
-    qml: 3,
-    rbs: 4,
-    sbr: 4,
-  },
-  confirmations5m: {
-    mss: 6,
-    ocl: 3,
-    qml: 2,
-    rbs: 3,
-    sbr: 3,
-  },
   confirmations1m: {
     mss: 4,
     ocl: 2,
@@ -67,20 +53,6 @@ export interface SignalAnalysis {
   tradeType: 'Main Trend' | 'Counter Trend' | '';
   asianReaction: 'Wick Taken' | 'Body Taken' | 'Not Taken' | '';
   confirmations: {
-    mss: boolean;
-    ocl: boolean;
-    qml: boolean;
-    rbs: boolean;
-    sbr: boolean;
-  };
-  confirmations5m: {
-    mss: boolean;
-    ocl: boolean;
-    qml: boolean;
-    rbs: boolean;
-    sbr: boolean;
-  };
-  confirmations1m: {
     mss: boolean;
     ocl: boolean;
     qml: boolean;
@@ -160,33 +132,17 @@ export function calculateConfidence(analysis: SignalAnalysis): {
   breakdown['Asian reaction'] = b.asianReaction[analysis.asianReaction as keyof typeof b.asianReaction] || 0;
 
   const conf = analysis.confirmations;
-  breakdown['15M MSS'] = conf.mss ? b.confirmations15m.mss : 0;
-  breakdown['15M OCL'] = conf.ocl ? b.confirmations15m.ocl : 0;
-  breakdown['15M QML'] = conf.qml ? b.confirmations15m.qml : 0;
-  breakdown['15M RBS'] = conf.rbs ? b.confirmations15m.rbs : 0;
-  breakdown['15M SBR'] = conf.sbr ? b.confirmations15m.sbr : 0;
-
-  const conf5m = analysis.confirmations5m || {};
-  breakdown['5M MSS'] = conf5m.mss ? b.confirmations5m.mss : 0;
-  breakdown['5M OCL'] = conf5m.ocl ? b.confirmations5m.ocl : 0;
-  breakdown['5M QML'] = conf5m.qml ? b.confirmations5m.qml : 0;
-  breakdown['5M RBS'] = conf5m.rbs ? b.confirmations5m.rbs : 0;
-  breakdown['5M SBR'] = conf5m.sbr ? b.confirmations5m.sbr : 0;
-
-  const conf1m = analysis.confirmations1m || {};
-  breakdown['1M MSS'] = conf1m.mss ? b.confirmations1m.mss : 0;
-  breakdown['1M OCL'] = conf1m.ocl ? b.confirmations1m.ocl : 0;
-  breakdown['1M QML'] = conf1m.qml ? b.confirmations1m.qml : 0;
-  breakdown['1M RBS'] = conf1m.rbs ? b.confirmations1m.rbs : 0;
-  breakdown['1M SBR'] = conf1m.sbr ? b.confirmations1m.sbr : 0;
+  breakdown['1M MSS'] = conf.mss ? b.confirmations1m.mss : 0;
+  breakdown['1M OCL'] = conf.ocl ? b.confirmations1m.ocl : 0;
+  breakdown['1M QML'] = conf.qml ? b.confirmations1m.qml : 0;
+  breakdown['1M RBS'] = conf.rbs ? b.confirmations1m.rbs : 0;
+  breakdown['1M SBR'] = conf.sbr ? b.confirmations1m.sbr : 0;
 
   // Counter-trend setups cap base structure/liquidity contribution unless strong confirmation
   let score = Object.values(breakdown).reduce((sum, v) => sum + v, 0);
   if (analysis.tradeType === 'Counter Trend') {
-    const confirmationSum = breakdown['15M MSS'] + breakdown['15M OCL'] + breakdown['15M QML'] + breakdown['15M RBS'] + breakdown['15M SBR']
-      + breakdown['5M MSS'] + breakdown['5M OCL'] + breakdown['5M QML'] + breakdown['5M RBS'] + breakdown['5M SBR']
-      + breakdown['1M MSS'] + breakdown['1M OCL'] + breakdown['1M QML'] + breakdown['1M RBS'] + breakdown['1M SBR'];
-    if (confirmationSum < 12) {
+    const confirmationSum = breakdown['1M MSS'] + breakdown['1M OCL'] + breakdown['1M QML'] + breakdown['1M RBS'] + breakdown['1M SBR'];
+    if (confirmationSum < 6) {
       score = Math.min(score, 55);
     }
   }
@@ -198,9 +154,9 @@ export function calculateConfidence(analysis: SignalAnalysis): {
 export function generateReason(analysis: SignalAnalysis): string {
   const parts: string[] = [];
 
-  if (analysis.marketStructure === 'HH + HL') parts.push('1H structure is bullish.');
-  else if (analysis.marketStructure === 'LL + LH') parts.push('1H structure is bearish.');
-  else if (analysis.marketStructure === 'Mixed / Unclear') parts.push('1H structure is mixed.');
+  if (analysis.marketStructure === 'HH + HL') parts.push('15M structure is bullish.');
+  else if (analysis.marketStructure === 'LL + LH') parts.push('15M structure is bearish.');
+  else if (analysis.marketStructure === 'Mixed / Unclear') parts.push('15M structure is mixed.');
 
   if (analysis.liquidity === 'Liquidity Taken') parts.push('Liquidity has been taken.');
   else if (analysis.liquidity === 'Liquidity Not Taken') parts.push('Liquidity has not been taken.');
@@ -219,37 +175,15 @@ export function generateReason(analysis: SignalAnalysis): string {
   else if (analysis.asianReaction === 'Body Taken') parts.push('The Asian level was taken by body.');
 
   const conf = analysis.confirmations;
-  const confParts15m: string[] = [];
-  if (conf.mss) confParts15m.push('MSS');
-  if (conf.ocl) confParts15m.push('OCL');
-  if (conf.qml) confParts15m.push('QML');
-  if (conf.rbs) confParts15m.push('RBS');
-  if (conf.sbr) confParts15m.push('SBR');
+  const confParts: string[] = [];
+  if (conf.mss) confParts.push('MSS');
+  if (conf.ocl) confParts.push('OCL');
+  if (conf.qml) confParts.push('QML');
+  if (conf.rbs) confParts.push('RBS');
+  if (conf.sbr) confParts.push('SBR');
 
-  if (confParts15m.length === 1) parts.push(`15M ${confParts15m[0]} confirms the setup.`);
-  else if (confParts15m.length > 1) parts.push(`15M ${confParts15m.slice(0, -1).join(', ')} and ${confParts15m[confParts15m.length - 1]} confirm the setup.`);
-
-  const conf5m = analysis.confirmations5m || {};
-  const confParts5m: string[] = [];
-  if (conf5m.mss) confParts5m.push('MSS');
-  if (conf5m.ocl) confParts5m.push('OCL');
-  if (conf5m.qml) confParts5m.push('QML');
-  if (conf5m.rbs) confParts5m.push('RBS');
-  if (conf5m.sbr) confParts5m.push('SBR');
-
-  if (confParts5m.length === 1) parts.push(`5M ${confParts5m[0]} adds confirmation.`);
-  else if (confParts5m.length > 1) parts.push(`5M ${confParts5m.slice(0, -1).join(', ')} and ${confParts5m[confParts5m.length - 1]} add confirmation.`);
-
-  const conf1m = analysis.confirmations1m || {};
-  const confParts1m: string[] = [];
-  if (conf1m.mss) confParts1m.push('MSS');
-  if (conf1m.ocl) confParts1m.push('OCL');
-  if (conf1m.qml) confParts1m.push('QML');
-  if (conf1m.rbs) confParts1m.push('RBS');
-  if (conf1m.sbr) confParts1m.push('SBR');
-
-  if (confParts1m.length === 1) parts.push(`1M ${confParts1m[0]} adds confirmation.`);
-  else if (confParts1m.length > 1) parts.push(`1M ${confParts1m.slice(0, -1).join(', ')} and ${confParts1m[confParts1m.length - 1]} add confirmation.`);
+  if (confParts.length === 1) parts.push(`1M ${confParts[0]} confirms the setup.`);
+  else if (confParts.length > 1) parts.push(`1M ${confParts.slice(0, -1).join(', ')} and ${confParts[confParts.length - 1]} confirm the setup.`);
 
   const firstSentenceParts = parts.slice(0, 3).join(' ').trim();
   const secondSentenceParts = parts.slice(3, 5).join(' ').trim();
@@ -264,16 +198,14 @@ export function validateBuiltSignal(payload: BuiltSignalPayload): { ok: boolean;
   if (!APPROVED_PAIRS.includes(pair)) return { ok: false, error: `Invalid or unsupported pair: ${payload.pair}` };
   if (payload.direction !== 'BUY' && payload.direction !== 'SELL') return { ok: false, error: 'Direction must be BUY or SELL' };
   if (!payload.timeframe?.trim()) return { ok: false, error: 'Timeframe is required' };
-  if (!payload.marketStructure) return { ok: false, error: 'Select 1H market structure' };
+  if (!payload.marketStructure) return { ok: false, error: 'Select 15M market structure' };
   if (!payload.liquidity) return { ok: false, error: 'Select liquidity status' };
   if (!payload.asianHighLow) return { ok: false, error: 'Select Asian High/Low status' };
   if (!payload.strategy) return { ok: false, error: 'Select a strategy' };
   if (!payload.tradeType) return { ok: false, error: 'Select trade type' };
   if (!payload.asianReaction) return { ok: false, error: 'Select Asian level reaction' };
-  if (!payload.confirmations || (!payload.confirmations.mss && !payload.confirmations.ocl && !payload.confirmations.qml && !payload.confirmations.rbs && !payload.confirmations.sbr
-    && !payload.confirmations5m?.mss && !payload.confirmations5m?.ocl && !payload.confirmations5m?.qml && !payload.confirmations5m?.rbs && !payload.confirmations5m?.sbr
-    && !payload.confirmations1m?.mss && !payload.confirmations1m?.ocl && !payload.confirmations1m?.qml && !payload.confirmations1m?.rbs && !payload.confirmations1m?.sbr)) {
-    return { ok: false, error: 'Select at least one 15M, 5M, or 1M confirmation' };
+  if (!payload.confirmations || (!payload.confirmations.mss && !payload.confirmations.ocl && !payload.confirmations.qml && !payload.confirmations.rbs && !payload.confirmations.sbr)) {
+    return { ok: false, error: 'Select at least one 1M confirmation' };
   }
   if (!Number.isFinite(payload.entry) || !Number.isFinite(payload.sl)) return { ok: false, error: 'Entry and SL must be valid numbers' };
   if (payload.direction === 'BUY' && payload.sl >= payload.entry) return { ok: false, error: 'BUY stop loss must be below entry' };
@@ -382,8 +314,6 @@ export async function listDrafts(adminEmail: string) {
 export async function saveDraft(adminEmail: string, payload: DraftPayload) {
   if (!supabase) return { ok: false, error: 'Supabase not available' };
   const conf = payload.confirmations || { mss: false, ocl: false, qml: false, rbs: false, sbr: false };
-  const conf5m = payload.confirmations5m || { mss: false, ocl: false, qml: false, rbs: false, sbr: false };
-  const conf1m = payload.confirmations1m || { mss: false, ocl: false, qml: false, rbs: false, sbr: false };
   const { score, breakdown } = calculateConfidence(payload as SignalAnalysis);
   const reason = generateReason(payload as SignalAnalysis);
 
@@ -410,16 +340,6 @@ export async function saveDraft(adminEmail: string, payload: DraftPayload) {
     confirmation_qml: conf.qml,
     confirmation_rbs: conf.rbs,
     confirmation_sbr: conf.sbr,
-    confirmation_5m_mss: conf5m.mss,
-    confirmation_5m_ocl: conf5m.ocl,
-    confirmation_5m_qml: conf5m.qml,
-    confirmation_5m_rbs: conf5m.rbs,
-    confirmation_5m_sbr: conf5m.sbr,
-    confirmation_1m_mss: conf1m.mss,
-    confirmation_1m_ocl: conf1m.ocl,
-    confirmation_1m_qml: conf1m.qml,
-    confirmation_1m_rbs: conf1m.rbs,
-    confirmation_1m_sbr: conf1m.sbr,
     auto_confidence: score,
     auto_confidence_breakdown: breakdown,
     auto_reason: reason,

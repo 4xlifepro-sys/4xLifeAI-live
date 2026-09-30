@@ -19,20 +19,6 @@ const ASIAN_OPTIONS = ['Asian High Taken', 'Asian Low Taken', 'Neither Taken'];
 const STRATEGIES = ['Classic A', 'Classic V'];
 const TRADE_TYPES = ['Main Trend', 'Counter Trend'];
 const ASIAN_REACTIONS = ['Wick Taken', 'Body Taken', 'Not Taken'];
-const CONFIRMATIONS_15M = [
-  { key: 'mss', label: 'MSS' },
-  { key: 'ocl', label: 'OCL' },
-  { key: 'qml', label: 'QML' },
-  { key: 'rbs', label: 'RBS' },
-  { key: 'sbr', label: 'SBR' },
-];
-const CONFIRMATIONS_5M = [
-  { key: 'mss', label: 'MSS' },
-  { key: 'ocl', label: 'OCL' },
-  { key: 'qml', label: 'QML' },
-  { key: 'rbs', label: 'RBS' },
-  { key: 'sbr', label: 'SBR' },
-];
 const CONFIRMATIONS_1M = [
   { key: 'mss', label: 'MSS' },
   { key: 'ocl', label: 'OCL' },
@@ -78,16 +64,6 @@ interface Draft {
   confirmation_qml: boolean;
   confirmation_rbs: boolean;
   confirmation_sbr: boolean;
-  confirmation_5m_mss: boolean;
-  confirmation_5m_ocl: boolean;
-  confirmation_5m_qml: boolean;
-  confirmation_5m_rbs: boolean;
-  confirmation_5m_sbr: boolean;
-  confirmation_1m_mss: boolean;
-  confirmation_1m_ocl: boolean;
-  confirmation_1m_qml: boolean;
-  confirmation_1m_rbs: boolean;
-  confirmation_1m_sbr: boolean;
   entry: number;
   sl: number;
   sl_mode?: 'price' | 'pips';
@@ -130,16 +106,6 @@ interface HistorySignal {
   confirmation_qml: boolean;
   confirmation_rbs: boolean;
   confirmation_sbr: boolean;
-  confirmation_5m_mss: boolean;
-  confirmation_5m_ocl: boolean;
-  confirmation_5m_qml: boolean;
-  confirmation_5m_rbs: boolean;
-  confirmation_5m_sbr: boolean;
-  confirmation_1m_mss: boolean;
-  confirmation_1m_ocl: boolean;
-  confirmation_1m_qml: boolean;
-  confirmation_1m_rbs: boolean;
-  confirmation_1m_sbr: boolean;
   auto_reason: string;
   news_event?: string;
   news_prediction?: string;
@@ -173,8 +139,6 @@ function emptyAnalysis() {
     tradeType: '',
     asianReaction: '',
     confirmations: { mss: false, ocl: false, qml: false, rbs: false, sbr: false },
-    confirmations5m: { mss: false, ocl: false, qml: false, rbs: false, sbr: false },
-    confirmations1m: { mss: false, ocl: false, qml: false, rbs: false, sbr: false },
     entry: '',
     sl: '',
   };
@@ -366,20 +330,6 @@ export default function SignalBuilder() {
           rbs: s.confirmations?.includes('RBS') || false,
           sbr: s.confirmations?.includes('SBR') || false,
         },
-        confirmations5m: {
-          mss: s.confirmations5m?.includes('MSS') || false,
-          ocl: s.confirmations5m?.includes('OCL') || false,
-          qml: s.confirmations5m?.includes('QML') || false,
-          rbs: s.confirmations5m?.includes('RBS') || false,
-          sbr: s.confirmations5m?.includes('SBR') || false,
-        },
-        confirmations1m: {
-          mss: s.confirmations1m?.includes('MSS') || false,
-          ocl: s.confirmations1m?.includes('OCL') || false,
-          qml: s.confirmations1m?.includes('QML') || false,
-          rbs: s.confirmations1m?.includes('RBS') || false,
-          sbr: s.confirmations1m?.includes('SBR') || false,
-        },
         entry: Number.isFinite(s.entry) ? String(s.entry) : '',
         sl: Number.isFinite(s.sl) ? String(s.sl) : '',
       });
@@ -409,10 +359,10 @@ export default function SignalBuilder() {
     setAnalysis((prev) => ({ ...prev, ...patch }));
   };
 
-  const toggleConfirmation = (group: 'confirmations' | 'confirmations5m' | 'confirmations1m', key: string) => {
+  const toggleConfirmation = (key: keyof typeof analysis.confirmations) => {
     setAnalysis((prev) => ({
       ...prev,
-      [group]: { ...(prev as any)[group], [key]: !(prev as any)[group][key] },
+      confirmations: { ...prev.confirmations, [key]: !prev.confirmations[key] },
     }));
   };
 
@@ -437,17 +387,14 @@ export default function SignalBuilder() {
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
     if (!analysis.direction) errors.push('Select BUY or SELL.');
-    if (!analysis.marketStructure) errors.push('Select 1H market structure.');
+    if (!analysis.marketStructure) errors.push('Select 15M market structure.');
     if (!analysis.liquidity) errors.push('Select liquidity status.');
     if (!analysis.asianHighLow) errors.push('Select Asian High/Low status.');
     if (!analysis.strategy) errors.push('Select Classic A or Classic V.');
     if (!analysis.tradeType) errors.push('Select Main Trend or Counter Trend.');
     if (!analysis.asianReaction) errors.push('Select Asian level reaction.');
-    const anyConfirmation =
-      Object.values(analysis.confirmations).some(Boolean) ||
-      Object.values(analysis.confirmations5m).some(Boolean) ||
-      Object.values(analysis.confirmations1m).some(Boolean);
-    if (!anyConfirmation) errors.push('Select at least one 15M, 5M, or 1M confirmation.');
+    const anyConfirmation = Object.values(analysis.confirmations).some(Boolean);
+    if (!anyConfirmation) errors.push('Select at least one 1M confirmation.');
     if (!Number.isFinite(numericEntry) || numericEntry <= 0) errors.push('Enter a valid entry price.');
     if (!Number.isFinite(numericSl) || numericSl <= 0) errors.push('Enter a valid stop loss.');
     if (analysis.direction === 'BUY' && numericSl >= numericEntry) errors.push('BUY SL must be below entry.');
@@ -467,8 +414,6 @@ export default function SignalBuilder() {
     tradeType: analysis.tradeType,
     asianReaction: analysis.asianReaction,
     confirmations: analysis.confirmations,
-    confirmations5m: analysis.confirmations5m,
-    confirmations1m: analysis.confirmations1m,
     entry: numericEntry,
     sl: numericSl,
     tpMultiples: Array.from(selectedMultiples),
@@ -566,20 +511,6 @@ export default function SignalBuilder() {
         qml: draft.confirmation_qml,
         rbs: draft.confirmation_rbs,
         sbr: draft.confirmation_sbr,
-      },
-      confirmations5m: {
-        mss: draft.confirmation_5m_mss,
-        ocl: draft.confirmation_5m_ocl,
-        qml: draft.confirmation_5m_qml,
-        rbs: draft.confirmation_5m_rbs,
-        sbr: draft.confirmation_5m_sbr,
-      },
-      confirmations1m: {
-        mss: draft.confirmation_1m_mss,
-        ocl: draft.confirmation_1m_ocl,
-        qml: draft.confirmation_1m_qml,
-        rbs: draft.confirmation_1m_rbs,
-        sbr: draft.confirmation_1m_sbr,
       },
       entry: Number.isFinite(draft.entry) ? String(draft.entry) : '',
       sl: Number.isFinite(draft.sl) ? String(draft.sl) : '',
@@ -711,9 +642,9 @@ export default function SignalBuilder() {
             </div>
           </div>
 
-          {/* 1H analysis */}
+          {/* 15M analysis */}
           <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-5 space-y-5">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">1H High-Timeframe Analysis</h3>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">15M High-Timeframe Analysis</h3>
             {renderToggleGroup('Market Structure', MARKET_STRUCTURES, analysis.marketStructure, (v) => updateAnalysis({ marketStructure: v }))}
             {renderToggleGroup('Liquidity', LIQUIDITY_OPTIONS, analysis.liquidity, (v) => updateAnalysis({ liquidity: v }))}
             {renderToggleGroup('Asian High / Low', ASIAN_OPTIONS, analysis.asianHighLow, (v) => updateAnalysis({ asianHighLow: v }))}
@@ -722,71 +653,25 @@ export default function SignalBuilder() {
             {renderToggleGroup('Asian Level Reaction', ASIAN_REACTIONS, analysis.asianReaction, (v) => updateAnalysis({ asianReaction: v }))}
           </div>
 
-          {/* Confirmation sections */}
+          {/* 1M confirmation */}
           <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-5 space-y-6">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Lower-Timeframe Confirmations</h3>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">15M Confirmation</label>
-              <div className="flex flex-wrap gap-3">
-                {CONFIRMATIONS_15M.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => toggleConfirmation('confirmations', c.key)}
-                    className={cn(
-                      'px-4 py-3 rounded-xl text-sm font-bold border transition-all',
-                      analysis.confirmations[c.key as keyof typeof analysis.confirmations]
-                        ? 'bg-[#00E08A]/10 border-[#00E08A] text-[#00E08A] shadow-[0_0_15px_rgba(0,224,138,0.15)]'
-                        : 'bg-[#0D1017] border-[#202735] text-[#8A95A5] hover:border-white/20 hover:text-white'
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">5M Confirmation</label>
-              <div className="flex flex-wrap gap-3">
-                {CONFIRMATIONS_5M.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => toggleConfirmation('confirmations5m', c.key)}
-                    className={cn(
-                      'px-4 py-3 rounded-xl text-sm font-bold border transition-all',
-                      analysis.confirmations5m[c.key as keyof typeof analysis.confirmations5m]
-                        ? 'bg-[#00E08A]/10 border-[#00E08A] text-[#00E08A] shadow-[0_0_15px_rgba(0,224,138,0.15)]'
-                        : 'bg-[#0D1017] border-[#202735] text-[#8A95A5] hover:border-white/20 hover:text-white'
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-[#8A95A5] tracking-wider uppercase">1M Confirmation</label>
-              <div className="flex flex-wrap gap-3">
-                {CONFIRMATIONS_1M.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => toggleConfirmation('confirmations1m', c.key)}
-                    className={cn(
-                      'px-4 py-3 rounded-xl text-sm font-bold border transition-all',
-                      analysis.confirmations1m[c.key as keyof typeof analysis.confirmations1m]
-                        ? 'bg-[#00E08A]/10 border-[#00E08A] text-[#00E08A] shadow-[0_0_15px_rgba(0,224,138,0.15)]'
-                        : 'bg-[#0D1017] border-[#202735] text-[#8A95A5] hover:border-white/20 hover:text-white'
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">1M Confirmation</h3>
+            <div className="flex flex-wrap gap-3">
+              {CONFIRMATIONS_1M.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => toggleConfirmation(c.key as keyof typeof analysis.confirmations)}
+                  className={cn(
+                    'px-4 py-3 rounded-xl text-sm font-bold border transition-all',
+                    analysis.confirmations[c.key as keyof typeof analysis.confirmations]
+                      ? 'bg-[#00E08A]/10 border-[#00E08A] text-[#00E08A] shadow-[0_0_15px_rgba(0,224,138,0.15)]'
+                      : 'bg-[#0D1017] border-[#202735] text-[#8A95A5] hover:border-white/20 hover:text-white'
+                  )}
+                >
+                  {c.label}
+                </button>
+              ))}
             </div>
           </div>
 
