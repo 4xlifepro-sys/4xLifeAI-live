@@ -1836,10 +1836,11 @@ async function startServer() {
 HIGH-IMPACT ECONOMIC CALENDAR (red-folder events only, ${tz ? "times in the USER'S LOCAL time" : 'times in GMT/UTC'}):
 ${calendarBlock}
 
-${base64Data2 ? `DUAL-TIMEFRAME MODE — TWO charts of the SAME pair are attached:
-IMAGE #1 (first image) = HIGHER TIMEFRAME chart (sets the direction).
-IMAGE #2 (second image) = ENTRY TIMEFRAME chart (sets the timing).
-` : ''}Analyze this trading chart screenshot using professional price action methodology.
+${base64Data2 ? `TWO-CHART MODE — TWO screenshots are attached:
+IMAGE #1 (first image) = the primary chart.
+IMAGE #2 (second image) = a second chart for the same instrument.
+Read each timeframe only from its visible chart label. Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
+` : `SINGLE-CHART MODE — read the timeframe only from the visible chart label. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
 
 Determine:
 1. Trend (Bullish/Bearish/Range)
@@ -1872,22 +1873,25 @@ NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the d
 - newsEvent: short label like "NFP · Fri 3:30pm" (event name + day + time EXACTLY as shown in the calendar above).
 - newsTime: copy the matching event's normalized UTC timestamp from the calendar data exactly. Never calculate it from the display label, user's timezone, or current time.
 
-DUAL-TIMEFRAME RULES (apply ONLY when two charts are attached):
+MULTI-CHART RULES (apply when two screenshots are attached):
+- Read each chart's timeframe from its visible chart label only; never infer it from candle patterns, image order, or assumed workflow.
+- Set timeframe to "<IMAGE #1 timeframe>/<IMAGE #2 timeframe>" using the visible labels (for example, "15M/5M"). If either label is unreadable, write "Unclear" for that chart's timeframe.
+- When one screenshot is attached, set timeframe to its visible chart label or "Unclear" if unreadable.
 - Read the directional bias of each chart (bullish / bearish / range).
 - tfStatus = "ALIGNED" if both charts lean the same direction; "CONFLICT" if they disagree (one bullish vs the other bearish, or one strongly trending vs the other reversing).
-- If tfStatus = "CONFLICT": trade MUST be "WAIT", and warnings must state that the two timeframes disagree.
+- If tfStatus = "CONFLICT": trade MUST be "WAIT", and warnings must state that the two charts disagree.
 - If tfStatus = "ALIGNED" and trade is BUY/SELL in that same direction: raise confidence by 10 points (max 80).
-- tfNote: ONE short sentence, e.g. "H1 trend up and M5 pullback also up — aligned for BUY." Never promise outcomes.
+- tfNote: ONE short sentence using only the visible chart timeframes. Never invent or assume a timeframe.
 - When only one chart is attached: tfStatus = "SINGLE", tfNote = "".
 
 CRITICAL RULES FOR SIGNAL GENERATION:
-- GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, higher timeframe structure, and confluence of price action
+- GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, visible chart structure, and confluence of price action
 - Only return WAIT if: (1) setup is genuinely unclear, (2) momentum is exhausted/reversal imminent, (3) price is in a true ranging market
 - For strong trends with higher highs/lows: Return BUY if trend is bullish and structure is clear (breakout or pullback both valid)
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
-- ENTRY TYPE RULE: use BUY STOP or SELL STOP when the setup is valid but the breakout/breakdown close has not happened. Use IMMEDIATE BUY or IMMEDIATE SELL only when the screenshot or entry-timeframe evidence shows a completed directional close and live price remains near the valid entry. A wick, touch, bias, or confidence score is not confirmation.
+- ENTRY TYPE RULE: use BUY STOP or SELL STOP when the setup is valid but the breakout/breakdown close has not happened on the visible entry chart. Use IMMEDIATE BUY or IMMEDIATE SELL only when the screenshot shows a completed directional close and live price remains near the valid entry. A wick, touch, bias, or confidence score is not confirmation.
 - IMMEDIATE ENTRY RULE: when confirmation is complete, entry MUST be the current market price. For an unconfirmed setup, use WAIT with a BUY STOP or SELL STOP entry type and a visible trigger level.
 - Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
 - ALWAYS calculate all three take profits at exactly 1R, 2R, and 3R from Entry and Stop Loss
@@ -2089,7 +2093,7 @@ Return the analysis in this exact JSON format:
           analysis.entryType = direction === 'BUY' ? 'BUY STOP' : 'SELL STOP';
           analysis.status = Number(analysis.confidence) >= 65 ? 'PLANNED' : 'WAITING';
           analysis.triggerPrice = analysis.triggerPrice || analysis.resistance || analysis.support || '';
-          analysis.warnings = `Waiting for a confirmed 5M ${direction === 'BUY' ? 'close above the breakout trigger' : 'close below the breakdown trigger'} before entry. ${analysis.warnings || ''}`.trim();
+          analysis.warnings = `Waiting for a confirmed directional close beyond the visible breakout/breakdown trigger before entry. ${analysis.warnings || ''}`.trim();
         }
       } else {
         analysis.entryType = 'WAITING';

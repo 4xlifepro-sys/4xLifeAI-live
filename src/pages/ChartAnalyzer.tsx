@@ -322,7 +322,7 @@ export default function ChartAnalyzer() {
           {selectedImage ? (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <img src={selectedImage} alt="Selected chart" className="max-h-96 mx-auto rounded-2xl border border-cyan-400/30 shadow-2xl" />
-              <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Chart 1 — Higher Timeframe (H4 / H1)</p>
+              <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Chart 1 — Main screenshot (timeframe read from chart)</p>
               <p className="text-sm text-slate-400 font-medium">{selectedFileName}</p>
               <p className="text-xs text-slate-600">Click or drop to replace</p>
             </div>
@@ -332,7 +332,7 @@ export default function ChartAnalyzer() {
                 <Upload className="w-10 h-10 text-cyan-400" />
               </div>
               <div>
-                <p className="text-lg font-bold text-white">Chart 1 — Higher timeframe (H4 / H1)</p>
+                <p className="text-lg font-bold text-white">Chart 1 — Main screenshot (timeframe read from chart)</p>
                 <p className="text-sm text-slate-400 mt-1">Drop or click to select your chart</p>
                 <p className="text-xs text-slate-600 mt-3">PNG, JPG, JPEG • Max 10MB • TradingView, MT4, MT5 supported</p>
               </div>
@@ -340,7 +340,7 @@ export default function ChartAnalyzer() {
           )}
         </div>
 
-        {/* Chart 2 — Entry timeframe (optional) */}
+        {/* Chart 2 — Additional screenshot (optional) */}
         <div
           onDrop={handleDrop2}
           onDragOver={handleDragOver}
@@ -355,16 +355,16 @@ export default function ChartAnalyzer() {
           <input ref={fileInput2Ref} type="file" accept="image/*" onChange={handleImageSelect2} className="hidden" />
           {selectedImage2 ? (
             <div className="flex items-center justify-center gap-4">
-              <img src={selectedImage2} alt="Entry timeframe chart" className="max-h-28 rounded-xl border border-cyan-400/30" />
+              <img src={selectedImage2} alt="Second chart screenshot" className="max-h-28 rounded-xl border border-cyan-400/30" />
               <div className="text-left">
-                <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Chart 2 — Entry TF (M15 / M5)</p>
+                <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Chart 2 — Additional screenshot (timeframe read from chart)</p>
                 <p className="text-sm text-slate-400 font-medium mt-0.5">{selectedFileName2}</p>
                 <p className="text-[11px] text-slate-500 mt-1">Click to replace</p>
               </div>
             </div>
           ) : (
             <p className="text-sm text-slate-400">
-              <span className="font-bold text-slate-200">+ Chart 2 (optional):</span> entry timeframe (M15 / M5) of the SAME pair — the AI checks if both timeframes agree for a stronger signal.
+              <span className="font-bold text-slate-200">+ Chart 2 (optional):</span> another screenshot of the same instrument. The analyzer reads its timeframe from the chart itself.
             </p>
           )}
         </div>
