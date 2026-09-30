@@ -1894,7 +1894,7 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades
 - For WAIT trades, still show hypothetical levels based on nearest swing points
 - Never invent prices; only use what is clearly visible
-- Confidence should reflect: Strong clear setups = 75-95%, Decent setups = 60-75%, Ambiguous = 40-60%, Unclear = <40%
+- Confidence is a setup-strength score, not a win-rate or profit probability. It must be an integer from 0 to 80; never return more than 80. Use: Strong clear setups = 70-80, Decent setups = 60-69, Ambiguous = 40-59, Unclear = 0-39.
 
 Return the analysis in this exact JSON format:
 {
