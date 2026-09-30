@@ -44,14 +44,6 @@ interface AnalysisResult {
     updatedAt: string | null;
     reason: string;
   };
-  targetValidation?: {
-    status: string;
-    historicalTimeframe?: string;
-    tp1: { price: number; source: string; rr: number } | null;
-    tp2: { price: number; source: string; rr: number } | null;
-    tp3: { price: number; source: string; rr: number } | null;
-    reasons: string[];
-  };
 }
 
 const ANALYSIS_STEPS = [
@@ -562,9 +554,9 @@ export default function ChartAnalyzer() {
                 {[
                   { label: 'Entry', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
                   { label: 'Stop Loss', value: result.stopLoss, color: 'text-red-400', bg: 'bg-red-500/10' },
-                  { label: 'TP1', value: result.tp1, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP2', value: result.tp2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                  { label: 'TP3', value: result.tp3, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP1 (1R)', value: result.tp1, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP2 (2R)', value: result.tp2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                  { label: 'TP3 (3R)', value: result.tp3, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                 ].map((level) => (
                   <button
                     key={level.label}
@@ -683,46 +675,6 @@ export default function ChartAnalyzer() {
                 })()}
               </div>
             )}
-
-            {result.targetValidation && (
-              <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 px-5 py-4">
-                <p className="text-sm font-bold text-violet-200">
-                  Target structure: {result.targetValidation.status === 'READY' ? 'READY' : 'WAITING'}
-                </p>
-                <p className="mt-1 text-xs text-slate-300">
-                  TP1: {result.targetValidation.tp1 ? `${result.targetValidation.tp1.price} (${result.targetValidation.tp1.rr.toFixed(2)}R) — screenshot structure` : 'not validated'}
-                </p>
-                <p className="mt-1 text-xs text-slate-300">
-                  TP2: {result.targetValidation.tp2 ? `${result.targetValidation.tp2.price} (${result.targetValidation.tp2.rr.toFixed(2)}R) — 1H historical structure` : 'not available'}
-                </p>
-                <p className="mt-1 text-xs text-slate-300">
-                  TP3: {result.targetValidation.tp3 ? `${result.targetValidation.tp3.price} (${result.targetValidation.tp3.rr.toFixed(2)}R) — 1H historical structure` : 'not available'}
-                </p>
-                {result.targetValidation.reasons.length > 0 && (
-                  <p className="mt-2 text-xs text-amber-200">{result.targetValidation.reasons.join(' ')}</p>
-                )}
-              </div>
-            )}
-
-            <div className={cn(
-              "rounded-2xl border px-5 py-4",
-              result.trade.toUpperCase() === 'WAIT' && Number(result.confidence) < 65
-                ? "border-amber-400/30 bg-amber-500/10"
-                : result.trade.toUpperCase() === 'WAIT'
-                  ? "border-amber-400/30 bg-amber-500/10"
-                  : "border-emerald-400/30 bg-emerald-500/10"
-            )}>
-              <p className="text-sm font-bold text-white">
-                Decision: {result.trade.toUpperCase() === 'WAIT'
-                  ? 'WAITING'
-                  : (result.entryType || `IMMEDIATE ${result.trade.toUpperCase()}`)}
-              </p>
-              <p className="mt-1 text-xs text-slate-300">
-                {result.trade.toUpperCase() === 'WAIT'
-                  ? 'The setup is not ready to enter now. Wait for the specified trigger before entering.'
-                  : 'The setup is confirmed and the live price is still close enough to the valid entry.'}
-              </p>
-            </div>
 
             {/* Reasoning & Warnings */}
             <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5 backdrop-blur-sm">

@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from "express";
-import { buildHistoricalTargetPlan, calculateRr } from "./server/target-structure.js";
 import {
   publishBuiltSignal,
   listDrafts,
@@ -1852,7 +1851,7 @@ Determine:
 7. Entry Type (BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL)
 8. Entry Price (see entry-type rule below)
 8. Stop Loss (beyond nearest swing)
-9. TP1, TP2, TP3 (logical levels, TP1 RR must be between 1R and 1.5R)
+9. TP1, TP2, TP3 at exactly 1R, 2R, and 3R, calculated only from Entry and Stop Loss
 10. Risk:Reward ratio
 11. Confidence Score (0-80%) — never return more than 80
 12. Reasoning (why this trade exists)
@@ -1891,9 +1890,12 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - ENTRY TYPE RULE: use BUY STOP or SELL STOP when the setup is valid but the breakout/breakdown close has not happened. Use IMMEDIATE BUY or IMMEDIATE SELL only when the screenshot or entry-timeframe evidence shows a completed directional close and live price remains near the valid entry. A wick, touch, bias, or confidence score is not confirmation.
 - IMMEDIATE ENTRY RULE: when confirmation is complete, entry MUST be the current market price. For an unconfirmed setup, use WAIT with a BUY STOP or SELL STOP entry type and a visible trigger level.
 - Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
-- ALWAYS provide Entry, Stop Loss, TP1, TP2, TP3, and Risk:Reward even for WAIT trades
-- For WAIT trades, still show hypothetical levels based on nearest swing points
-- Never invent prices; only use what is clearly visible
+- ALWAYS calculate all three take profits at exactly 1R, 2R, and 3R from Entry and Stop Loss
+- For BUY: risk = entry - stopLoss; TP1 = entry + risk, TP2 = entry + (2 × risk), TP3 = entry + (3 × risk)
+- For SELL: risk = stopLoss - entry; TP1 = entry - risk, TP2 = entry - (2 × risk), TP3 = entry - (3 × risk)
+- TP prices must be derived only from the screenshot-based Entry and Stop Loss. Do not use live quotes, historical candles, or market structure to choose or validate targets
+- Never invent Entry or Stop Loss prices; only use what is clearly visible
+- If Entry and Stop Loss are unreadable or do not define positive directional risk, set all TP fields to "N/A" and explain why
 - Confidence is a setup-strength score, not a win-rate or profit probability. It must be an integer from 0 to 80; never return more than 80. Use: Strong clear setups = 70-80, Decent setups = 60-69, Ambiguous = 40-59, Unclear = 0-39.
 
 Return the analysis in this exact JSON format:
@@ -2060,54 +2062,6 @@ Return the analysis in this exact JSON format:
         liveValidation.status = 'WAITING';
         liveValidation.reason = 'Pair was not readable or is not supported by cTrader validation';
       }
-      let targetValidation: any = {
-        status: 'WAITING',
-        tp1: null,
-        tp2: null,
-        tp3: null,
-        reasons: ['Target validation not completed.'],
-      };
-      const direction = String(analysis.trade || '').toUpperCase();
-      const entry = Number(analysis.entry);
-      const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
-      const tp1Candidate = Number(analysis.tp1);
-      if ((direction === 'BUY' || direction === 'SELL') && Number.isFinite(entry) && Number.isFinite(stopLoss) && Number.isFinite(tp1Candidate)) {
-        const liveModule: any = await import('./server/live-market-feed.js');
-        const historicalCandles = await liveModule.fetchHistoricalCandles(livePair, '1h', 240);
-        const tp1Rr = calculateRr(direction, entry, stopLoss, tp1Candidate);
-        const plan = buildHistoricalTargetPlan(
-          historicalCandles || [],
-          direction,
-          entry,
-          stopLoss,
-          tp1Candidate,
-        );
-        const tp1 = tp1Rr === null ? null : {
-          price: tp1Candidate,
-          source: 'uploaded screenshot structure',
-          rr: tp1Rr,
-        };
-        const reasons = [...plan.reasons];
-        if (!tp1) reasons.push('Screenshot TP1 is invalid or directionally inconsistent.');
-        if (tp1 && tp1.rr < 1) reasons.push('TP1 is below the minimum acceptable 1R.');
-        if (tp1 && tp1.rr > 1.5) reasons.push('TP1 is above the maximum acceptable 1.5R; select the nearest valid structure target.');
-        if (!plan.tp2) reasons.push('A valid cTrader 1H TP2 target was not found.');
-        if (!plan.tp3) reasons.push('A valid cTrader 1H TP3 target at 3R or higher was not found.');
-        targetValidation = {
-          status: tp1 && tp1.rr >= 1 && tp1.rr <= 1.5 && plan.tp2 && plan.tp3 ? 'READY' : 'WAITING',
-          tp1,
-          tp2: plan.tp2,
-          tp3: plan.tp3,
-          historicalTimeframe: '1H',
-          reasons: [...new Set(reasons)],
-        };
-      }
-      if (targetValidation.status !== 'READY' && direction !== 'WAIT') {
-        analysis.trade = 'WAIT';
-        analysis.status = 'WAITING';
-        analysis.warnings = `${targetValidation.reasons.join(' ')} ${analysis.warnings || ''}`.trim();
-      }
-
       const requestedEntryType = String(analysis.entryType || '').toUpperCase();
       const hasCompletedConfirmation = requestedEntryType === 'IMMEDIATE BUY' || requestedEntryType === 'IMMEDIATE SELL';
       const livePrice = liveValidation.livePrice;
@@ -2145,16 +2099,45 @@ Return the analysis in this exact JSON format:
         ? liveValidation.livePrice
         : analysis.entry;
 
+      const direction = String(analysis.trade || '').toUpperCase();
+      const entry = Number(analysis.entry);
+      const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
+      const risk = direction === 'BUY'
+        ? entry - stopLoss
+        : direction === 'SELL'
+          ? stopLoss - entry
+          : Number.NaN;
+      if (direction === 'BUY' || direction === 'SELL') {
+        if (Number.isFinite(entry) && Number.isFinite(stopLoss) && risk > 0) {
+          const entryPrecision = String(analysis.entry).split('.')[1]?.length || 0;
+          const stopPrecision = String(analysis.stopLoss ?? analysis.sl).split('.')[1]?.length || 0;
+          const precision = Math.min(8, Math.max(entryPrecision, stopPrecision));
+          const formatTarget = (price: number) => Number(price.toFixed(precision)).toString();
+          analysis.tp1 = formatTarget(direction === 'BUY' ? entry + risk : entry - risk);
+          analysis.tp2 = formatTarget(direction === 'BUY' ? entry + 2 * risk : entry - 2 * risk);
+          analysis.tp3 = formatTarget(direction === 'BUY' ? entry + 3 * risk : entry - 3 * risk);
+          analysis.riskReward = '1R / 2R / 3R';
+        } else {
+          analysis.trade = 'WAIT';
+          analysis.entryType = 'WAITING';
+          analysis.status = 'WAITING';
+          analysis.tp1 = 'N/A';
+          analysis.tp2 = 'N/A';
+          analysis.tp3 = 'N/A';
+          analysis.riskReward = 'N/A';
+          analysis.warnings = `Entry and Stop Loss must define positive risk before 1R/2R/3R targets can be calculated. ${analysis.warnings || ''}`.trim();
+        }
+      }
+
       console.log('[ChartAnalyzer] cTrader live validation', {
         pair: liveValidation.pair,
         status: liveValidation.status,
         livePrice: liveValidation.livePrice,
         updatedAt: liveValidation.updatedAt,
         reason: liveValidation.reason,
-        targetValidation,
       });
 
-      res.json({ success: true, analysis: { ...analysis, liveValidation, targetValidation } });
+      res.json({ success: true, analysis: { ...analysis, liveValidation } });
     } catch (e: any) {
       let errorMessage = 'Failed to analyze chart';
       
