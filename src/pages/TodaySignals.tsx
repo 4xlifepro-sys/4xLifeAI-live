@@ -277,13 +277,27 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                   </div>
                 </div>
                 {signal.news_event && signal.news_prediction && (
-                  <div className={cn(
-                    'text-xs italic border rounded-lg px-3 py-2',
-                    signal.news_prediction === signal.direction
-                      ? 'border-[#00E08A]/20 bg-[#00E08A]/5 text-[#00E08A]'
-                      : 'border-red-500/20 bg-red-500/5 text-red-400'
-                  )}>
-                    News outlook: {signal.news_prediction === signal.direction ? 'supports' : 'conflicts with'} {signal.direction} ({signal.news_event})
+                  <div className="rounded-lg border border-amber-400/30 bg-amber-500/5 px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                      <span className="font-bold uppercase tracking-wider text-amber-300">Today's News</span>
+                      <span className="text-slate-200">{signal.news_event}</span>
+                      {signal.news_time && Number.isFinite(new Date(signal.news_time).getTime()) && (
+                        <span className="text-slate-400">
+                          {new Date(signal.news_time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className={cn(
+                        'rounded px-2 py-1 font-bold',
+                        signal.news_prediction === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' :
+                        signal.news_prediction === 'SELL' ? 'bg-red-500/10 text-red-400' : 'bg-slate-500/10 text-slate-300'
+                      )}>
+                        {signal.news_prediction}{signal.news_probability ? ` ${signal.news_probability}%` : ''}
+                      </span>
+                      {signal.news_impact && <span className="text-amber-300">{signal.news_impact} impact</span>}
+                    </div>
+                    {signal.news_reason && <p className="mt-2 text-xs leading-relaxed text-slate-400">{signal.news_reason}</p>}
                   </div>
                 )}
               </div>

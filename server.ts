@@ -1291,6 +1291,9 @@ async function startServer() {
       news_event: hasFutureNews ? String(analysis.newsEvent) : null,
       news_impact: hasFutureNews ? 'HIGH' : null,
       news_time: hasFutureNews ? normalizedNewsTime : null,
+      news_prediction: hasFutureNews ? String(analysis.newsPrediction || 'NEUTRAL').toUpperCase() : null,
+      news_probability: hasFutureNews ? Math.max(50, Math.min(75, Number(analysis.newsProbability) || 50)) : null,
+      news_reason: hasFutureNews ? String(analysis.newsReason || '') : null,
       reason: `${analysis.reasoning || 'Manual screenshot signal'}${hasFutureNews ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };
 
