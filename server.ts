@@ -2062,6 +2062,7 @@ Return the analysis in this exact JSON format:
         liveValidation.status = 'WAITING';
         liveValidation.reason = 'Pair was not readable or is not supported by cTrader validation';
       }
+      const direction = String(analysis.trade || '').toUpperCase();
       const requestedEntryType = String(analysis.entryType || '').toUpperCase();
       const hasCompletedConfirmation = requestedEntryType === 'IMMEDIATE BUY' || requestedEntryType === 'IMMEDIATE SELL';
       const livePrice = liveValidation.livePrice;
@@ -2099,7 +2100,6 @@ Return the analysis in this exact JSON format:
         ? liveValidation.livePrice
         : analysis.entry;
 
-      const direction = String(analysis.trade || '').toUpperCase();
       const entry = Number(analysis.entry);
       const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
       const risk = direction === 'BUY'
