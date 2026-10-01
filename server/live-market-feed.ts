@@ -108,7 +108,7 @@ export async function getLatestPrice(pair: string): Promise<{ pair: string; pric
     pair,
     price: null,
     digits: null,
-    timestamp: Date.now()
+    timestamp: 0
   };
 
   try {
@@ -141,8 +141,12 @@ export async function getLatestPrice(pair: string): Promise<{ pair: string; pric
     result.digits = digits;
     result.raw = { last, full: { symbolId: full?.symbolId, digits: full?.digits, name: full?.symbolName } };
     const decoded = decodeTrendbar(last, digits);
-    if (decoded && Number.isFinite(decoded.close)) {
+    const quoteTimestamp = decoded ? Date.parse(decoded.timestamp) : NaN;
+    if (!Number.isFinite(quoteTimestamp) || quoteTimestamp <= 0) {
+      result.error = 'quote_timestamp_unavailable';
+    } else if (decoded && Number.isFinite(decoded.close)) {
       result.price = decoded.close;
+      result.timestamp = quoteTimestamp;
     } else {
       result.error = 'invalid_close';
     }

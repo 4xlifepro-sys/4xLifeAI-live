@@ -62,33 +62,55 @@ function normalizeCalendarTitle(value: unknown): string {
     .replace(/\s+/g, ' ');
 }
 
-function matchCalendarEvent(events: FFEvent[], title: string, country?: string): string | null {
-  const requestedTitle = String(title || '').split('·')[0].trim();
-  const normalizedTitle = normalizeCalendarTitle(requestedTitle);
-  if (!normalizedTitle) return null;
+function calendarDateKey(date: Date, timeZone?: string): string {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+  } catch {
+    parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+  }
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function pairCurrencies(pair: string): string[] {
+  const normalized = String(pair || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (normalized.includes('XAU') || normalized.includes('XAG') || normalized.includes('GOLD') || normalized.includes('SILVER')) return ['USD'];
+  const code = normalized.slice(0, 6);
+  return code.length === 6 ? [code.slice(0, 3), code.slice(3, 6)] : [];
+}
+
+function getUpcomingHighImpactEvents(events: FFEvent[], currencies: string[], timeZone?: string): Array<{ event: FFEvent; timestamp: string }> {
   const now = Date.now();
-  const candidates = events
+  const today = calendarDateKey(new Date(now), timeZone);
+  const relevantCurrencies = new Set(currencies.map((currency) => currency.toUpperCase()));
+  return events
     .map((event) => ({ event, timestamp: parseForexFactoryEventUtc(event) }))
     .filter(({ event, timestamp }) => {
-      if (!timestamp || new Date(timestamp).getTime() <= now) return false;
-      if (country && String(event.country || '').toUpperCase() !== String(country).toUpperCase()) return false;
-      return normalizeCalendarTitle(event.title) === normalizedTitle;
+      if ((event.impact || '').toLowerCase() !== 'high' || !timestamp) return false;
+      const eventDate = new Date(timestamp);
+      if (eventDate.getTime() <= now || calendarDateKey(eventDate, timeZone) !== today) return false;
+      return relevantCurrencies.has(String(event.country || '').toUpperCase());
     })
-    .sort((a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime());
-  const selected = candidates[0];
-  console.log(selected ? '[calendar] matched event' : '[calendar] no exact future event match', {
-    requestedTitle,
-    matchedTitle: selected?.event.title || null,
-    country: selected?.event.country || country || null,
-    rawDate: selected?.event.date || null,
-    rawTime: selected?.event.time || null,
-    normalizedUtc: selected?.timestamp || null,
-    nowUtc: new Date(now).toISOString(),
-    remainingSeconds: selected?.timestamp
-      ? Math.max(0, Math.floor((new Date(selected.timestamp).getTime() - now) / 1000))
-      : null,
-  });
-  return selected?.timestamp || null;
+    .sort((a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime())
+    .map(({ event, timestamp }) => ({ event, timestamp: timestamp! }));
+}
+
+function matchCalendarEvent(events: FFEvent[], title: string, currencies: string[], timeZone?: string): string | null {
+  const normalizedTitle = normalizeCalendarTitle(String(title || '').split('·')[0]);
+  if (!normalizedTitle) return null;
+  return getUpcomingHighImpactEvents(events, currencies, timeZone)
+    .find(({ event }) => normalizeCalendarTitle(event.title) === normalizedTitle)?.timestamp || null;
 }
 let ffCache: { at: number; events: FFEvent[] } | null = null;
 const FF_CACHE_MS = 15 * 60 * 1000; // 15 minutes
@@ -119,38 +141,43 @@ async function getEconomicCalendar(): Promise<FFEvent[]> {
   }
 }
 
+function isEconomicCalendarAvailable(): boolean {
+  return Boolean(ffCache && Date.now() - ffCache.at <= FF_CACHE_MS * 2);
+}
+
 // Build a compact, high-impact-only calendar string for the analysis engine.
 // We include the currency so Gemini can match it to the detected pair.
 // Times are shown in the viewer's local timezone when provided (like Forex Factory).
 function buildCalendarPromptBlock(events: FFEvent[], timeZone?: string): string {
   const now = Date.now();
-  const highImpact = events.filter((e) => {
-    const impact = (e.impact || '').toLowerCase();
-    if (impact !== 'high') return false;
-    const normalizedUtc = parseForexFactoryEventUtc(e);
-    const t = normalizedUtc ? new Date(normalizedUtc).getTime() : NaN;
-    if (isNaN(t)) return false;
-    return t > now && t < now + 5 * 24 * 60 * 60 * 1000;
+  const today = calendarDateKey(new Date(now), timeZone);
+  const highImpact = events.filter((event) => {
+    if ((event.impact || '').toLowerCase() !== 'high') return false;
+    const timestamp = parseForexFactoryEventUtc(event);
+    if (!timestamp) return false;
+    const eventDate = new Date(timestamp);
+    return eventDate.getTime() > now && calendarDateKey(eventDate, timeZone) === today;
   });
-  if (highImpact.length === 0) return 'NONE (no high-impact red-folder events this week).';
+  if (highImpact.length === 0) return 'NONE (no upcoming high-impact events for today).';
   return highImpact
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date))
     .slice(0, 20)
-    .map((e) => {
-      const normalizedUtc = parseForexFactoryEventUtc(e);
-      const d = normalizedUtc ? new Date(normalizedUtc) : new Date(NaN);
+    .map((event) => {
+      const timestamp = parseForexFactoryEventUtc(event);
+      const date = timestamp ? new Date(timestamp) : new Date(NaN);
       let when: string;
-      if (isNaN(d.getTime())) when = e.date;
+      if (isNaN(date.getTime())) when = event.date;
       else if (timeZone) {
         try {
-          when = d.toLocaleString('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (user local time)';
+          when = date.toLocaleString('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (user local time)';
         } catch {
-          when = d.toUTCString().replace(':00 GMT', ' GMT') + ' (GMT)';
+          when = date.toUTCString().replace(':00 GMT', ' GMT') + ' (GMT)';
         }
       } else {
-        when = d.toUTCString().replace(':00 GMT', ' GMT') + ' (GMT)';
+        when = date.toUTCString().replace(':00 GMT', ' GMT') + ' (GMT)';
       }
-      const actual = e.actual && e.actual !== '' ? e.actual : 'PENDING';
-      return `- ${when} | ${e.country} | ${e.title} | forecast: ${e.forecast || 'n/a'} | previous: ${e.previous || 'n/a'} | actual: ${actual}`;
+      const actual = event.actual && event.actual !== '' ? event.actual : 'PENDING';
+      return `- ${when} | ${event.country} | ${event.title} | forecast: ${event.forecast || 'n/a'} | previous: ${event.previous || 'n/a'} | actual: ${actual}`;
     })
     .join('\n');
 }
@@ -1208,6 +1235,47 @@ async function startServer() {
     return aliases[normalized] || normalized;
   }
 
+  async function getFreshLiveQuote(pair: string): Promise<{ price: number | null; digits: number; timestamp: number; error?: string }> {
+    try {
+      const liveModule: any = await import('./server/live-market-feed.js');
+      const quote = await liveModule.getLatestPrice(pair);
+      const price = Number(quote?.price);
+      const timestamp = Number(quote?.timestamp);
+      const ageMs = Date.now() - timestamp;
+      if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0) {
+        return { price: null, digits: 5, timestamp: 0, error: quote?.error || 'No valid live quote was returned.' };
+      }
+      if (ageMs < -5000 || ageMs > 90_000) {
+        return { price: null, digits: Number(quote.digits) || 5, timestamp, error: 'The live quote is stale. Wait for an updated market price and retry.' };
+      }
+      const digits = Math.min(8, Math.max(0, Math.trunc(Number(quote.digits) || 5)));
+      return { price: Number(price.toFixed(digits)), digits, timestamp };
+    } catch (error: any) {
+      return { price: null, digits: 5, timestamp: 0, error: error?.message || 'Live quote is unavailable.' };
+    }
+  }
+
+  function applyLiveEntryAndTargets(analysis: any, quote: { price: number; digits: number; timestamp: number }): string | null {
+    analysis.entry = Number(quote.price.toFixed(quote.digits)).toString();
+    analysis.liveMarketUpdatedAt = new Date(quote.timestamp).toISOString();
+    const direction = String(analysis.trade || '').toUpperCase();
+    if (direction !== 'BUY' && direction !== 'SELL') return null;
+
+    const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
+    const risk = direction === 'BUY' ? quote.price - stopLoss : stopLoss - quote.price;
+    if (!Number.isFinite(stopLoss) || stopLoss <= 0 || !Number.isFinite(risk) || risk <= 0) {
+      return `${direction} stop loss must remain beyond the fresh live Entry price.`;
+    }
+
+    const precision = Math.min(8, Math.max(quote.digits, String(analysis.stopLoss ?? analysis.sl).split('.')[1]?.length || 0));
+    const formatTarget = (price: number) => Number(price.toFixed(precision)).toString();
+    analysis.tp1 = formatTarget(direction === 'BUY' ? quote.price + risk : quote.price - risk);
+    analysis.tp2 = formatTarget(direction === 'BUY' ? quote.price + 2 * risk : quote.price - 2 * risk);
+    analysis.tp3 = formatTarget(direction === 'BUY' ? quote.price + 3 * risk : quote.price - 3 * risk);
+    analysis.riskReward = '1R / 2R / 3R';
+    return null;
+  }
+
   async function publishManualSignal(analysis: any, pair: string): Promise<{ ok: boolean; error?: string; signal?: any }> {
     if (!supabase) return { ok: false, error: 'Supabase not available' };
 
@@ -1297,7 +1365,15 @@ async function startServer() {
       reason: `${analysis.reasoning || 'Manual screenshot signal'}${hasFutureNews ? ` NEWS: ${analysis.newsEvent} — ${analysis.newsPrediction || 'NEUTRAL'} ${analysis.newsProbability || 50}% — ${analysis.newsReason || ''}` : ''}`,
     };
 
-    const { error: insertError } = await supabase.from('signals').insert([signalPayload]);
+    let { error: insertError } = await supabase.from('signals').insert([signalPayload]);
+    if (insertError && /news_(?:event|impact|time|prediction|probability|reason).*column|column.*news_(?:event|impact|time|prediction|probability|reason)/i.test(insertError.message)) {
+      const compatiblePayload = { ...signalPayload };
+      for (const newsColumn of ['news_event', 'news_impact', 'news_time', 'news_prediction', 'news_probability', 'news_reason']) {
+        delete compatiblePayload[newsColumn];
+      }
+      const retry = await supabase.from('signals').insert([compatiblePayload]);
+      insertError = retry.error;
+    }
     if (insertError) {
       return { ok: false, error: insertError.message };
     }
@@ -1320,7 +1396,7 @@ async function startServer() {
           + `News bias: ${String(analysis.newsPrediction || 'NEUTRAL').toUpperCase()} `
           + `${Number(analysis.newsProbability) || 50}%\n`
           + `News scenario: ${analysis.newsReason || 'Monitor the event and volatility.'}`
-        : '📰 NEWS: No high-impact event identified.');
+        : '📰 NEWS: No high-impact news scheduled today for this pair.');
 
     await sendTelegramMessage(msg, process.env.TELEGRAM_VIP_CHAT_ID || undefined);
 
@@ -1360,7 +1436,7 @@ async function startServer() {
           + `Impact: ${String(signal.news_impact || 'N/A').toUpperCase()}\n`
           + `Time: ${signal.news_time || 'Scheduled event time unavailable'}\n`
           + `Analysis: Monitor the event and volatility.`
-        : '\n📰 News: No high-impact event identified.');
+        : '\n📰 No high-impact news scheduled today for this pair.');
   }
 
   async function sendSignalTelegram(signal: any, label = 'SIGNAL') {
@@ -1845,7 +1921,7 @@ IMAGE #2 (second image) = a second chart for the same instrument.
 Read each timeframe only from its visible chart label. Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
 ` : `SINGLE-CHART MODE — read the timeframe only from the visible chart label. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
 
-IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for all chart-derived fields. Never use a live market feed or external quote as a substitute for screenshot content. For Entry, use the latest readable current-price marker from the screenshot with the lowest readable timeframe label; if timeframe labels are unreadable, use IMAGE #1.
+IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for market structure, trend, support/resistance, stop loss, and setup. Never use a live market feed to replace screenshot evidence for technical analysis. Entry is the exception: the server will set Entry from a fresh live market quote after analysis; do not use a screenshot price for Entry or calculate final targets from screenshot price.
 
 Determine:
 1. Trend (Bullish/Bearish/Range)
@@ -1855,14 +1931,14 @@ Determine:
 5. Setup Quality (Breakout/Pullback/Rejection/Continuation)
 6. Trade Decision (BUY/SELL/WAIT)
 7. Entry Type (BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL)
-8. Entry Price (see entry-type rule below)
+8. Entry Price (the server will replace it with a fresh live quote)
 8. Stop Loss (beyond nearest swing)
 9. TP1, TP2, TP3 at exactly 1R, 2R, and 3R, calculated only from Entry and Stop Loss
 10. Risk:Reward ratio
 11. Confidence Score (0-80%) — never return more than 80
 12. Reasoning (why this trade exists)
 13. Warnings (any risks to be aware of)
-14. News Bias — using ONLY the high-impact calendar above, for the currencies in the detected instrument
+14. News Bias — use only upcoming high-impact red-folder events for today in the calendar above and only currencies that belong to the detected instrument. If there are no matching events, set newsHasEvent=false; never invent a news event.
 15. Timeframe Alignment (ONLY when two charts are attached; otherwise tfStatus = "SINGLE")
 
 NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the detected pair):
@@ -1896,16 +1972,12 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
-- ENTRY PRICE RULE: identify each screenshot's timeframe from its visible chart label. Extract screenshotMarketPrice from the latest visible current-price marker on the screenshot with the lowest readable timeframe. If timeframe labels are unreadable, use IMAGE #1. Return that price as screenshotMarketPrice. Entry MUST equal screenshotMarketPrice exactly; never use a support/resistance level, pullback level, stop-order trigger, or live-feed quote as Entry. A pending trigger belongs only in triggerPrice.
-- If the chart does not show a readable current price, set screenshotMarketPrice and entry to "N/A", trade to WAIT, and explain that the price is unreadable. Never infer or invent the current price.
-- ENTRY TYPE RULE: use BUY STOP or SELL STOP only to describe a separate pending trigger, and put that trigger in triggerPrice. Use IMMEDIATE BUY or IMMEDIATE SELL when the screenshot shows a completed directional close and price remains near the valid setup. The Entry field still remains the screenshotMarketPrice.
-- Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
-- ALWAYS calculate all three take profits at exactly 1R, 2R, and 3R from the screenshotMarketPrice Entry and Stop Loss
-- For BUY: risk = entry - stopLoss; TP1 = entry + risk, TP2 = entry + (2 × risk), TP3 = entry + (3 × risk)
-- For SELL: risk = stopLoss - entry; TP1 = entry - risk, TP2 = entry - (2 × risk), TP3 = entry - (3 × risk)
-- TP prices must be derived only from the screenshot-based Entry and Stop Loss. Do not use live quotes, historical candles, or market structure to choose or validate targets
-- Never invent Entry or Stop Loss prices; only use what is clearly visible
-- If Entry and Stop Loss are unreadable or do not define positive directional risk, set all TP fields to "N/A" and explain why
+- ENTRY SOURCE RULE: do not choose a screenshot level as Entry. After analyzing the screenshots, the server will set Entry from a fresh cTrader M1 quote for the detected instrument. If the live quote is unavailable or older than 90 seconds, the server will return WAIT instead of using a stale or screenshot price.
+- TARGET RULE: the server recalculates TP1/TP2/TP3 at 1R/2R/3R from the fresh live Entry and screenshot-based Stop Loss. Do not treat screenshot-based TP values as final.
+- For BUY: risk = live Entry - stopLoss; TP1 = entry + risk, TP2 = entry + (2 × risk), TP3 = entry + (3 × risk)
+- For SELL: risk = stopLoss - live Entry; TP1 = entry - risk, TP2 = entry - (2 × risk), TP3 = entry - (3 × risk)
+- If the live Entry and screenshot-based Stop Loss do not define positive directional risk, set trade to WAIT and explain that price has moved past the valid stop-loss relationship.
+- Never invent the screenshot-based Stop Loss; only use what is clearly visible.
 - Confidence is a setup-strength score, not a win-rate or profit probability. It must be an integer from 0 to 80; never return more than 80. Use: Strong clear setups = 70-80, Decent setups = 60-69, Ambiguous = 40-59, Unclear = 0-39.
 
 Return the analysis in this exact JSON format:
@@ -1919,8 +1991,8 @@ Return the analysis in this exact JSON format:
   "trade": "BUY/SELL/WAIT",
   "entryType": "BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL/WAITING",
   "triggerPrice": "price or empty",
-  "screenshotMarketPrice": "latest visible current price or N/A",
-  "entry": "exactly screenshotMarketPrice",
+  "screenshotMarketPrice": "visible screenshot price for reference or N/A",
+  "entry": "temporary value; server replaces with fresh live quote",
   "stopLoss": "price",
   "tp1": "price",
   "tp2": "price",
@@ -1990,17 +2062,35 @@ Return the analysis in this exact JSON format:
         }
       }
       
-      // Normalize news-bias fields so the analysis engine can never show a misleading value
       if (analysis && typeof analysis === 'object') {
-        analysis.newsHasEvent = analysis.newsHasEvent === true;
-        const calendarNewsTime = analysis.newsEvent
-          ? matchCalendarEvent(calendarEvents, String(analysis.newsEvent), 'USD')
+        const eventCurrencies = pairCurrencies(normalizePair(String(analysis.instrument || '')));
+        const relevantEvents = getUpcomingHighImpactEvents(calendarEvents, eventCurrencies, tz);
+        const matchedNewsTime = analysis.newsEvent
+          ? matchCalendarEvent(calendarEvents, String(analysis.newsEvent), eventCurrencies, tz)
           : null;
-        analysis.newsTime = calendarNewsTime || null;
-        if (!calendarNewsTime || new Date(calendarNewsTime).getTime() <= Date.now()) {
-          analysis.newsHasEvent = false;
+        const selectedNewsTime = matchedNewsTime || relevantEvents[0]?.timestamp || null;
+        analysis.newsTime = selectedNewsTime;
+        analysis.newsHasEvent = Boolean(selectedNewsTime);
+        analysis.newsStatus = !isEconomicCalendarAvailable()
+          ? 'UNAVAILABLE'
+          : !analysis.newsHasEvent
+            ? 'NO_HIGH_IMPACT'
+            : matchedNewsTime
+              ? 'HIGH_IMPACT'
+              : 'HIGH_IMPACT_UNASSESSED';
+        if (!analysis.newsHasEvent) {
           analysis.newsEvent = '';
           analysis.newsTime = null;
+          analysis.newsReason = '';
+          analysis.newsProbability = undefined;
+          analysis.newsBigMove = false;
+        } else if (!matchedNewsTime) {
+          const nextEvent = relevantEvents[0];
+          analysis.newsEvent = nextEvent.event.title;
+          analysis.newsPrediction = 'NEUTRAL';
+          analysis.newsReason = 'A high-impact event is scheduled for this pair today, but no reliable directional news bias was available.';
+          analysis.newsProbability = undefined;
+          analysis.newsBigMove = new Date(nextEvent.timestamp).getTime() - Date.now() <= 48 * 60 * 60 * 1000;
         }
         const pred = String(analysis.newsPrediction || '').toUpperCase();
         analysis.newsPrediction = pred === 'BUY' || pred === 'SELL' ? pred : 'NEUTRAL';
@@ -2008,18 +2098,43 @@ Return the analysis in this exact JSON format:
         analysis.newsProbability = analysis.newsHasEvent && isFinite(prob)
           ? Math.max(50, Math.min(75, Math.round(prob)))
           : undefined;
-        analysis.newsBigMove = analysis.newsBigMove === true;
-        if (!analysis.newsEvent) analysis.newsHasEvent = false;
+        analysis.newsBigMove = analysis.newsHasEvent && analysis.newsBigMove === true;
 
         const screenshotMarketPrice = Number(analysis.screenshotMarketPrice);
-        if (Number.isFinite(screenshotMarketPrice) && screenshotMarketPrice > 0) {
-          analysis.entry = String(analysis.screenshotMarketPrice).trim();
-        } else {
+        analysis.screenshotMarketPrice = Number.isFinite(screenshotMarketPrice) && screenshotMarketPrice > 0
+          ? screenshotMarketPrice.toString()
+          : 'N/A';
+
+        const instrument = normalizePair(analysis.instrument);
+        const liveQuote = APPROVED_PAIRS.includes(instrument)
+          ? await getFreshLiveQuote(instrument)
+          : { price: null, digits: 5, timestamp: 0, error: 'Could not identify a supported pair from the screenshots.' };
+        if (liveQuote.price === null) {
           analysis.entry = 'N/A';
           analysis.trade = 'WAIT';
           analysis.entryType = 'WAITING';
           analysis.status = 'WAITING';
-          analysis.warnings = `The current price is not readable in the screenshot. ${analysis.warnings || ''}`.trim();
+          analysis.tp1 = 'N/A';
+          analysis.tp2 = 'N/A';
+          analysis.tp3 = 'N/A';
+          analysis.riskReward = 'N/A';
+          analysis.warnings = `${liveQuote.error || 'A fresh live quote is unavailable.'} ${analysis.warnings || ''}`.trim();
+        } else {
+          const liveEntryError = applyLiveEntryAndTargets(analysis, {
+            price: liveQuote.price,
+            digits: liveQuote.digits,
+            timestamp: liveQuote.timestamp,
+          });
+          if (liveEntryError) {
+            analysis.trade = 'WAIT';
+            analysis.entryType = 'WAITING';
+            analysis.status = 'WAITING';
+            analysis.tp1 = 'N/A';
+            analysis.tp2 = 'N/A';
+            analysis.tp3 = 'N/A';
+            analysis.riskReward = 'N/A';
+            analysis.warnings = `${liveEntryError} ${analysis.warnings || ''}`.trim();
+          }
         }
 
         // Dual-timeframe safety: a conflict always blocks entry, whatever the analysis returns
@@ -2145,9 +2260,20 @@ Return the analysis in this exact JSON format:
         return res.status(400).json({ error: `Cannot send WAIT signal: ${analysis.trade}` });
       }
 
+      const liveQuote = await getFreshLiveQuote(finalPair);
+      if (liveQuote.price === null) {
+        return res.status(409).json({ error: liveQuote.error || 'Fresh live quote unavailable. Please analyze again before publishing.' });
+      }
+      const liveEntryError = applyLiveEntryAndTargets(analysis, {
+        price: liveQuote.price,
+        digits: liveQuote.digits,
+        timestamp: liveQuote.timestamp,
+      });
+      if (liveEntryError) return res.status(409).json({ error: liveEntryError });
+
       const result = await publishManualSignal(analysis, finalPair);
       if (!result.ok) return res.status(400).json({ error: result.error });
-      res.json({ success: true, signal: result.signal });
+      res.json({ success: true, signal: result.signal, liveMarketUpdatedAt: analysis.liveMarketUpdatedAt });
     } catch (e: any) {
       console.error('[manual-signal/send] error:', e);
       res.status(500).json({ error: e.message || 'Failed to publish manual signal' });

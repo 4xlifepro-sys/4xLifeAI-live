@@ -21,6 +21,8 @@ interface AnalysisResult {
   status?: string;
   entryType?: string;
   entry: string;
+  screenshotMarketPrice?: string;
+  liveMarketUpdatedAt?: string;
   stopLoss: string;
   tp1: string;
   tp2: string;
@@ -30,6 +32,7 @@ interface AnalysisResult {
   reasoning: string;
   warnings: string;
   newsHasEvent?: boolean;
+  newsStatus?: 'HIGH_IMPACT' | 'HIGH_IMPACT_UNASSESSED' | 'NO_HIGH_IMPACT' | 'UNAVAILABLE';
   newsEvent?: string;
   newsPrediction?: string;
   newsProbability?: number;
@@ -223,6 +226,17 @@ export default function ChartAnalyzer() {
       });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Could not publish signal');
+      if (data.signal) {
+        setResult(current => current ? {
+          ...current,
+          entry: String(data.signal.entry_price),
+          stopLoss: String(data.signal.sl),
+          tp1: String(data.signal.tp1),
+          tp2: String(data.signal.tp2),
+          tp3: String(data.signal.tp3),
+          liveMarketUpdatedAt: data.liveMarketUpdatedAt || current.liveMarketUpdatedAt,
+        } : current);
+      }
       setPublishMessage('Published to Today Signals, All Signals, and Engine Signal.');
     } catch (e: any) {
       setPublishMessage(e.message || 'Could not publish signal');
@@ -533,7 +547,7 @@ export default function ChartAnalyzer() {
                 {result.trade.toUpperCase() === 'SELL' && '🔽 Use these prices to SELL'}
                 {result.trade.toUpperCase() === 'WAIT' && '⏸️ Wait for a better setup - do NOT trade now'}
               </p>
-              <p className="text-xs text-slate-500">Entry is read from the current price shown in your uploaded chart screenshot.</p>
+              <p className="text-xs text-slate-500">Entry uses the fresh live market quote{result.liveMarketUpdatedAt ? ` updated ${new Date(result.liveMarketUpdatedAt).toLocaleTimeString()}` : ''}. Screenshot price: {result.screenshotMarketPrice || 'Unavailable'}.</p>
 
               {result.trade.toUpperCase() === 'WAIT' && (
                 <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5">
@@ -546,7 +560,7 @@ export default function ChartAnalyzer() {
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {[
-                  { label: 'Entry', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
+                  { label: 'Entry (Live)', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
                   { label: 'Stop Loss', value: result.stopLoss, color: 'text-red-400', bg: 'bg-red-500/10' },
                   { label: 'TP1 (1R)', value: result.tp1, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                   { label: 'TP2 (2R)', value: result.tp2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
@@ -578,7 +592,7 @@ export default function ChartAnalyzer() {
             {isAdmin && result.trade.toUpperCase() !== 'WAIT' && (
               <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-5">
                 <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Admin confirmation</p>
-                <p className="mt-2 text-sm text-slate-300">Publish this exact screenshot result to Today Signals, All Signals, and Engine Signal.</p>
+                <p className="mt-2 text-sm text-slate-300">Publish this screenshot-based setup with a fresh live Entry and recalculated targets.</p>
                 <button type="button" onClick={handleSendConfirm} disabled={isPublishing || publishMessage.startsWith('Published')} className="mt-4 w-full rounded-xl bg-amber-400 px-5 py-3 font-black text-slate-950 disabled:opacity-60">
                   {isPublishing ? 'Publishing...' : publishMessage.startsWith('Published') ? 'Published' : 'Send Confirm'}
                 </button>
@@ -596,15 +610,23 @@ export default function ChartAnalyzer() {
                   <p className="text-sm font-bold truncate">
                     <span className="text-slate-200">📰 {result.newsEvent}</span>
                     <span className="mx-2 text-slate-500">→</span>
-                    <span className={cn(
-                      result.newsPrediction === 'BUY' ? 'text-emerald-400' :
-                      result.newsPrediction === 'SELL' ? 'text-red-400' : 'text-slate-300'
-                    )}>
-                      {result.newsPrediction === 'BUY' ? 'BUY 🐂' : result.newsPrediction === 'SELL' ? 'SELL 🐻' : 'NEUTRAL ⚖️'}
-                    </span>
-                    <span className={cn('ml-2', (result.newsProbability || 0) >= 65 ? 'text-emerald-400' : 'text-amber-400')}>
-                      {result.newsProbability}%
-                    </span>
+                    {result.newsStatus === 'HIGH_IMPACT_UNASSESSED' ? (
+                      <span className="text-amber-400">⚠️ HIGH IMPACT</span>
+                    ) : (
+                      <>
+                        <span className={cn(
+                          result.newsPrediction === 'BUY' ? 'text-emerald-400' :
+                          result.newsPrediction === 'SELL' ? 'text-red-400' : 'text-slate-300'
+                        )}>
+                          {result.newsPrediction === 'BUY' ? 'BUY 🐂' : result.newsPrediction === 'SELL' ? 'SELL 🐻' : 'NEUTRAL ⚖️'}
+                        </span>
+                        {result.newsProbability !== undefined && (
+                          <span className={cn('ml-2', result.newsProbability >= 65 ? 'text-emerald-400' : 'text-amber-400')}>
+                            {result.newsProbability}%
+                          </span>
+                        )}
+                      </>
+                    )}
                     {result.newsBigMove && <span className="ml-2 text-amber-400">· ⚠️ big move</span>}
                   </p>
                   <span className="text-xs text-slate-500 shrink-0">{showNewsDetail ? '▾' : '▸'}</span>
@@ -614,6 +636,18 @@ export default function ChartAnalyzer() {
                     {result.newsReason} <span className="text-slate-500">(news lean, not a promise)</span>
                   </p>
                 )}
+              </div>
+            )}
+            {!result.newsHasEvent && (
+              <div className={cn(
+                'rounded-2xl border px-5 py-3.5 text-sm',
+                result.newsStatus === 'UNAVAILABLE'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                  : 'border-slate-700/50 bg-slate-800/60 text-slate-300'
+              )}>
+                {result.newsStatus === 'UNAVAILABLE'
+                  ? 'High-impact news calendar is unavailable; today’s news status could not be confirmed.'
+                  : 'No high-impact news scheduled today for this pair.'}
               </div>
             )}
 
