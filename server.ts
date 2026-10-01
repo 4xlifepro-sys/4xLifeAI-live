@@ -1845,7 +1845,7 @@ IMAGE #2 (second image) = a second chart for the same instrument.
 Read each timeframe only from its visible chart label. Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
 ` : `SINGLE-CHART MODE — read the timeframe only from the visible chart label. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
 
-IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for all chart-derived fields. Never use a live market feed or external quote as a substitute for screenshot content. For two screenshots, inspect both charts; Entry is the latest readable current-price marker in the primary screenshot.
+IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for all chart-derived fields. Never use a live market feed or external quote as a substitute for screenshot content. For Entry, use the latest readable current-price marker from the screenshot with the lowest readable timeframe label; if timeframe labels are unreadable, use IMAGE #1.
 
 Determine:
 1. Trend (Bullish/Bearish/Range)
@@ -1896,7 +1896,7 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
-- ENTRY PRICE RULE: extract the latest visible market price from the primary screenshot's current-price marker or the latest candle's visible close. Return it as screenshotMarketPrice. Entry MUST equal screenshotMarketPrice exactly; never use a support/resistance level, pullback level, stop-order trigger, or live-feed quote as Entry. A pending trigger belongs only in triggerPrice.
+- ENTRY PRICE RULE: identify each screenshot's timeframe from its visible chart label. Extract screenshotMarketPrice from the latest visible current-price marker on the screenshot with the lowest readable timeframe. If timeframe labels are unreadable, use IMAGE #1. Return that price as screenshotMarketPrice. Entry MUST equal screenshotMarketPrice exactly; never use a support/resistance level, pullback level, stop-order trigger, or live-feed quote as Entry. A pending trigger belongs only in triggerPrice.
 - If the chart does not show a readable current price, set screenshotMarketPrice and entry to "N/A", trade to WAIT, and explain that the price is unreadable. Never infer or invent the current price.
 - ENTRY TYPE RULE: use BUY STOP or SELL STOP only to describe a separate pending trigger, and put that trigger in triggerPrice. Use IMMEDIATE BUY or IMMEDIATE SELL when the screenshot shows a completed directional close and price remains near the valid setup. The Entry field still remains the screenshotMarketPrice.
 - Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
