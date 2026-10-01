@@ -1894,10 +1894,11 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
-- ENTRY TYPE RULE: use BUY STOP or SELL STOP when the setup is valid but the breakout/breakdown close has not happened on the visible entry chart. Use IMMEDIATE BUY or IMMEDIATE SELL only when the screenshot shows a completed directional close and live price remains near the valid entry. A wick, touch, bias, or confidence score is not confirmation.
-- IMMEDIATE ENTRY RULE: when confirmation is complete, entry MUST be the current market price. For an unconfirmed setup, use WAIT with a BUY STOP or SELL STOP entry type and a visible trigger level.
+- ENTRY PRICE RULE: extract the latest visible market price from the primary screenshot's current-price marker or the latest candle's visible close. Return it as screenshotMarketPrice. Entry MUST equal screenshotMarketPrice exactly; never use a support/resistance level, pullback level, stop-order trigger, or live-feed quote as Entry. A pending trigger belongs only in triggerPrice.
+- If the chart does not show a readable current price, set screenshotMarketPrice and entry to "N/A", trade to WAIT, and explain that the price is unreadable. Never infer or invent the current price.
+- ENTRY TYPE RULE: use BUY STOP or SELL STOP only to describe a separate pending trigger, and put that trigger in triggerPrice. Use IMMEDIATE BUY or IMMEDIATE SELL when the screenshot shows a completed directional close and price remains near the valid setup. The Entry field still remains the screenshotMarketPrice.
 - Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
-- ALWAYS calculate all three take profits at exactly 1R, 2R, and 3R from Entry and Stop Loss
+- ALWAYS calculate all three take profits at exactly 1R, 2R, and 3R from the screenshotMarketPrice Entry and Stop Loss
 - For BUY: risk = entry - stopLoss; TP1 = entry + risk, TP2 = entry + (2 × risk), TP3 = entry + (3 × risk)
 - For SELL: risk = stopLoss - entry; TP1 = entry - risk, TP2 = entry - (2 × risk), TP3 = entry - (3 × risk)
 - TP prices must be derived only from the screenshot-based Entry and Stop Loss. Do not use live quotes, historical candles, or market structure to choose or validate targets
@@ -1916,7 +1917,8 @@ Return the analysis in this exact JSON format:
   "trade": "BUY/SELL/WAIT",
   "entryType": "BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL/WAITING",
   "triggerPrice": "price or empty",
-  "entry": "price",
+  "screenshotMarketPrice": "latest visible current price or N/A",
+  "entry": "exactly screenshotMarketPrice",
   "stopLoss": "price",
   "tp1": "price",
   "tp2": "price",
@@ -2006,6 +2008,17 @@ Return the analysis in this exact JSON format:
           : undefined;
         analysis.newsBigMove = analysis.newsBigMove === true;
         if (!analysis.newsEvent) analysis.newsHasEvent = false;
+
+        const screenshotMarketPrice = Number(analysis.screenshotMarketPrice);
+        if (Number.isFinite(screenshotMarketPrice) && screenshotMarketPrice > 0) {
+          analysis.entry = String(analysis.screenshotMarketPrice).trim();
+        } else {
+          analysis.entry = 'N/A';
+          analysis.trade = 'WAIT';
+          analysis.entryType = 'WAITING';
+          analysis.status = 'WAITING';
+          analysis.warnings = `The current price is not readable in the screenshot. ${analysis.warnings || ''}`.trim();
+        }
 
         // Dual-timeframe safety: a conflict always blocks entry, whatever the analysis returns
         const tf = String(analysis.tfStatus || '').toUpperCase();
@@ -2102,10 +2115,6 @@ Return the analysis in this exact JSON format:
         analysis.entryType = 'WAITING';
         analysis.status = 'WAITING';
       }
-
-      analysis.entry = liveValidation.status === 'CONNECTED' && hasCompletedConfirmation
-        ? liveValidation.livePrice
-        : analysis.entry;
 
       const entry = Number(analysis.entry);
       const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
