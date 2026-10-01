@@ -46,7 +46,6 @@ interface AnalysisResult {
   entryType?: string;
   entry: string;
   screenshotMarketPrice?: string;
-  liveMarketUpdatedAt?: string;
   stopLoss: string;
   tp1: string;
   tp2: string;
@@ -263,11 +262,6 @@ export default function ChartAnalyzer() {
         setResult(current => current ? {
           ...current,
           entry: String(data.signal.entry_price),
-          stopLoss: String(data.signal.sl),
-          tp1: String(data.signal.tp1),
-          tp2: String(data.signal.tp2),
-          tp3: String(data.signal.tp3),
-          liveMarketUpdatedAt: data.liveMarketUpdatedAt || current.liveMarketUpdatedAt,
         } : current);
       }
       setPublishMessage('Published to Today Signals, All Signals, and Engine Signal.');
@@ -580,7 +574,7 @@ export default function ChartAnalyzer() {
                 {result.trade.toUpperCase() === 'SELL' && '🔽 Use these prices to SELL'}
                 {result.trade.toUpperCase() === 'WAIT' && '⏸️ Wait for a better setup - do NOT trade now'}
               </p>
-              <p className="text-xs text-slate-500">Entry uses the fresh live market quote{result.liveMarketUpdatedAt ? ` updated ${new Date(result.liveMarketUpdatedAt).toLocaleTimeString()}` : ''}. Screenshot price: {result.screenshotMarketPrice || 'Unavailable'}.</p>
+              <p className="text-xs text-slate-500">Entry uses the visible current-price marker from the lowest-timeframe screenshot. Screenshot price: {result.screenshotMarketPrice || 'Unavailable'}.</p>
 
               {result.trade.toUpperCase() === 'WAIT' && (
                 <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5">
@@ -593,7 +587,7 @@ export default function ChartAnalyzer() {
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {[
-                  { label: 'Entry (Live)', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
+                  { label: 'Entry (Chart)', value: result.entry, color: 'text-white', bg: 'bg-slate-700/50' },
                   { label: 'Stop Loss', value: result.stopLoss, color: 'text-red-400', bg: 'bg-red-500/10' },
                   { label: 'TP1 (1R)', value: result.tp1, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
                   { label: 'TP2 (2R)', value: result.tp2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
@@ -625,7 +619,7 @@ export default function ChartAnalyzer() {
             {isAdmin && result.trade.toUpperCase() !== 'WAIT' && (
               <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-5">
                 <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Admin confirmation</p>
-                <p className="mt-2 text-sm text-slate-300">Publish this screenshot-based setup with a fresh live Entry and recalculated targets.</p>
+                <p className="mt-2 text-sm text-slate-300">Publish this screenshot-based setup using the chart Entry shown above.</p>
                 <button type="button" onClick={handleSendConfirm} disabled={isPublishing || publishMessage.startsWith('Published')} className="mt-4 w-full rounded-xl bg-amber-400 px-5 py-3 font-black text-slate-950 disabled:opacity-60">
                   {isPublishing ? 'Publishing...' : publishMessage.startsWith('Published') ? 'Published' : 'Send Confirm'}
                 </button>

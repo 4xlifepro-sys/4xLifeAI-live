@@ -1296,47 +1296,6 @@ async function startServer() {
     return aliases[normalized] || normalized;
   }
 
-  async function getFreshLiveQuote(pair: string): Promise<{ price: number | null; digits: number; timestamp: number; error?: string }> {
-    try {
-      const liveModule: any = await import('./server/live-market-feed.js');
-      const quote = await liveModule.getLatestPrice(pair);
-      const price = Number(quote?.price);
-      const timestamp = Number(quote?.timestamp);
-      const ageMs = Date.now() - timestamp;
-      if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0) {
-        return { price: null, digits: 5, timestamp: 0, error: quote?.error || 'No valid live quote was returned.' };
-      }
-      if (ageMs < -5000 || ageMs > 90_000) {
-        return { price: null, digits: Number(quote.digits) || 5, timestamp, error: 'The live quote is stale. Wait for an updated market price and retry.' };
-      }
-      const digits = Math.min(8, Math.max(0, Math.trunc(Number(quote.digits) || 5)));
-      return { price: Number(price.toFixed(digits)), digits, timestamp };
-    } catch (error: any) {
-      return { price: null, digits: 5, timestamp: 0, error: error?.message || 'Live quote is unavailable.' };
-    }
-  }
-
-  function applyLiveEntryAndTargets(analysis: any, quote: { price: number; digits: number; timestamp: number }): string | null {
-    analysis.entry = Number(quote.price.toFixed(quote.digits)).toString();
-    analysis.liveMarketUpdatedAt = new Date(quote.timestamp).toISOString();
-    const direction = String(analysis.trade || '').toUpperCase();
-    if (direction !== 'BUY' && direction !== 'SELL') return null;
-
-    const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
-    const risk = direction === 'BUY' ? quote.price - stopLoss : stopLoss - quote.price;
-    if (!Number.isFinite(stopLoss) || stopLoss <= 0 || !Number.isFinite(risk) || risk <= 0) {
-      return `${direction} stop loss must remain beyond the fresh live Entry price.`;
-    }
-
-    const precision = Math.min(8, Math.max(quote.digits, String(analysis.stopLoss ?? analysis.sl).split('.')[1]?.length || 0));
-    const formatTarget = (price: number) => Number(price.toFixed(precision)).toString();
-    analysis.tp1 = formatTarget(direction === 'BUY' ? quote.price + risk : quote.price - risk);
-    analysis.tp2 = formatTarget(direction === 'BUY' ? quote.price + 2 * risk : quote.price - 2 * risk);
-    analysis.tp3 = formatTarget(direction === 'BUY' ? quote.price + 3 * risk : quote.price - 3 * risk);
-    analysis.riskReward = '1R / 2R / 3R';
-    return null;
-  }
-
   async function publishManualSignal(analysis: any, pair: string): Promise<{ ok: boolean; error?: string; signal?: any }> {
     if (!supabase) return { ok: false, error: 'Supabase not available' };
 
@@ -1989,7 +1948,7 @@ IMAGE #2 (second image) = a second chart for the same instrument.
 Read each timeframe only from its visible chart label. Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
 ` : `SINGLE-CHART MODE — read the timeframe only from the visible chart label. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
 
-IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for market structure, trend, support/resistance, stop loss, and setup. Never use a live market feed to replace screenshot evidence for technical analysis. Entry is the exception: the server will set Entry from a fresh live market quote after analysis; do not use a screenshot price for Entry or calculate final targets from screenshot price.
+IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for market structure, trend, support/resistance, stop loss, and setup. For Entry, use the latest readable current-price marker from the screenshot with the lowest readable timeframe label; if timeframe labels are unreadable, use IMAGE #1. Do not substitute a live market quote for that screenshot price.
 
 Determine:
 1. Trend (Bullish/Bearish/Range)
@@ -1999,7 +1958,7 @@ Determine:
 5. Setup Quality (Breakout/Pullback/Rejection/Continuation)
 6. Trade Decision (BUY/SELL/WAIT)
 7. Entry Type (BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL)
-8. Entry Price (the server will replace it with a fresh live quote)
+8. Entry Price (use the current-price marker from the screenshot with the lowest readable timeframe)
 8. Stop Loss (beyond nearest swing)
 9. TP1, TP2, TP3 at exactly 1R, 2R, and 3R, calculated only from Entry and Stop Loss
 10. Risk:Reward ratio
@@ -2038,12 +1997,11 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
-- ENTRY SOURCE RULE: do not choose a screenshot level as Entry. After analyzing the screenshots, the server will set Entry from a fresh cTrader M1 quote for the detected instrument. If the live quote is unavailable or older than 90 seconds, the server will return WAIT instead of using a stale or screenshot price.
-- TARGET RULE: the server recalculates TP1/TP2/TP3 at 1R/2R/3R from the fresh live Entry and screenshot-based Stop Loss. Do not treat screenshot-based TP values as final.
-- For BUY: risk = live Entry - stopLoss; TP1 = entry + risk, TP2 = entry + (2 × risk), TP3 = entry + (3 × risk)
-- For SELL: risk = stopLoss - live Entry; TP1 = entry - risk, TP2 = entry - (2 × risk), TP3 = entry - (3 × risk)
-- If the live Entry and screenshot-based Stop Loss do not define positive directional risk, set trade to WAIT and explain that price has moved past the valid stop-loss relationship.
-- Never invent the screenshot-based Stop Loss; only use what is clearly visible.
+- ENTRY PRICE RULE: extract the latest visible market price from the current-price marker on the screenshot with the lowest readable timeframe. If timeframe labels are unreadable, use IMAGE #1. Return it as screenshotMarketPrice and use the same value for Entry. Never substitute an external/live quote or a support/resistance, pullback, or stop-order trigger price as Entry. A pending trigger belongs only in triggerPrice.
+- If the chart does not show a readable current price, set screenshotMarketPrice and entry to "N/A", trade to WAIT, and explain that the price is unreadable. Never infer or invent the current price.
+- ENTRY TYPE RULE: use BUY STOP or SELL STOP only to describe a separate pending trigger, and put that trigger in triggerPrice. Use IMMEDIATE BUY or IMMEDIATE SELL when the screenshot shows a completed directional close and price remains near the valid setup. The Entry field still remains the screenshotMarketPrice.
+- Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
+- Never place SL inside market noise
 - Confidence is a setup-strength score, not a win-rate or profit probability. It must be an integer from 0 to 80; never return more than 80. Use: Strong clear setups = 70-80, Decent setups = 60-69, Ambiguous = 40-59, Unclear = 0-39.
 
 Return the analysis in this exact JSON format:
@@ -2058,7 +2016,7 @@ Return the analysis in this exact JSON format:
   "entryType": "BUY STOP/SELL STOP/IMMEDIATE BUY/IMMEDIATE SELL/WAITING",
   "triggerPrice": "price or empty",
   "screenshotMarketPrice": "visible screenshot price for reference or N/A",
-  "entry": "temporary value; server replaces with fresh live quote",
+  "entry": "same as screenshotMarketPrice",
   "stopLoss": "price",
   "tp1": "price",
   "tp2": "price",
@@ -2171,37 +2129,7 @@ Return the analysis in this exact JSON format:
           ? screenshotMarketPrice.toString()
           : 'N/A';
 
-        const instrument = normalizePair(analysis.instrument);
-        const liveQuote = APPROVED_PAIRS.includes(instrument)
-          ? await getFreshLiveQuote(instrument)
-          : { price: null, digits: 5, timestamp: 0, error: 'Could not identify a supported pair from the screenshots.' };
-        if (liveQuote.price === null) {
-          analysis.entry = 'N/A';
-          analysis.trade = 'WAIT';
-          analysis.entryType = 'WAITING';
-          analysis.status = 'WAITING';
-          analysis.tp1 = 'N/A';
-          analysis.tp2 = 'N/A';
-          analysis.tp3 = 'N/A';
-          analysis.riskReward = 'N/A';
-          analysis.warnings = `${liveQuote.error || 'A fresh live quote is unavailable.'} ${analysis.warnings || ''}`.trim();
-        } else {
-          const liveEntryError = applyLiveEntryAndTargets(analysis, {
-            price: liveQuote.price,
-            digits: liveQuote.digits,
-            timestamp: liveQuote.timestamp,
-          });
-          if (liveEntryError) {
-            analysis.trade = 'WAIT';
-            analysis.entryType = 'WAITING';
-            analysis.status = 'WAITING';
-            analysis.tp1 = 'N/A';
-            analysis.tp2 = 'N/A';
-            analysis.tp3 = 'N/A';
-            analysis.riskReward = 'N/A';
-            analysis.warnings = `${liveEntryError} ${analysis.warnings || ''}`.trim();
-          }
-        }
+        analysis.entry = analysis.screenshotMarketPrice;
 
         const verifiedImage1 = visibleTimeframes.image1;
         const verifiedImage2 = base64Data2 ? visibleTimeframes.image2 : null;
@@ -2263,34 +2191,6 @@ Return the analysis in this exact JSON format:
         analysis.status = 'WAITING';
       }
 
-      const entry = Number(analysis.entry);
-      const stopLoss = Number(analysis.stopLoss ?? analysis.sl);
-      const risk = direction === 'BUY'
-        ? entry - stopLoss
-        : direction === 'SELL'
-          ? stopLoss - entry
-          : Number.NaN;
-      if (direction === 'BUY' || direction === 'SELL') {
-        if (Number.isFinite(entry) && Number.isFinite(stopLoss) && risk > 0) {
-          const entryPrecision = String(analysis.entry).split('.')[1]?.length || 0;
-          const stopPrecision = String(analysis.stopLoss ?? analysis.sl).split('.')[1]?.length || 0;
-          const precision = Math.min(8, Math.max(entryPrecision, stopPrecision));
-          const formatTarget = (price: number) => Number(price.toFixed(precision)).toString();
-          analysis.tp1 = formatTarget(direction === 'BUY' ? entry + risk : entry - risk);
-          analysis.tp2 = formatTarget(direction === 'BUY' ? entry + 2 * risk : entry - 2 * risk);
-          analysis.tp3 = formatTarget(direction === 'BUY' ? entry + 3 * risk : entry - 3 * risk);
-          analysis.riskReward = '1R / 2R / 3R';
-        } else {
-          analysis.trade = 'WAIT';
-          analysis.entryType = 'WAITING';
-          analysis.status = 'WAITING';
-          analysis.tp1 = 'N/A';
-          analysis.tp2 = 'N/A';
-          analysis.tp3 = 'N/A';
-          analysis.riskReward = 'N/A';
-          analysis.warnings = `Entry and Stop Loss must define positive risk before 1R/2R/3R targets can be calculated. ${analysis.warnings || ''}`.trim();
-        }
-      }
 
       res.json({ success: true, analysis });
     } catch (e: any) {
@@ -2349,20 +2249,9 @@ Return the analysis in this exact JSON format:
         return res.status(400).json({ error: `Cannot send WAIT signal: ${analysis.trade}` });
       }
 
-      const liveQuote = await getFreshLiveQuote(finalPair);
-      if (liveQuote.price === null) {
-        return res.status(409).json({ error: liveQuote.error || 'Fresh live quote unavailable. Please analyze again before publishing.' });
-      }
-      const liveEntryError = applyLiveEntryAndTargets(analysis, {
-        price: liveQuote.price,
-        digits: liveQuote.digits,
-        timestamp: liveQuote.timestamp,
-      });
-      if (liveEntryError) return res.status(409).json({ error: liveEntryError });
-
       const result = await publishManualSignal(analysis, finalPair);
       if (!result.ok) return res.status(400).json({ error: result.error });
-      res.json({ success: true, signal: result.signal, liveMarketUpdatedAt: analysis.liveMarketUpdatedAt });
+      res.json({ success: true, signal: result.signal });
     } catch (e: any) {
       console.error('[manual-signal/send] error:', e);
       res.status(500).json({ error: e.message || 'Failed to publish manual signal' });
