@@ -64,6 +64,14 @@ function normalizeVisibleTimeframe(value: unknown): string | null {
   return null;
 }
 
+function normalizeAnalysisTimeframes(value: unknown): { image1: string | null; image2: string | null } {
+  const [first = '', second = ''] = String(value || '').split(/\s*(?:\/|,|;|\band\b|&)\s*/i);
+  return {
+    image1: normalizeVisibleTimeframe(first),
+    image2: normalizeVisibleTimeframe(second),
+  };
+}
+
 function sanitizeUnverifiedTimeframes(value: unknown, verifiedTimeframes: Set<string>): string {
   const pattern = /\b(?:(\d{1,2})\s*-?\s*(?:M|MIN(?:UTE)?S?|H|HR|HRS|HOUR|HOURS|D|DAY|DAYS|W|WK|WEEK|WEEKS|MO|MONTH|MONTHS)|([MHDW])\s*(\d{1,2}))\b/gi;
   const sentences = String(value || '').split(/(?<=[.!?])\s+/);
@@ -1945,8 +1953,8 @@ ${calendarBlock}
 ${base64Data2 ? `TWO-CHART MODE — TWO screenshots are attached:
 IMAGE #1 (first image) = the primary chart.
 IMAGE #2 (second image) = a second chart for the same instrument.
-Read each timeframe only from its visible chart label. Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
-` : `SINGLE-CHART MODE — read the timeframe only from the visible chart label. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
+Read each timeframe from the visible label in the top-left chart header. For TradingView headers, “Euro / U.S. Dollar · 15 · Pepperstone” means 15M and “Euro / U.S. Dollar · 5 · Pepperstone” means 5M. Put both detected intervals in timeframe in image order, such as "15M/5M". Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
+` : `SINGLE-CHART MODE — read the timeframe from the visible label in the top-left chart header. For example, “Euro / U.S. Dollar · 15 · Pepperstone” means 15M. Put the detected interval in timeframe. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
 
 IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for market structure, trend, support/resistance, stop loss, and setup. For Entry, use the latest readable current-price marker from the screenshot with the lowest readable timeframe label; if timeframe labels are unreadable, use IMAGE #1. Do not substitute a live market quote for that screenshot price.
 
@@ -1982,7 +1990,7 @@ NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the d
 - newsTime: copy the matching event's normalized UTC timestamp from the calendar data exactly. Never calculate it from the display label, user's timezone, or current time.
 
 MULTI-CHART RULES (apply when two screenshots are attached):
-- The server independently reads each visible timeframe label. Your timeframe field and tfNote are not trusted and will be overwritten from that label pass.
+- The server first reads the timeframe labels with a focused header OCR pass. If that pass cannot read a label, use the timeframe value you returned from the full chart analysis. You MUST copy each visible chart interval into timeframe in image order; never leave it empty or write "Unclear" when the label is readable.
 - Describe chart 1 and chart 2 only; never refer to an unseen or assumed timeframe.
 - Read the directional bias of each chart (bullish / bearish / range).
 - tfStatus = "ALIGNED" if both charts lean the same direction; "CONFLICT" if they disagree (one bullish vs the other bearish, or one strongly trending vs the other reversing).
@@ -2131,8 +2139,9 @@ Return the analysis in this exact JSON format:
 
         analysis.entry = analysis.screenshotMarketPrice;
 
-        const verifiedImage1 = visibleTimeframes.image1;
-        const verifiedImage2 = base64Data2 ? visibleTimeframes.image2 : null;
+        const analysisTimeframes = normalizeAnalysisTimeframes(analysis.timeframe);
+        const verifiedImage1 = visibleTimeframes.image1 || analysisTimeframes.image1;
+        const verifiedImage2 = base64Data2 ? visibleTimeframes.image2 || analysisTimeframes.image2 : null;
         const verifiedTimeframes = new Set([verifiedImage1, verifiedImage2].filter((timeframe): timeframe is string => Boolean(timeframe)));
         const image1Timeframe = verifiedImage1 || 'Unclear';
         const image2Timeframe = verifiedImage2 || 'Unclear';
@@ -2146,7 +2155,7 @@ Return the analysis in this exact JSON format:
           }
         }
         const modelTfStatus = String(analysis.tfStatus || '').toUpperCase();
-        const bothTimeframesVerified = Boolean(base64Data2 && visibleTimeframes.image1 && visibleTimeframes.image2);
+        const bothTimeframesVerified = Boolean(base64Data2 && verifiedImage1 && verifiedImage2);
         analysis.tfStatus = bothTimeframesVerified && (modelTfStatus === 'ALIGNED' || modelTfStatus === 'CONFLICT')
           ? modelTfStatus
           : 'SINGLE';
