@@ -37,13 +37,6 @@ interface AnalysisResult {
   newsBigMove?: boolean;
   tfStatus?: string;
   tfNote?: string;
-  liveValidation?: {
-    status: string;
-    pair: string | null;
-    livePrice: number | null;
-    updatedAt: string | null;
-    reason: string;
-  };
 }
 
 const ANALYSIS_STEPS = [
@@ -540,6 +533,7 @@ export default function ChartAnalyzer() {
                 {result.trade.toUpperCase() === 'SELL' && '🔽 Use these prices to SELL'}
                 {result.trade.toUpperCase() === 'WAIT' && '⏸️ Wait for a better setup - do NOT trade now'}
               </p>
+              <p className="text-xs text-slate-500">Entry is read from the current price shown in your uploaded chart screenshot.</p>
 
               {result.trade.toUpperCase() === 'WAIT' && (
                 <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5">
@@ -635,44 +629,6 @@ export default function ChartAnalyzer() {
                     : <span className="text-amber-300">🔄 Timeframes disagree ⚠️ — WAIT recommended</span>}
                 </p>
                 {result.tfNote && <p className="text-xs text-slate-400 mt-1">{result.tfNote}</p>}
-              </div>
-            )}
-
-            {result.liveValidation && (
-              <div className="rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-5 py-3.5">
-                {(() => {
-                  const updatedAt = result.liveValidation.updatedAt ? new Date(result.liveValidation.updatedAt) : null;
-                  const utcHour = updatedAt ? updatedAt.getUTCHours() + updatedAt.getUTCMinutes() / 60 : null;
-                  const session = utcHour === null
-                    ? null
-                    : utcHour >= 12 && utcHour < 16
-                      ? 'London / New York overlap'
-                      : utcHour >= 7 && utcHour < 12
-                        ? 'London'
-                        : utcHour >= 16 && utcHour < 21
-                          ? 'New York'
-                          : utcHour >= 0 && utcHour < 7
-                            ? 'Tokyo'
-                            : 'New York';
-                  return (
-                    <>
-                <p className="text-sm font-bold text-cyan-200">
-                  ForexLifeAI Live Market: {result.liveValidation.status}
-                </p>
-                <p className="mt-1 text-xs text-slate-300">
-                  {result.liveValidation.livePrice !== null
-                    ? `Current price: ${result.liveValidation.livePrice}`
-                    : result.liveValidation.reason}
-                </p>
-                {session && <p className="mt-1 text-xs text-slate-300">Market session: {session}</p>}
-                {result.liveValidation.updatedAt && (
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Updated: {new Date(result.liveValidation.updatedAt).toLocaleTimeString()} GMT+3
-                  </p>
-                )}
-                    </>
-                  );
-                })()}
               </div>
             )}
 

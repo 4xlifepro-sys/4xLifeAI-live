@@ -1845,6 +1845,8 @@ IMAGE #2 (second image) = a second chart for the same instrument.
 Read each timeframe only from its visible chart label. Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
 ` : `SINGLE-CHART MODE — read the timeframe only from the visible chart label. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
 
+IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for all chart-derived fields. Never use a live market feed or external quote as a substitute for screenshot content. For two screenshots, inspect both charts; Entry is the latest readable current-price marker in the primary screenshot.
+
 Determine:
 1. Trend (Bullish/Bearish/Range)
 2. Market Structure (HH/HL/LH/LL or Neutral)
@@ -2041,71 +2043,12 @@ Return the analysis in this exact JSON format:
             : 'WAITING';
       }
 
-      const liveValidation: {
-        status: string;
-        pair: string | null;
-        livePrice: number | null;
-        updatedAt: string | null;
-        reason: string;
-      } = {
-        status: 'NOT_CONNECTED',
-        pair: String(analysis.instrument || '').trim().toUpperCase() || null,
-        livePrice: null,
-        updatedAt: null,
-        reason: 'cTrader live validation is not yet connected to screenshot analysis',
-      };
-      const livePair = normalizePair(liveValidation.pair || '');
-      if (APPROVED_PAIRS.includes(livePair)) {
-        try {
-          const liveModule: any = await import('./server/live-market-feed.js');
-          const live = await liveModule.getLatestPrice(livePair);
-          liveValidation.livePrice = Number.isFinite(Number(live?.price)) ? Number(live.price) : null;
-          liveValidation.updatedAt = live?.timestamp ? new Date(live.timestamp).toISOString() : null;
-          if (liveValidation.livePrice !== null) {
-            const ageSeconds = Math.max(0, (Date.now() - Number(live.timestamp || Date.now())) / 1000);
-            if (ageSeconds <= 90) {
-              liveValidation.status = 'CONNECTED';
-              liveValidation.reason = 'cTrader demo price received; screenshot analysis remains the source of direction';
-            } else {
-              liveValidation.status = 'STALE';
-              liveValidation.reason = `cTrader price is ${Math.round(ageSeconds)} seconds old`;
-            }
-          } else {
-            liveValidation.status = 'ERROR';
-            liveValidation.reason = live?.error || 'cTrader did not return a live price';
-          }
-        } catch (liveError: any) {
-          liveValidation.status = 'ERROR';
-          liveValidation.reason = liveError?.message || 'cTrader live validation failed';
-        }
-      } else {
-        liveValidation.status = 'WAITING';
-        liveValidation.reason = 'Pair was not readable or is not supported by cTrader validation';
-      }
       const direction = String(analysis.trade || '').toUpperCase();
       const requestedEntryType = String(analysis.entryType || '').toUpperCase();
       const hasCompletedConfirmation = requestedEntryType === 'IMMEDIATE BUY' || requestedEntryType === 'IMMEDIATE SELL';
-      const livePrice = liveValidation.livePrice;
-      const numericEntry = Number(analysis.entry);
-      const entryDistance = Number.isFinite(livePrice) && Number.isFinite(numericEntry)
-        ? Math.abs(livePrice - numericEntry)
-        : null;
-      const entryTolerance = Number.isFinite(numericEntry)
-        ? Math.max(Math.abs(numericEntry) * 0.0015, 0.0001)
-        : null;
 
       if (direction === 'BUY' || direction === 'SELL') {
-        if (liveValidation.status !== 'CONNECTED' && Number(analysis.confidence) < 65) {
-          analysis.trade = 'WAIT';
-          analysis.entryType = 'WAITING';
-          analysis.status = 'WAITING';
-          analysis.warnings = `${liveValidation.reason}. Live price validation is required before publishing. ${analysis.warnings || ''}`.trim();
-        } else if (hasCompletedConfirmation && entryDistance !== null && entryTolerance !== null && entryDistance > entryTolerance && Number(analysis.confidence) < 65) {
-          analysis.trade = 'WAIT';
-          analysis.entryType = 'WAITING';
-          analysis.status = 'WAITING';
-          analysis.warnings = `The confirmed move is too far from the valid entry; do not chase it. Wait for a new setup. ${analysis.warnings || ''}`.trim();
-        } else if (!hasCompletedConfirmation) {
+        if (!hasCompletedConfirmation) {
           analysis.entryType = direction === 'BUY' ? 'BUY STOP' : 'SELL STOP';
           analysis.status = Number(analysis.confidence) >= 65 ? 'PLANNED' : 'WAITING';
           analysis.triggerPrice = analysis.triggerPrice || analysis.resistance || analysis.support || '';
@@ -2145,15 +2088,7 @@ Return the analysis in this exact JSON format:
         }
       }
 
-      console.log('[ChartAnalyzer] cTrader live validation', {
-        pair: liveValidation.pair,
-        status: liveValidation.status,
-        livePrice: liveValidation.livePrice,
-        updatedAt: liveValidation.updatedAt,
-        reason: liveValidation.reason,
-      });
-
-      res.json({ success: true, analysis: { ...analysis, liveValidation } });
+      res.json({ success: true, analysis });
     } catch (e: any) {
       let errorMessage = 'Failed to analyze chart';
       
