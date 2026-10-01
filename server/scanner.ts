@@ -895,7 +895,7 @@ async function trackOpenSignals() {
     if (!pair) continue;
 
     try {
-      const candles = await fetchCandles(pair, 'M5', 300);
+      const candles = await fetchCandles(pair, signal.breakeven_at ? '1min' : '5min');
       if (!candles || candles.length < 2) continue;
 
       await trackSignalAgainstCandles(signal, candles);
@@ -907,55 +907,144 @@ async function trackOpenSignals() {
 
 async function trackSignalAgainstCandles(signal: any, candles: any[]) {
   const isLong = signal.direction === 'BUY' || signal.direction === 'LONG';
-  const latest = candles[candles.length - 1];
-  const close = Number(latest.close);
-  if (!Number.isFinite(close)) return;
-
-  const reached = (level: unknown) => Number.isFinite(Number(level)) && (isLong ? close >= Number(level) : close <= Number(level));
-  const stopped = Number.isFinite(Number(signal.sl)) && (isLong ? close <= Number(signal.sl) : close >= Number(signal.sl));
   const currentStatus = signal.status || 'LIVE';
+  const stageTimestamp = currentStatus === 'TP2_HIT'
+    ? signal.tp2_hit_at || signal.created_at || signal.timestamp
+    : currentStatus === 'TP1_HIT'
+      ? signal.tp1_hit_at || signal.created_at || signal.timestamp
+      : signal.created_at || signal.timestamp;
+  const stageTime = new Date(stageTimestamp || 0).getTime();
+  const trackableCandles = candles
+    .filter((candle) => new Date(candle.timestamp).getTime() > stageTime)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  if (trackableCandles.length === 0) return;
 
-  let nextStatus: string | undefined;
-  let hitLevel: string | undefined;
-  let exitPrice: number | undefined;
-  if (stopped) {
-    nextStatus = 'STOP_LOSS_HIT';
-    hitLevel = 'SL';
-    exitPrice = Number(signal.sl);
-  } else if (currentStatus === 'LIVE' && reached(signal.tp1)) {
-    nextStatus = 'TP1_HIT';
-    hitLevel = 'TP1';
-    exitPrice = Number(signal.tp1);
-  } else if (currentStatus === 'TP1_HIT' && reached(signal.tp2)) {
-    nextStatus = 'TP2_HIT';
-    hitLevel = 'TP2';
-    exitPrice = Number(signal.tp2);
-  } else if (currentStatus === 'TP2_HIT' && reached(signal.tp3)) {
-    nextStatus = 'TP3_HIT';
-    hitLevel = 'TP3';
-    exitPrice = Number(signal.tp3);
+  const pair = String(signal.pair || '');
+  const pipSize = getPipMultiplier(pair);
+  const entry = Number(signal.entry_price ?? signal.entry);
+  const originalStop = Number(signal.original_sl ?? signal.sl);
+  if (!Number.isFinite(entry) || !Number.isFinite(originalStop) || !Number.isFinite(pipSize) || pipSize <= 0) return;
+
+  let trackedStatus = currentStatus;
+  for (const candle of trackableCandles) {
+    const high = Number(candle.high);
+    const low = Number(candle.low);
+    if (!Number.isFinite(high) || !Number.isFinite(low)) continue;
+
+    const effectiveStopValue = signal.breakeven_at
+      ? entry
+      : trackedStatus === 'TP2_HIT'
+        ? signal.tp1
+        : trackedStatus === 'TP1_HIT'
+          ? entry
+          : originalStop;
+    const effectiveStop = effectiveStopValue === null || effectiveStopValue === undefined || String(effectiveStopValue).trim() === ''
+      ? NaN
+      : Number(effectiveStopValue);
+    const stopped = Number.isFinite(effectiveStop) && (isLong ? low <= effectiveStop : high >= effectiveStop);
+    const configuredTargets = [
+      { level: 'TP1' as const, index: 0, price: signal.tp1 },
+      { level: 'TP2' as const, index: 1, price: signal.tp2 },
+      { level: 'TP3' as const, index: 2, price: signal.tp3 },
+    ].filter((target) => target.price !== null && target.price !== undefined && String(target.price).trim() !== '' && Number.isFinite(Number(target.price)));
+    if (configuredTargets.length === 0) continue;
+
+    const statusIndex = trackedStatus === 'TP2_HIT' ? 1 : trackedStatus === 'TP1_HIT' ? 0 : -1;
+    const reachedTarget = (target: unknown) => target !== null && target !== undefined && String(target).trim() !== ''
+      && Number.isFinite(Number(target)) && (isLong ? high >= Number(target) : low <= Number(target));
+    let hitLevel: 'SL' | 'TP1' | 'TP2' | 'TP3' | null = null;
+    let hitPrice = 0;
+
+    if (stopped) {
+      hitLevel = 'SL';
+      hitPrice = effectiveStop;
+    } else {
+      const reachedTargets = configuredTargets.filter((target) => target.index > statusIndex && reachedTarget(target.price));
+      const targetHit = reachedTargets[reachedTargets.length - 1];
+      if (targetHit) {
+        hitLevel = targetHit.level;
+        hitPrice = Number(targetHit.price);
+      }
+    }
+
+    if (!hitLevel) continue;
+
+    const eventTime = new Date(candle.timestamp).toISOString();
+    const update: Record<string, any> = { status: trackedStatus, is_active: true };
+    const pipsAtLevel = (price: number) => Math.abs(price - entry) / pipSize;
+
+    if (hitLevel === 'SL') {
+      const securedTarget = trackedStatus === 'TP2_HIT' ? Number(signal.tp2) : trackedStatus === 'TP1_HIT' ? Number(signal.tp1) : null;
+      const closedAtBreakEven = Boolean(signal.breakeven_at) && securedTarget === null;
+      update.status = securedTarget !== null || closedAtBreakEven ? 'CLOSED' : 'STOP_LOSS_HIT';
+      update.result = securedTarget !== null ? 'PARTIAL WIN' : closedAtBreakEven ? 'BREAKEVEN' : 'LOSS';
+      update.is_active = false;
+      update.closed_at = eventTime;
+      if (securedTarget !== null) {
+        update.pips_won = pipsAtLevel(securedTarget);
+        update.pips_lost = 0;
+      } else if (closedAtBreakEven) {
+        update.pips_won = 0;
+        update.pips_lost = 0;
+      } else {
+        update.pips_lost = pipsAtLevel(hitPrice);
+      }
+    } else {
+      const target = configuredTargets.find((item) => item.level === hitLevel)!;
+      for (const clearedTarget of configuredTargets) {
+        if (clearedTarget.index > target.index) break;
+        const timestampColumn = `${clearedTarget.level.toLowerCase()}_hit_at`;
+        if (!signal[timestampColumn] || clearedTarget.index > statusIndex) update[timestampColumn] = eventTime;
+      }
+
+      const finalTarget = configuredTargets[configuredTargets.length - 1];
+      const reachedFinalTarget = target.index === finalTarget.index;
+      update.status = reachedFinalTarget
+        ? (hitLevel === 'TP3' ? 'TP3_HIT' : 'CLOSED')
+        : `${hitLevel}_HIT`;
+      update.result = reachedFinalTarget ? 'WIN' : 'PARTIAL WIN';
+      update.is_active = !reachedFinalTarget;
+      update.pips_won = pipsAtLevel(hitPrice);
+      update.pips_lost = 0;
+      if (reachedFinalTarget) update.closed_at = eventTime;
+      else trackedStatus = update.status;
+    }
+
+    const { data: updatedSignal, error } = await supabase
+      .from('signals')
+      .update(update)
+      .eq('id', signal.id)
+      .eq('is_active', true)
+      .select('id')
+      .maybeSingle();
+    if (error) {
+      console.error(`Signal tracker update failed for ${pair}:`, error.message);
+      return;
+    }
+    if (!updatedSignal) return;
+    if (signal.breakeven_at) {
+      const securedTarget = trackedStatus === 'TP2_HIT' ? 'TP2' : trackedStatus === 'TP1_HIT' ? 'TP1' : null;
+      const eventMessage = hitLevel === 'SL'
+        ? securedTarget
+          ? `${securedTarget} secured; remaining position closed at Entry for +${Number(update.pips_won || 0).toFixed(1)} pips.`
+          : 'Closed at Entry: 0.0 pips.'
+        : hitLevel === 'TP3'
+          ? `TP3 reached at ${hitPrice}. Full target reached for +${Number(update.pips_won || 0).toFixed(1)} pips.`
+          : `${hitLevel} reached at ${hitPrice}. Stop Loss remains at Entry; signal is ${update.is_active ? 'still active' : 'closed'}.`;
+      if (TELEGRAM_SIGNALS_DISABLED) {
+        console.log('[KILL SWITCH] Break-even tracking update blocked');
+      } else {
+        await sendTelegramToVipAndFree(
+          `${hitLevel === 'SL' ? '🛡️' : '🎯'} <b>4xFiveAI — ${hitLevel === 'SL' ? 'BREAKEVEN EXIT' : `${hitLevel} REACHED`}</b>\n\n`
+          + `Pair: ${pair}\n`
+          + `Signal: ${isLong ? 'BUY' : 'SELL'}\n`
+          + `Entry: ${entry}\n`
+          + `Result: ${eventMessage}`,
+        ).catch((telegramError) => console.error('[TELEGRAM] break-even signal update failed:', telegramError));
+      }
+    }
+    if (!update.is_active) return;
   }
-
-  if (!nextStatus || !hitLevel || exitPrice == null) return;
-
-  const closed = nextStatus === 'STOP_LOSS_HIT' || nextStatus === 'TP3_HIT';
-  const closedAt = new Date(latest.timestamp || Date.now()).toISOString();
-  const payload: any = {
-    status: nextStatus,
-    is_active: !closed,
-  };
-  if (closed) payload.closed_at = closedAt;
-
-  if (hitLevel === 'TP1') payload.tp1_hit_at = closedAt;
-  if (hitLevel === 'TP2') payload.tp2_hit_at = closedAt;
-  if (hitLevel === 'TP3') payload.tp3_hit_at = closedAt;
-
-  const { error } = await supabase
-    .from('signals')
-    .update(payload)
-    .eq('id', signal.id)
-    .eq('is_active', true);
-  if (error) console.error(`Signal tracker update failed for ${signal.pair}:`, error.message);
 }
 
 // Metals (XAUUSD, XAGUSD) use the trend-breakout engine's trailing EMA20
@@ -1137,6 +1226,7 @@ export async function startScanner() {
             if (entryTf) candleCache.set(pair, entryTf as any[]);
 
             for (const s of activeSignals) {
+              if (s.breakeven_at) continue;
               let signalCandles = candleCache.get(s.pair);
               if (!signalCandles) {
                 signalCandles = await fetchCandles(s.pair, '5min') as any[];
@@ -1148,7 +1238,7 @@ export async function startScanner() {
                 continue;
               }
 
-              const trackingStartTime = s.tp2_hit_at || s.tp1_hit_at || s.created_at || s.timestamp || 0;
+              const trackingStartTime = s.breakeven_at || s.tp2_hit_at || s.tp1_hit_at || s.created_at || s.timestamp || 0;
               const openedAt = new Date(trackingStartTime).getTime();
               const trackingCandles = signalCandles.filter((candle: any) => new Date(candle.timestamp).getTime() > openedAt);
               let currentPrice = trackingCandles[trackingCandles.length - 1];
@@ -1167,7 +1257,7 @@ export async function startScanner() {
               // Safety guard: never mark a TP-hit signal as INVALID just because sl was
               // corrupted/overwritten to entry (trailing-stop bug). If TP was hit, trust the TP.
               const hasAnyTPHit = s.tp1_hit_at || s.tp2_hit_at || s.tp3_hit_at;
-              if (sEntry && sSL && Math.abs(sEntry - sSL) < 1e-12) {
+              if (sEntry && sSL && Math.abs(sEntry - sSL) < 1e-12 && !s.breakeven_at) {
                 if (hasAnyTPHit) {
                   const alertMsg = `🛡️ <b>Auto-Safety Blocked Invalid</b>\n\nPair: ${s.pair}\nIssue: SL equals entry after TP was already hit\nRestored original SL: ${s.original_sl || 'n/a'}\nSignal will keep its real TP outcome.`;
                   console.log(`[OUTCOME TRACKER] ${s.pair} SL equals entry but TP was already hit — NOT marking invalid. Restoring original SL ${s.original_sl || 'n/a'}.`);
@@ -1209,9 +1299,9 @@ export async function startScanner() {
               const firstEventCandle = trackingCandles.find((candle: any) => {
                  const close = Number(candle.close);
                  if (!Number.isFinite(close)) return false;
-                 let trailingSL = s.sl;
-                 if (currentStatus === 'TP2_HIT') trailingSL = s.tp1;
-                 else if (currentStatus === 'TP1_HIT') trailingSL = sEntry;
+                 let trailingSL = s.breakeven_at ? sEntry : s.sl;
+                 if (!s.breakeven_at && currentStatus === 'TP2_HIT') trailingSL = s.tp1;
+                 else if (!s.breakeven_at && currentStatus === 'TP1_HIT') trailingSL = sEntry;
 
                  if (isLong) {
                     return close <= trailingSL
@@ -1231,10 +1321,10 @@ export async function startScanner() {
               }
 
               // Determine current effective SL based on trailing logic
-              let effectiveSL = s.sl;
-              if (currentStatus === 'TP2_HIT') {
+              let effectiveSL = s.breakeven_at ? sEntry : s.sl;
+              if (!s.breakeven_at && currentStatus === 'TP2_HIT') {
                   effectiveSL = s.tp1;
-              } else if (currentStatus === 'TP1_HIT') {
+              } else if (!s.breakeven_at && currentStatus === 'TP1_HIT') {
                   effectiveSL = sEntry;
               }
 
@@ -1302,7 +1392,10 @@ export async function startScanner() {
                              finalResult = 'PARTIAL WIN';
                              rawPips = calculatePips(s.tp1, sEntry);
                          }
-                         else finalResult = 'LOSS';
+                         else if (s.breakeven_at) {
+                            finalResult = 'BREAKEVEN';
+                            rawPips = 0;
+                        } else finalResult = 'LOSS';
                      }
                  } else {
                      finalResult = 'OPEN';
@@ -1349,7 +1442,8 @@ export async function startScanner() {
                  console.log(`[OUTCOME TRACKER] ${s.pair} ${hitLevel} HIT @ ${closedAt}`);
                  if (!TELEGRAM_SIGNALS_DISABLED) {
                    const freeHitMsg = formatFreeTpHitMessage(s.pair, directionStr, hitLevel, hitPrice, sEntry);
-                   sendTelegramOutcomeToVipAndFree(hitMsg, freeHitMsg);
+                   if (finalResult === 'BREAKEVEN') sendTelegramToVipAndFree(hitMsg);
+                  else sendTelegramOutcomeToVipAndFree(hitMsg, freeHitMsg);
                  } else console.log('[KILL SWITCH] Telegram hit msg BLOCKED');
                  
                  if (finalClose) {
@@ -1371,7 +1465,7 @@ export async function startScanner() {
                      const totalPips = isWin ? `+${pipStr}` : (isBreakeven ? `0.0` : `-${pipStr}`);
                      const summaryEmoji = isWin ? '🟢' : (isBreakeven ? '🛡️' : '🔴');
                      
-                     const riskPips = calculatePips(sEntry, s.sl) || 1; // avoid / 0
+                     const riskPips = calculatePips(sEntry, s.original_sl ?? s.sl) || 1; // avoid / 0
                      const rrRatio = (rawPips / riskPips).toFixed(1);
                      const riskRewardStr = isWin ? `1:${rrRatio}` : (isBreakeven ? '0:0' : `-1:1`);
                      
@@ -1395,7 +1489,7 @@ export async function startScanner() {
                  
                  // Payload construction for Supabase update
                  const updatePayload: any = { status: mapStatus(newStatus) };
-                 if (hitLevel === 'SL' && finalResult === 'PARTIAL WIN') {
+                 if (hitLevel === 'SL' && ['PARTIAL WIN', 'BREAKEVEN'].includes(finalResult)) {
                     updatePayload.status = mapStatus('CLOSED');
                  }
                  if (tpRecordStr) {

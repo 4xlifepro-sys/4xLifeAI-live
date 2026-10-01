@@ -819,7 +819,8 @@ async function startServer() {
       if (data) {
         res.json(data.map((d: any) => ({
           ...d,
-          sl: d.original_sl ?? d.sl,
+          sl: d.is_active ? d.sl : d.original_sl ?? d.sl,
+          breakeven_at: d.breakeven_at,
           entry: d.entry_price,
           timestamp: d.created_at,
           aiConfidence: (d.confidence || 0) * 10,
@@ -1197,8 +1198,9 @@ async function startServer() {
         direction: d.direction,
         entry: d.entry_price,
         entry_price: d.entry_price,
-        sl: d.original_sl ?? d.sl,
+        sl: d.is_active ? d.sl : d.original_sl ?? d.sl,
         original_sl: d.original_sl,
+        breakeven_at: d.breakeven_at,
         tp1: d.tp1,
         tp2: d.tp2,
         tp3: d.tp3,
@@ -1259,8 +1261,9 @@ async function startServer() {
         direction: d.direction,
         entry: d.entry_price,
         entry_price: d.entry_price,
-        sl: d.original_sl ?? d.sl,
+        sl: d.is_active ? d.sl : d.original_sl ?? d.sl,
         original_sl: d.original_sl,
+        breakeven_at: d.breakeven_at,
         tp1: d.tp1,
         tp2: d.tp2,
         tp3: d.tp3,
@@ -2364,6 +2367,72 @@ Return the analysis in this exact JSON format:
     } catch (e: any) {
       console.error('[signal-builder/history] error:', e);
       res.status(500).json({ error: e.message || 'Failed to load history' });
+    }
+  });
+
+  app.post("/api/admin/signals/:id/move-sl-to-entry", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const { data: signal, error: readError } = await supabase
+        .from("signals")
+        .select("id,status,is_active,pair,direction,entry_price,sl,original_sl,tp1,tp2,tp3,breakeven_at")
+        .eq("id", req.params.id)
+        .maybeSingle();
+      if (readError) {
+        if (readError.message.includes("breakeven_at") || readError.message.includes("schema cache")) {
+          return res.status(503).json({ error: "Database migration required: add signals.breakeven_at before enabling break-even protection." });
+        }
+        return res.status(500).json({ error: readError.message });
+      }
+      if (!signal || signal.is_active === false) return res.status(404).json({ error: "Active signal not found" });
+      if (signal.breakeven_at) return res.json({ success: true, signal, alreadyActive: true, telegramSent: null });
+
+      const entry = Number(signal.entry_price);
+      const direction = signal.direction === "BUY" || signal.direction === "LONG" ? "BUY" : "SELL";
+      const currentStop = Number(signal.sl);
+      if (!Number.isFinite(entry) || entry <= 0 || !Number.isFinite(currentStop) || currentStop <= 0) {
+        return res.status(400).json({ error: "Signal Entry or Stop Loss is invalid" });
+      }
+      const wouldLoosenStop = direction === "BUY" ? currentStop > entry : currentStop < entry;
+      if (wouldLoosenStop) return res.status(409).json({ error: "The current Stop Loss is already beyond Entry; refusing to reduce protection." });
+      const activatedAt = new Date().toISOString();
+      const { data: updated, error: updateError } = await supabase
+        .from("signals")
+        .update({ sl: entry, original_sl: signal.original_sl ?? signal.sl, breakeven_at: activatedAt })
+        .eq("id", req.params.id)
+        .eq("sl", signal.sl)
+        .eq("is_active", true)
+        .is("breakeven_at", null)
+        .select("*")
+        .maybeSingle();
+      if (updateError) {
+        if (updateError.message.includes("breakeven_at") || updateError.message.includes("schema cache")) {
+          return res.status(503).json({ error: "Database migration required: add signals.breakeven_at before enabling break-even protection." });
+        }
+        return res.status(500).json({ error: updateError.message });
+      }
+      if (!updated) return res.status(409).json({ error: "Signal was updated or closed. Refresh and try again." });
+
+      let telegramSent = false;
+      try {
+        telegramSent = await sendTelegramToVipAndFree(
+          `🛡️ <b>4xFiveAI — STOP MOVED TO ENTRY</b>\n\n`
+          + `Pair: ${signal.pair}\n`
+          + `Signal: ${direction}\n`
+          + `Entry: ${entry}\n`
+          + `New Stop Loss: ${entry}\n`
+          + `TP1: ${signal.tp1 ?? "N/A"}\n`
+          + `TP2: ${signal.tp2 ?? "N/A"}\n`
+          + `TP3: ${signal.tp3 ?? "N/A"}\n\n`
+          + `Signal remains active. Monitoring for a return to Entry.`,
+        );
+      } catch (telegramError: any) {
+        console.error("[admin/move-sl-to-entry] telegram update failed:", telegramError?.message || telegramError);
+      }
+      res.json({ success: true, signal: updated, telegramSent });
+    } catch (error: any) {
+      console.error("[admin/move-sl-to-entry] failed:", error?.message || error);
+      res.status(500).json({ error: error?.message || "Failed to move Stop Loss to Entry" });
     }
   });
 

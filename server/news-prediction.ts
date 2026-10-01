@@ -14,6 +14,7 @@ export interface FFEvent {
 export interface NewsPrediction {
   newsHasEvent: boolean;
   newsEvent: string;
+  newsEventAt: string | null;
   newsPrediction: 'BUY' | 'SELL' | 'NEUTRAL';
   newsProbability: number;
   newsReason: string;
@@ -67,6 +68,28 @@ function buildCalendarPromptBlock(events: FFEvent[], pair: string, timeZone?: st
     .join('\n') + '\n';
 }
 
+function getTodayUpcomingEvents(events: FFEvent[], pair: string, timeZone?: string): FFEvent[] {
+  const now = Date.now();
+  const today = timeZone
+    ? new Date(now).toLocaleDateString('en-CA', { timeZone })
+    : new Date(now).toISOString().slice(0, 10);
+  const relevantCurrencies = pairCurrencies(pair);
+  return events
+    .filter((event) => {
+      if ((event.impact || '').toLowerCase() !== 'high') return false;
+      if (!relevantCurrencies.has(event.country.toUpperCase())) return false;
+      const utc = parseForexFactoryEventUtc(event);
+      if (!utc) return false;
+      const timestamp = Date.parse(utc);
+      if (timestamp < now) return false;
+      const eventDate = timeZone
+        ? new Date(timestamp).toLocaleDateString('en-CA', { timeZone })
+        : new Date(timestamp).toISOString().slice(0, 10);
+      return eventDate === today;
+    })
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+
 function pairCurrencies(pair: string): Set<string> {
   const p = pair.toUpperCase();
   if (p.length === 6) return new Set([p.slice(0, 3), p.slice(3, 6)]);
@@ -84,7 +107,19 @@ export async function predictNewsFromCalendar(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { error: 'GEMINI_API_KEY not configured' };
 
-  const calendarBlock = buildCalendarPromptBlock(events, pair, timeZone);
+  const upcomingEvents = getTodayUpcomingEvents(events, pair, timeZone);
+  if (upcomingEvents.length === 0) {
+    return {
+      newsHasEvent: false,
+      newsEvent: '',
+      newsEventAt: null,
+      newsPrediction: 'NEUTRAL',
+      newsProbability: 50,
+      newsReason: 'No upcoming high-impact events are scheduled for this pair today.',
+    };
+  }
+
+  const calendarBlock = buildCalendarPromptBlock(upcomingEvents, pair, timeZone);
   const prompt = `You are a forex/crypto news analyst. Given the following Forex Factory high-impact economic calendar events for the relevant currencies of ${pair}, decide whether any upcoming event materially supports a ${direction} trade on ${pair}.
 
 Upcoming high-impact events for ${pair} currencies:
@@ -95,12 +130,13 @@ Rules:
 - If an event is likely to push the pair in the same direction as the ${direction} trade, return newsPrediction="${direction}" with 55-75 probability.
 - If an event is likely to push the pair in the opposite direction, return newsPrediction=the opposite direction with 55-75 probability.
 - If the event impact is mixed or unclear, return newsPrediction=NEUTRAL.
+- Set newsEvent to the exact event title from the calendar list; never invent or combine event titles.
 - Do not output probability above 75. Confidence is not a guarantee.
 
 Return ONLY a JSON object exactly like this:
 {
   "newsHasEvent": true,
-  "newsEvent": "short event label",
+  "newsEvent": "exact calendar event title",
   "newsPrediction": "BUY" | "SELL" | "NEUTRAL",
   "newsProbability": 65,
   "newsReason": "one short customer-friendly sentence explaining the bias"
@@ -129,10 +165,18 @@ Return ONLY a JSON object exactly like this:
     const prediction = String(parsed.newsPrediction || '').toUpperCase();
     const validPrediction = prediction === 'BUY' || prediction === 'SELL' ? prediction : 'NEUTRAL';
     const probability = Math.min(75, Math.max(50, Number(parsed.newsProbability) || 50));
+    const returnedEvent = String(parsed.newsEvent || '').trim().toLowerCase();
+    const selectedEvent = parsed.newsHasEvent
+      ? upcomingEvents.find((event) => {
+          const title = event.title.trim().toLowerCase();
+          return returnedEvent === title || returnedEvent.includes(title) || title.includes(returnedEvent);
+        }) || upcomingEvents[0]
+      : null;
 
     return {
-      newsHasEvent: Boolean(parsed.newsHasEvent),
-      newsEvent: String(parsed.newsEvent || 'Economic event'),
+      newsHasEvent: Boolean(parsed.newsHasEvent && selectedEvent),
+      newsEvent: selectedEvent?.title || '',
+      newsEventAt: selectedEvent ? parseForexFactoryEventUtc(selectedEvent) : null,
       newsPrediction: validPrediction as 'BUY' | 'SELL' | 'NEUTRAL',
       newsProbability: probability,
       newsReason: String(parsed.newsReason || ''),

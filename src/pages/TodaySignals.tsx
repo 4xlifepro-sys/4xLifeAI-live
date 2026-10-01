@@ -175,8 +175,10 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                 {(() => {
                   const isClosed = signal.status === 'CLOSED' || !signal.is_active;
                   if (!isClosed) {
-                    const isBreakeven = signal.sl === signal.tp1 && signal.status && signal.status.includes('HIT');
-                    const liveLabel = signal.status === 'TP2_HIT'
+                    const isBreakeven = Boolean(signal.breakeven_at);
+                    const liveLabel = signal.breakeven_at
+                      ? 'SL AT ENTRY - ACTIVE'
+                      : signal.status === 'TP2_HIT'
                       ? 'TP2 SECURED - WAITING TP3'
                       : signal.status === 'TP1_HIT'
                       ? 'TP1 SECURED - WAITING TP2 / TP3'
@@ -191,7 +193,7 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                         </span>
                         {isBreakeven && (
                           <span className="text-[10px] text-[#00E08A] font-medium px-2 py-0.5 rounded border border-[#00E08A]/20 bg-[#00E08A]/10">
-                            SL moved to TP1 (breakeven+)
+                            SL moved to Entry (breakeven)
                           </span>
                         )}
                       </div>

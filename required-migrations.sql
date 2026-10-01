@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS public.trades (
 
 -- 4. signals.original_sl
 ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS original_sl double precision;
+ALTER TABLE public.signals ADD COLUMN IF NOT EXISTS breakeven_at timestamp with time zone;
 
 -- 5. signal_audit_log.final_score
 ALTER TABLE public.signal_audit_log ADD COLUMN IF NOT EXISTS final_score double precision;

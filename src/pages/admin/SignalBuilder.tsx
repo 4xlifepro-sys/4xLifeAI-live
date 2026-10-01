@@ -78,6 +78,7 @@ interface Draft {
 interface NewsPrediction {
   newsHasEvent: boolean;
   newsEvent: string;
+  newsEventAt?: string | null;
   newsPrediction: 'BUY' | 'SELL' | 'NEUTRAL';
   newsProbability: number;
   newsReason: string;
@@ -111,6 +112,28 @@ interface HistorySignal {
   news_prediction?: string;
   news_probability?: number;
   news_reason?: string;
+}
+
+function formatNewsEventTiming(eventAt: string | null | undefined, now: number): string | null {
+  if (!eventAt) return null;
+  const timestamp = Date.parse(eventAt);
+  if (!Number.isFinite(timestamp)) return null;
+  const eventDate = new Date(timestamp);
+  const currentDate = new Date(now);
+  const sameDay = eventDate.getFullYear() === currentDate.getFullYear()
+    && eventDate.getMonth() === currentDate.getMonth()
+    && eventDate.getDate() === currentDate.getDate();
+  const dateLabel = sameDay
+    ? 'Today'
+    : eventDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeLabel = eventDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const remainingMs = timestamp - now;
+  if (remainingMs <= 0) return `${dateLabel}, ${timeLabel} · Scheduled time reached`;
+  const remainingMinutes = Math.ceil(remainingMs / 60000);
+  const timeLeft = remainingMinutes < 60
+    ? `${remainingMinutes} min left`
+    : `${Math.floor(remainingMinutes / 60)}h${remainingMinutes % 60 ? ` ${remainingMinutes % 60}m` : ''} left`;
+  return `${dateLabel}, ${timeLabel} · ${timeLeft}`;
 }
 
 function formatPrice(value: number, pair: string): string {
@@ -178,6 +201,7 @@ export default function SignalBuilder() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsPrediction, setNewsPrediction] = useState<NewsPrediction | null>(null);
   const [newsError, setNewsError] = useState('');
+  const [newsClock, setNewsClock] = useState(Date.now());
 
   const [chartFile, setChartFile] = useState<File | null>(null);
   const [chartAnalyzing, setChartAnalyzing] = useState(false);
@@ -243,6 +267,13 @@ export default function SignalBuilder() {
       setNewsError('');
     }
   }, [newsEnabled]);
+
+  useEffect(() => {
+    if (!newsPrediction?.newsEventAt) return;
+    setNewsClock(Date.now());
+    const timer = window.setInterval(() => setNewsClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [newsPrediction?.newsEventAt]);
 
 
   useEffect(() => {
@@ -833,11 +864,14 @@ export default function SignalBuilder() {
                       <span className="text-xs text-[#8A95A5]">Upcoming event</span>
                       <span className="text-xs font-bold text-[#F5A524]">{newsPrediction.newsEvent}</span>
                     </div>
+                    <p className="text-xs font-semibold text-[#AAB5C5]">
+                      {formatNewsEventTiming(newsPrediction.newsEventAt, newsClock) || 'Scheduled event time unavailable'}
+                    </p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-[#8A95A5]">News bias</span>
                       <span className={cn(
                         'text-xs font-bold uppercase',
-                        newsPrediction.newsPrediction === direction ? 'text-[#00E08A]' : newsPrediction.newsPrediction === 'NEUTRAL' ? 'text-[#8A95A5]' : 'text-red-400'
+                        newsPrediction.newsPrediction === 'BUY' ? 'text-[#00E08A]' : newsPrediction.newsPrediction === 'SELL' ? 'text-red-400' : 'text-[#8A95A5]'
                       )}>
                         {newsPrediction.newsPrediction} ({newsPrediction.newsProbability}%)
                       </span>
@@ -856,7 +890,7 @@ export default function SignalBuilder() {
 
                 {!newsLoading && newsPrediction && !newsPrediction.newsHasEvent && (
                   <div className="bg-[#11141A] rounded-xl p-4 border border-[#202735] text-xs text-[#8A95A5]">
-                    No high-impact events found for this pair in the next 5 days. No confidence adjustment applied.
+                    No upcoming high-impact events found for this pair today. No confidence adjustment applied.
                   </div>
                 )}
               </div>

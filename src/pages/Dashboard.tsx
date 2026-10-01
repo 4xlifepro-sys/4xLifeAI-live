@@ -199,6 +199,7 @@ export default function Dashboard() {
         confidence: Number(s.aiConfidence ?? s.confidence ?? 0),
         status,
         tradeStatus: s.status,
+        breakEvenActive: Boolean(s.breakeven_at),
         isAdmin,
         statusPips: Math.abs(pips),
         tier,
@@ -221,6 +222,22 @@ export default function Dashboard() {
         })(),
       };
     });
+
+    const latestSignals = [...allSignals]
+      .filter(s => PAIRS.includes(s.pair) && s.status !== 'REJECTED' && s.tier !== 'Reject')
+      .sort((a, b) => new Date(b.created_at || b.timestamp || '').getTime() - new Date(a.created_at || a.timestamp || '').getTime())
+      .slice(0, 5)
+      .map(s => ({
+        id: String(s.id || ''),
+        pair: s.pair,
+        direction: s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY' ? 'LONG' as const : 'SHORT' as const,
+        entry: Number(s.entry_price || s.entry || 0),
+        sl: Number(s.sl || 0),
+        tp1: Number(s.tp1 || 0),
+        status: String(s.status || (s.is_active === false ? 'CLOSED' : 'LIVE')),
+        isActive: s.is_active !== false,
+        openedAgo: daysAgo(s.created_at || s.timestamp || ''),
+      }));
 
     const historyMapped = uniqueClosed.slice(0, 10).map(s => {
       const isLong = s.direction === 'BUY' || s.direction === 'LONG' || s.signal === 'BUY';
@@ -264,6 +281,7 @@ export default function Dashboard() {
 
     const overrides: AdapterOverrides = {
       activeSignals: activeMapped,
+      recentSignals: latestSignals,
       history: historyMapped,
       stats: { winRate30d, signalsThisMonth: monthSignals, signalsSince: 'Since ' + monthStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), wins: monthWins.length, losses: monthLosses.length, avgRR, totalPipsClosed },
       session: sessionName,

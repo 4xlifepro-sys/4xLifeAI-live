@@ -49,9 +49,10 @@ interface ActiveSignal {
   tp2: number;
   tp3?: number;
   confidence?: number;
-  status: "profit" | "loss" | "pending";
+  status: "profit" | "loss" | "pending" | "profit secured";
   tradeStatus?: string;
   statusPips?: number;
+  breakEvenActive?: boolean;
   tier?: "Strong" | "Good" | "Valid";
   openedAgo: string; // e.g. "12m ago"
   news?: {
@@ -75,6 +76,18 @@ interface ClosedSignal {
   closedAt: string; // e.g. "Jul 4, 14:20"
 }
 
+interface RecentSignal {
+  id: string;
+  pair: string;
+  direction: "LONG" | "SHORT";
+  entry: number;
+  sl: number;
+  tp1: number;
+  status: string;
+  isActive: boolean;
+  openedAgo: string;
+}
+
 interface DashboardData {
   brand: string;
   tagline: string;
@@ -96,6 +109,7 @@ interface DashboardData {
     totalPipsClosed: number;
   };
   activeSignals: ActiveSignal[];
+  recentSignals: RecentSignal[];
   watchlist: WatchlistGroup[];
   history: ClosedSignal[];
 }
@@ -150,6 +164,7 @@ const sampleData: DashboardData = {
       openedAgo: "4m ago",
     },
   ],
+  recentSignals: [],
   watchlist: [
     {
       label: "FOREX",
@@ -424,6 +439,41 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
           )}
         </section>
 
+        {/* ---------------- Recently published signals ---------------- */}
+        <section className="x4-section">
+          <div className="x4-section__head">
+            <h2>Recently Published Signals</h2>
+            <span className="x4-muted">Latest {d.recentSignals.length}</span>
+          </div>
+
+          {d.recentSignals.length === 0 ? (
+            <div className="x4-table x4-published-empty">No published signals yet.</div>
+          ) : (
+            <div className="x4-table">
+              <div className="x4-published__head">
+                <span>PAIR</span>
+                <span>DIR</span>
+                <span>ENTRY</span>
+                <span>SL</span>
+                <span>TP1</span>
+                <span>STATUS</span>
+                <span>CREATED</span>
+              </div>
+              {d.recentSignals.map((signal) => (
+                <div className="x4-published__row" key={signal.id || `${signal.pair}-${signal.openedAgo}`}>
+                  <span className="x4-table__pair">{signal.pair}</span>
+                  <span className={`x4-dir ${signal.direction === "LONG" ? "long" : "short"}`}>{signal.direction}</span>
+                  <span>{fmtPrice(signal.entry)}</span>
+                  <span>{fmtPrice(signal.sl)}</span>
+                  <span>{fmtPrice(signal.tp1)}</span>
+                  <span className={`x4-result ${signal.isActive ? "x4-result--win" : "x4-result--breakeven"}`}>{signal.status}</span>
+                  <span className="x4-muted">{signal.openedAgo}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* ---------------- Watchlist ---------------- */}
         <section className="x4-section">
           <div className="x4-section__head">
@@ -567,6 +617,8 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       ? "TP2 secured - waiting for TP3"
       : s.tradeStatus === "TP1_HIT"
       ? "TP1 secured - waiting for TP2 / TP3"
+      : s.breakEvenActive
+      ? "Stop at Entry - monitoring for breakeven"
       : s.status === "profit"
       ? `Live market +${s.statusPips ?? 0} pips`
       : s.status === "loss"
@@ -604,6 +656,28 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       window.location.reload();
     } catch (error: any) {
       setManualError(error?.message || "Unable to update signal");
+      setManualAction(null);
+    }
+  };
+
+  const moveStopToEntry = async () => {
+    if (!s.id || manualAction || s.breakEvenActive) return;
+    if (!window.confirm(`Move ${s.pair} Stop Loss to Entry (${s.entry})? The signal stays active and both Telegram channels will be notified.`)) return;
+    setManualAction("MOVE_SL_TO_ENTRY");
+    setManualError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Please sign in again before moving the Stop Loss");
+      const response = await fetch(`/api/admin/signals/${encodeURIComponent(s.id)}/move-sl-to-entry`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Unable to move Stop Loss to Entry");
+      if (result?.telegramSent === false) window.alert("The Stop Loss moved to Entry, but a Telegram channel update failed.");
+      window.location.reload();
+    } catch (error: any) {
+      setManualError(error?.message || "Unable to move Stop Loss to Entry");
       setManualAction(null);
     }
   };
@@ -674,7 +748,7 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
       </div>
       <div className="x4-signal__levels">
         <Level label="ENTRY" value={s.entry} copied={copiedLevel === "ENTRY"} onCopy={copyLevel} />
-        <Level label="SL" value={s.sl} copied={copiedLevel === "SL"} onCopy={copyLevel} />
+        <Level label={s.breakEvenActive ? "SL (BE)" : "SL"} value={s.sl} copied={copiedLevel === "SL"} onCopy={copyLevel} />
         <Level label="TP1" value={s.tp1} copied={copiedLevel === "TP1"} onCopy={copyLevel} />
         <Level label="TP2" value={s.tp2} copied={copiedLevel === "TP2"} onCopy={copyLevel} />
         {s.tp3 != null && <Level label="TP3" value={s.tp3} copied={copiedLevel === "TP3"} onCopy={copyLevel} />}
@@ -718,9 +792,18 @@ function ActiveSignalCard({ s }: { s: ActiveSignal }) {
           <button type="button" className="x4-signal__manual-button x4-signal__manual-button--sl" onClick={() => markTarget("SL")} disabled={manualAction !== null}>
             {manualAction === "SL" ? "UPDATING..." : "MARK SL HIT"}
           </button>
+          {s.breakEvenActive ? (
+            <button type="button" className="x4-signal__manual-button x4-signal__manual-button--be" disabled>
+              STOP AT ENTRY ACTIVE
+            </button>
+          ) : (
+            <button type="button" className="x4-signal__manual-button x4-signal__manual-button--be" onClick={moveStopToEntry} disabled={manualAction !== null}>
+              {manualAction === "MOVE_SL_TO_ENTRY" ? "MOVING SL TO ENTRY..." : "MOVE SL TO ENTRY"}
+            </button>
+          )}
           {(["TP1_HIT", "TP2_HIT"].includes(s.tradeStatus || "") || s.status === "profit" || s.status === "profit secured") && (
             <button type="button" className="x4-signal__manual-button x4-signal__manual-button--be" onClick={() => markTarget("BE")} disabled={manualAction !== null}>
-              {manualAction === "BE" ? "UPDATING..." : "MARK BREAK-EVEN"}
+              {manualAction === "BE" ? "CLOSING AT ENTRY..." : "CLOSE REMAINING AT ENTRY"}
             </button>
           )}
           {(["TP1", "TP2", "TP3"] as const).map((level) => (
@@ -1549,6 +1632,28 @@ const CSS = `
   border-bottom: 1px solid var(--x4-line);
 }
 .x4-table__row:last-child { border-bottom: none; }
+.x4-published__head, .x4-published__row {
+  display: grid;
+  grid-template-columns: 90px 70px 90px 90px 90px 110px 1fr;
+  gap: 8px;
+  padding: 10px 16px;
+  align-items: center;
+  min-width: 760px;
+}
+.x4-published__head {
+  font-family: var(--x4-font-mono);
+  font-size: 10px;
+  color: var(--x4-text-dim);
+  letter-spacing: 0.8px;
+  border-bottom: 1px solid var(--x4-line);
+}
+.x4-published__row {
+  font-family: var(--x4-font-mono);
+  font-size: 13px;
+  border-bottom: 1px solid var(--x4-line);
+}
+.x4-published__row:last-child { border-bottom: none; }
+.x4-published-empty { padding: 18px 16px; color: var(--x4-text-dim); font-size: 13px; }
 .x4-table__pair { font-weight: 700; }
 .x4-result {
   font-size: 10px;

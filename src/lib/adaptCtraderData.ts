@@ -58,6 +58,7 @@ function inferTrend(pair: string, price: number, previousPrice?: number): "BULL"
 
 export interface AdapterOverrides {
   activeSignals?: any[]; // pass through from your scanner state
+  recentSignals?: any[];
   history?: any[]; // pass through from your closed-trades log
   stats?: Partial<{
     winRate30d: number;
@@ -128,6 +129,7 @@ export function adaptCtraderData(raw: RawPricesResponse, overrides: AdapterOverr
     clockUtc: new Date().toISOString().slice(11, 19) + " UTC",
     stats,
     activeSignals,
+    recentSignals: overrides.recentSignals ?? [],
     watchlist,
     history: overrides.history ?? [],
   };
