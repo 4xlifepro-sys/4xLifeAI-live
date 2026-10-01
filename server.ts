@@ -38,6 +38,15 @@ type FFEvent = {
   actual?: string;
 };
 
+type ChartImage = { mimeType: 'image/png' | 'image/jpeg' | 'image/webp'; data: string };
+
+function parseChartImage(value: unknown): ChartImage | null {
+  const match = String(value || '').match(/^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase().replace('image/jpg', 'image/jpeg') as ChartImage['mimeType'];
+  return { mimeType, data: match[2] };
+}
+
 function normalizeVisibleTimeframe(value: unknown): string | null {
   const label = String(value || '').toUpperCase().trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
   const bareMinuteMatch = label.match(/^(1|2|3|5|10|15|20|30|45|60)$/);
@@ -68,15 +77,15 @@ function sanitizeUnverifiedTimeframes(value: unknown, verifiedTimeframes: Set<st
   }).join(' ').replace(/\s+/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim();
 }
 
-async function readVisibleTimeframes(ai: any, image1: string, image2: string): Promise<{ image1: string | null; image2: string | null }> {
+async function readVisibleTimeframes(ai: any, image1: ChartImage, image2: ChartImage | null): Promise<{ image1: string | null; image2: string | null }> {
   const parts: any[] = [
-    { text: `Read ONLY the timeframe selector/label visibly printed on each attached trading-chart screenshot. Do not infer a timeframe from candle shapes, market behavior, typical workflows, or any text outside the chart. Return JSON only: {"image1":"<recognized timeframe or UNREADABLE>","image2":"<recognized timeframe or UNREADABLE>"}. Use canonical labels such as 1M, 5M, 15M, 1H, 4H, 1D. If a label is not clearly legible, return UNREADABLE. Image 1 is the first attached chart; image 2 is the second. Do not return a timeframe not visibly shown.` },
-    { inlineData: { mimeType: 'image/png', data: image1 } },
+    { text: `Read ONLY the timeframe selector/label visibly printed on each attached trading-chart screenshot. Use visual OCR: magnify the chart header in your attention and copy the exact interval text. Common trading-platform shorthand includes 5 = 5M and 15 = 15M; do not mistake 15 minutes for 1H or 1D. Do not infer a timeframe from candle shapes, market behavior, typical workflows, or any text outside the chart. Return JSON only: {"image1":"<recognized timeframe or UNREADABLE>","image2":"<recognized timeframe or UNREADABLE>"}. Use canonical labels such as 1M, 5M, 15M, 1H, 4H, 1D. If a label is not clearly legible, return UNREADABLE. Image 1 is the first attached chart; image 2 is the second. Do not return a timeframe not visibly shown.` },
+    { inlineData: { mimeType: image1.mimeType, data: image1.data } },
   ];
-  if (image2) parts.push({ inlineData: { mimeType: 'image/png', data: image2 } });
+  if (image2) parts.push({ inlineData: { mimeType: image2.mimeType, data: image2.data } });
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents: [{ role: 'user', parts }],
       config: { temperature: 0, responseMimeType: 'application/json' },
     });
@@ -1947,16 +1956,22 @@ async function startServer() {
   // AI Chart Analyzer Endpoint
   app.post("/api/chart-analyzer", async (req, res) => {
     try {
-      const { imageBase64, chartType, imageBase64_2, timezone } = req.body;
+      const { imageBase64, chartType, imageBase64_2, timezone, timeframeImageBase64, timeframeImageBase64_2 } = req.body;
       
       if (!imageBase64) {
         return res.status(400).json({ error: "No image provided" });
       }
 
-      // Strip data URL prefix if present
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      const base64Data2 = imageBase64_2 ? String(imageBase64_2).replace(/^data:image\/\w+;base64,/, '') : '';
-      const visibleTimeframes = await readVisibleTimeframes(ai, base64Data, base64Data2);
+      const image1 = parseChartImage(imageBase64);
+      const image2 = imageBase64_2 ? parseChartImage(imageBase64_2) : null;
+      if (!image1 || (imageBase64_2 && !image2)) {
+        return res.status(400).json({ error: 'Please upload chart images in PNG, JPEG, or WebP format.' });
+      }
+      const base64Data = image1.data;
+      const base64Data2 = image2?.data || '';
+      const timeframeImage1 = (timeframeImageBase64 && parseChartImage(timeframeImageBase64)) || image1;
+      const timeframeImage2 = (timeframeImageBase64_2 && parseChartImage(timeframeImageBase64_2)) || image2;
+      const visibleTimeframes = await readVisibleTimeframes(ai, timeframeImage1, timeframeImage2);
 
       // Fetch the free Forex Factory high-impact calendar for the news bias
       const calendarEvents = await getEconomicCalendar();
@@ -2065,9 +2080,9 @@ Return the analysis in this exact JSON format:
       
       const parts: any[] = [
         { text: chartAnalyzerPrompt },
-        { inlineData: { mimeType: 'image/png', data: base64Data } }
+        { inlineData: { mimeType: image1.mimeType, data: base64Data } }
       ];
-      if (base64Data2) parts.push({ inlineData: { mimeType: 'image/png', data: base64Data2 } });
+      if (image2) parts.push({ inlineData: { mimeType: image2.mimeType, data: base64Data2 } });
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',

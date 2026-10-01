@@ -10,6 +10,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function createTimeframeHeaderCrop(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const cropWidth = Math.max(1, image.naturalWidth);
+      const cropHeight = Math.max(1, Math.ceil(image.naturalHeight * 0.2));
+      const canvas = document.createElement('canvas');
+      canvas.width = cropWidth * 2;
+      canvas.height = cropHeight * 2;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        resolve(dataUrl);
+        return;
+      }
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(image, 0, 0, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    image.onerror = () => resolve(dataUrl);
+    image.src = dataUrl;
+  });
+}
+
 interface AnalysisResult {
   instrument: string;
   timeframe: string;
@@ -174,12 +198,21 @@ export default function ChartAnalyzer() {
     }
     setIsAnalyzing(true); setAnalysisStep(0); setResult(null); setError(''); setShowNewsDetail(false);
     try {
-      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
+      const timeframeImageBase64 = await createTimeframeHeaderCrop(selectedImage);
+      const timeframeImageBase64_2 = selectedImage2 ? await createTimeframeHeaderCrop(selectedImage2) : undefined;
+      const requestBody = JSON.stringify({
+        imageBase64: selectedImage,
+        imageBase64_2: selectedImage2 || undefined,
+        timeframeImageBase64,
+        timeframeImageBase64_2,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      let res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
       
       if (res.status === 503) {
         setAnalysisStep(analysisStep);
         await new Promise(r => setTimeout(r, 3000));
-        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: selectedImage, imageBase64_2: selectedImage2 || undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
+        res = await fetch('/api/chart-analyzer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
       }
       
       const data = await res.json();
