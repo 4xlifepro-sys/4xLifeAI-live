@@ -38,6 +38,58 @@ type FFEvent = {
   actual?: string;
 };
 
+function normalizeVisibleTimeframe(value: unknown): string | null {
+  const label = String(value || '').toUpperCase().trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  const bareMinuteMatch = label.match(/^(1|2|3|5|10|15|20|30|45|60)$/);
+  if (bareMinuteMatch) return `${Number(bareMinuteMatch[1])}M`;
+  const minuteMatch = label.match(/^(\d{1,2})\s*(?:M|MIN|MINS|MINUTE|MINUTES)$/) || label.match(/^M\s*(\d{1,2})$/);
+  if (minuteMatch && [1, 2, 3, 4, 5, 10, 15, 20, 30, 45, 60].includes(Number(minuteMatch[1]))) return `${Number(minuteMatch[1])}M`;
+  const hourMatch = label.match(/^(\d{1,2})\s*(?:H|HR|HRS|HOUR|HOURS)$/) || label.match(/^H\s*(\d{1,2})$/);
+  if (hourMatch && [1, 2, 3, 4, 6, 8, 12].includes(Number(hourMatch[1]))) return `${Number(hourMatch[1])}H`;
+  const dayMatch = label.match(/^(\d{1,2})\s*(?:D|DAY|DAYS)$/) || label.match(/^D\s*(\d{1,2})$/);
+  if (dayMatch && [1, 2, 3].includes(Number(dayMatch[1]))) return `${Number(dayMatch[1])}D`;
+  const weekMatch = label.match(/^(\d{1,2})\s*(?:W|WK|WEEK|WEEKS)$/) || label.match(/^W\s*(\d{1,2})$/);
+  if (weekMatch && Number(weekMatch[1]) === 1) return '1W';
+  const monthMatch = label.match(/^(\d{1,2})\s*(?:MO|MONTH|MONTHS)$/) || label.match(/^MO\s*(\d{1,2})$/);
+  if (monthMatch && Number(monthMatch[1]) === 1) return '1MO';
+  return null;
+}
+
+function sanitizeUnverifiedTimeframes(value: unknown, verifiedTimeframes: Set<string>): string {
+  const pattern = /\b(?:(\d{1,2})\s*-?\s*(?:M|MIN(?:UTE)?S?|H|HR|HRS|HOUR|HOURS|D|DAY|DAYS|W|WK|WEEK|WEEKS|MO|MONTH|MONTHS)|([MHDW])\s*(\d{1,2}))\b/gi;
+  const sentences = String(value || '').split(/(?<=[.!?])\s+/);
+  return sentences.filter((sentence) => {
+    const mentionsRelativeTimeframe = /\b(?:higher|lower|larger|smaller)\s+time ?frames?\b|\b(?:HTF|LTF)\b/i.test(sentence);
+    if (mentionsRelativeTimeframe && verifiedTimeframes.size < 2) return false;
+    return Array.from(sentence.matchAll(pattern)).every((match) => {
+      const timeframe = normalizeVisibleTimeframe(match[0]);
+      return timeframe !== null && verifiedTimeframes.has(timeframe);
+    });
+  }).join(' ').replace(/\s+/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim();
+}
+
+async function readVisibleTimeframes(ai: any, image1: string, image2: string): Promise<{ image1: string | null; image2: string | null }> {
+  const parts: any[] = [
+    { text: `Read ONLY the timeframe selector/label visibly printed on each attached trading-chart screenshot. Do not infer a timeframe from candle shapes, market behavior, typical workflows, or any text outside the chart. Return JSON only: {"image1":"<recognized timeframe or UNREADABLE>","image2":"<recognized timeframe or UNREADABLE>"}. Use canonical labels such as 1M, 5M, 15M, 1H, 4H, 1D. If a label is not clearly legible, return UNREADABLE. Image 1 is the first attached chart; image 2 is the second. Do not return a timeframe not visibly shown.` },
+    { inlineData: { mimeType: 'image/png', data: image1 } },
+  ];
+  if (image2) parts.push({ inlineData: { mimeType: 'image/png', data: image2 } });
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts }],
+      config: { temperature: 0, responseMimeType: 'application/json' },
+    });
+    const result = JSON.parse(response.text || '{}');
+    return {
+      image1: normalizeVisibleTimeframe(result.image1),
+      image2: image2 ? normalizeVisibleTimeframe(result.image2) : null,
+    };
+  } catch {
+    return { image1: null, image2: null };
+  }
+}
+
 function parseForexFactoryEventUtc(event: FFEvent): string | null {
   const rawTimestamp = String(event.date || '').trim();
   if (!rawTimestamp) return null;
@@ -1904,6 +1956,7 @@ async function startServer() {
       // Strip data URL prefix if present
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
       const base64Data2 = imageBase64_2 ? String(imageBase64_2).replace(/^data:image\/\w+;base64,/, '') : '';
+      const visibleTimeframes = await readVisibleTimeframes(ai, base64Data, base64Data2);
 
       // Fetch the free Forex Factory high-impact calendar for the news bias
       const calendarEvents = await getEconomicCalendar();
@@ -1955,15 +2008,13 @@ NEWS BIAS RULES (use ONLY the calendar events above whose currency matches the d
 - newsTime: copy the matching event's normalized UTC timestamp from the calendar data exactly. Never calculate it from the display label, user's timezone, or current time.
 
 MULTI-CHART RULES (apply when two screenshots are attached):
-- Read each chart's timeframe from its visible chart label only; never infer it from candle patterns, image order, or assumed workflow.
-- Set timeframe to "<IMAGE #1 timeframe>/<IMAGE #2 timeframe>" using the visible labels (for example, "15M/5M"). If either label is unreadable, write "Unclear" for that chart's timeframe.
-- When one screenshot is attached, set timeframe to its visible chart label or "Unclear" if unreadable.
+- The server independently reads each visible timeframe label. Your timeframe field and tfNote are not trusted and will be overwritten from that label pass.
+- Describe chart 1 and chart 2 only; never refer to an unseen or assumed timeframe.
 - Read the directional bias of each chart (bullish / bearish / range).
 - tfStatus = "ALIGNED" if both charts lean the same direction; "CONFLICT" if they disagree (one bullish vs the other bearish, or one strongly trending vs the other reversing).
 - If tfStatus = "CONFLICT": trade MUST be "WAIT", and warnings must state that the two charts disagree.
-- If tfStatus = "ALIGNED" and trade is BUY/SELL in that same direction: raise confidence by 10 points (max 80).
-- tfNote: ONE short sentence using only the visible chart timeframes. Never invent or assume a timeframe.
-- When only one chart is attached: tfStatus = "SINGLE", tfNote = "".
+- Do not add a timeframe-alignment confidence bonus; the server applies it only after both visible labels are verified.
+- When only one chart is attached: set tfStatus = "SINGLE", tfNote = "".
 
 CRITICAL RULES FOR SIGNAL GENERATION:
 - GENERATE ACTIONABLE SIGNALS: Return BUY/SELL when there is a clear trend, visible chart structure, and confluence of price action
@@ -2137,9 +2188,32 @@ Return the analysis in this exact JSON format:
           }
         }
 
+        const verifiedImage1 = visibleTimeframes.image1;
+        const verifiedImage2 = base64Data2 ? visibleTimeframes.image2 : null;
+        const verifiedTimeframes = new Set([verifiedImage1, verifiedImage2].filter((timeframe): timeframe is string => Boolean(timeframe)));
+        const image1Timeframe = verifiedImage1 || 'Unclear';
+        const image2Timeframe = verifiedImage2 || 'Unclear';
+        analysis.timeframe = base64Data2
+          ? `${image1Timeframe}/${image2Timeframe}`
+          : image1Timeframe;
+        for (const field of ['trend', 'marketStructure', 'reasoning', 'warnings']) {
+          if (typeof analysis[field] === 'string') {
+            analysis[field] = sanitizeUnverifiedTimeframes(analysis[field], verifiedTimeframes)
+              || 'Analysis is limited to what is clearly visible in the uploaded screenshot(s).';
+          }
+        }
+        const modelTfStatus = String(analysis.tfStatus || '').toUpperCase();
+        const bothTimeframesVerified = Boolean(base64Data2 && visibleTimeframes.image1 && visibleTimeframes.image2);
+        analysis.tfStatus = bothTimeframesVerified && (modelTfStatus === 'ALIGNED' || modelTfStatus === 'CONFLICT')
+          ? modelTfStatus
+          : 'SINGLE';
+        analysis.tfNote = analysis.tfStatus === 'ALIGNED'
+          ? `The ${visibleTimeframes.image1} and ${visibleTimeframes.image2} screenshots show aligned directional structure.`
+          : analysis.tfStatus === 'CONFLICT'
+            ? `The ${visibleTimeframes.image1} and ${visibleTimeframes.image2} screenshots show conflicting directional structure.`
+            : '';
+
         // Dual-timeframe safety: a conflict always blocks entry, whatever the analysis returns
-        const tf = String(analysis.tfStatus || '').toUpperCase();
-        analysis.tfStatus = (tf === 'ALIGNED' || tf === 'CONFLICT') && base64Data2 ? tf : 'SINGLE';
         analysis.confidence = Math.min(80, Math.max(0, Number(analysis.confidence) || 0));
         if (analysis.tfStatus === 'CONFLICT') {
           if (String(analysis.trade || '').toUpperCase() !== 'WAIT') analysis.trade = 'WAIT';
