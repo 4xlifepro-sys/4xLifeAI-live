@@ -14,11 +14,11 @@ function createTimeframeHeaderCrop(dataUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const image = new Image();
     image.onload = () => {
-      const cropWidth = Math.max(1, image.naturalWidth);
-      const cropHeight = Math.max(1, Math.ceil(image.naturalHeight * 0.2));
+      const cropWidth = Math.max(1, Math.ceil(image.naturalWidth * 0.55));
+      const cropHeight = Math.max(1, Math.ceil(image.naturalHeight * 0.12));
       const canvas = document.createElement('canvas');
-      canvas.width = cropWidth * 2;
-      canvas.height = cropHeight * 2;
+      canvas.width = cropWidth * 4;
+      canvas.height = cropHeight * 4;
       const context = canvas.getContext('2d');
       if (!context) {
         resolve(dataUrl);
