@@ -908,11 +908,11 @@ async function trackOpenSignals() {
 async function trackSignalAgainstCandles(signal: any, candles: any[]) {
   const isLong = signal.direction === 'BUY' || signal.direction === 'LONG';
   const currentStatus = signal.status || 'LIVE';
-  const stageTimestamp = currentStatus === 'TP2_HIT'
+  const stageTimestamp = signal.breakeven_at || (currentStatus === 'TP2_HIT'
     ? signal.tp2_hit_at || signal.created_at || signal.timestamp
     : currentStatus === 'TP1_HIT'
       ? signal.tp1_hit_at || signal.created_at || signal.timestamp
-      : signal.created_at || signal.timestamp;
+      : signal.created_at || signal.timestamp);
   const stageTime = new Date(stageTimestamp || 0).getTime();
   const trackableCandles = candles
     .filter((candle) => new Date(candle.timestamp).getTime() > stageTime)
