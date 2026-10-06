@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import StrategyMarketPanel from './StrategyMarketPanel';
 import { useEffect } from "react";
 
 /**
  * ============================================================================
- * 4xFiveAI — Professional Trading Terminal Dashboard
+ * 4xLifeAI — Professional Trading Terminal Dashboard
  * ============================================================================
  *
  * DESIGN DIRECTION: Institutional trading terminal (Bloomberg/Reuters-inspired),
@@ -119,7 +120,7 @@ interface DashboardData {
 // ---------------------------------------------------------------------------
 
 const sampleData: DashboardData = {
-  brand: "4xFiveAI",
+  brand: "4xLifeAI",
   tagline: "Premium Signal Intelligence",
   session: "LONDON SESSION",
   pairCount: 10,
@@ -416,6 +417,9 @@ export default function Dashboard({ data }: { data?: DashboardData }) {
             foot="Target profit ratio"
           />
         </section>
+
+        {/* ---------------- Automatic strategy ---------------- */}
+        <StrategyMarketPanel />
 
         {/* ---------------- Active signals ---------------- */}
         <section className="x4-section">

@@ -6,7 +6,7 @@ import {
   Send, Award, ShieldAlert, RefreshCw, Check, X, ExternalLink, 
   CircleDollarSign, Database, Play, Activity, LayoutList, Cpu,
   Upload, Image as ImageIcon, TrendingUp, TrendingDown, AlertTriangle,
-  SlidersHorizontal,
+  SlidersHorizontal, ClipboardPaste,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../components/ConfirmDialog';
@@ -44,6 +44,8 @@ interface PayoutRequest {
 const TABS = [
   { id: 'analytics', label: 'ANALYTICS', icon: BarChart2 },
   { id: 'signal-builder', label: 'SIGNAL BUILDER', icon: SlidersHorizontal },
+  { id: 'copilot-signal', label: 'COPILOT SIGNAL', icon: ClipboardPaste },
+  { id: 'strategy-control', label: 'STRATEGY CONTROL', icon: Shield },
   { id: 'users', label: 'USERS', icon: Users },
   { id: 'plans', label: 'PLANS', icon: LayoutList },
   { id: 'payments', label: 'PAYMENTS', icon: CreditCard },
@@ -58,6 +60,8 @@ const TABS = [
 
 import PlansManager from './admin/PlansManager';
 import SignalBuilder from './admin/SignalBuilder';
+import StrategyControl from './admin/StrategyControl';
+import CopilotSignal from './admin/CopilotSignal';
 
 export default function Admin() {
   const dialog = useDialog();
@@ -1372,6 +1376,8 @@ export default function Admin() {
           <div className="pb-10">
             {activeTab === 'analytics' && renderAnalyticsTab()}
             {activeTab === 'signal-builder' && <SignalBuilder />}
+            {activeTab === 'copilot-signal' && <CopilotSignal />}
+            {activeTab === 'strategy-control' && <StrategyControl />}
             {activeTab === 'users' && renderUsersTab()}
             {activeTab === 'plans' && <PlansManager />}
             {activeTab === 'payments' && renderPaymentsTab()}
@@ -1383,7 +1389,7 @@ export default function Admin() {
             {activeTab === 'limits' && renderLimitsTab()}
             
             {/* Placeholder for un-implemented tabs */}
-            {!['analytics', 'signal-builder', 'users', 'plans', 'payments', 'signals', 'referrals', 'tickets', 'history', 'prompts', 'limits'].includes(activeTab) && (
+            {!['analytics', 'signal-builder', 'copilot-signal', 'strategy-control', 'users', 'plans', 'payments', 'signals', 'referrals', 'tickets', 'history', 'prompts', 'limits'].includes(activeTab) && (
               <div className="bg-[#0D1017] border border-[#202735] rounded-2xl p-12 text-center shadow-sm">
                 <ShieldAlert className="w-12 h-12 text-[#202735] mx-auto mb-4" />
                 <h3 className="text-white text-lg font-bold tracking-widest uppercase mb-2">{TABS.find(t=>t.id === activeTab)?.label} Module</h3>

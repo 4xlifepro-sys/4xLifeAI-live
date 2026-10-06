@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard';
 import Account from './pages/Account';
 import Referrals from './pages/Referrals';
 import Admin from './pages/Admin';
+import CopilotSignal from './pages/admin/CopilotSignal';
 import ValidationAnalytics from './pages/ValidationAnalytics';
 import Trades from './pages/Trades';
 import Plans from './pages/Plans';
@@ -152,9 +153,9 @@ function GlobalLayout() {
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 font-black text-[10px] uppercase tracking-widest border border-blue-500/20">
             LIVE PLATFORM
           </span>
-          <span className="font-semibold text-slate-300">Secure Signal Network</span>
+          <span className="font-semibold text-slate-300">Trade Smarter. Live Bigger.</span>
           <span className="text-white font-black text-sm tracking-widest uppercase hover:text-blue-400 transition-colors drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-            4xFiveAI
+            4xLifeAI
           </span>
         </p>
       </div>
@@ -355,7 +356,7 @@ function GlobalLayout() {
                   }}
                   className="w-full flex items-center justify-center gap-3 px-4 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all uppercase text-sm tracking-wide border border-emerald-500/30 cursor-pointer"
                 >
-                  <span>Install 4xFiveAI App</span>
+                  <span>Install 4xLifeAI App</span>
                 </button>
               )}
 
@@ -396,6 +397,7 @@ function GlobalLayout() {
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
           <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="/admin/copilot-signal" element={<AdminRoute><CopilotSignal /></AdminRoute>} />
           <Route path="/validation" element={<ProtectedRoute><ValidationAnalytics /></ProtectedRoute>} />
           <Route path="/ai-coach" element={<ProtectedRoute><AICoach /></ProtectedRoute>} />
           <Route path="/chart-analyzer" element={<ProtectedRoute><ChartAnalyzer /></ProtectedRoute>} />
@@ -409,7 +411,7 @@ function GlobalLayout() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3">
               <Logo size={24} />
-              <span className="font-bold text-sm tracking-tight text-white font-sans">4xFiveAI</span>
+              <span className="font-bold text-sm tracking-tight text-white font-sans">4xLifeAI</span>
               <span className="text-xs text-[#5D6B80] border-l border-[#202735] pl-3">Premium Signal Intelligence</span>
             </div>
             
@@ -424,7 +426,7 @@ function GlobalLayout() {
             </div>
 
             <div className="text-xs text-[#5D6B80] text-center">
-              &copy; 2026 4xFiveAI. All rights reserved.
+              &copy; 2026 4xLifeAI. All rights reserved.
               <div className="mt-1">Developed by <span className="text-cyan-400 font-semibold">Tofik Mohammed</span></div>
             </div>
           </div>

@@ -195,6 +195,54 @@ export async function fetchCandles(pair: string, interval: '1min' | '5min' | '15
   }
 }
 
+export async function fetchCandlesForTimeframe(pair: string, timeframe: string): Promise<Candle[] | null> {
+  const normalized = timeframe.toUpperCase();
+  const directIntervals: Record<string, '1min' | '5min' | '15min' | '1h' | '4h'> = {
+    '1M': '1min', '5M': '5min', '15M': '15min', '1H': '1h', '4H': '4h',
+  };
+  if (directIntervals[normalized]) return fetchCandles(pair, directIntervals[normalized]);
+
+  const periods: Record<string, TrendbarPeriod> = {
+    '3M': TrendbarPeriod.M3,
+    '30M': TrendbarPeriod.M30,
+    '1D': TrendbarPeriod.D1,
+    '1W': TrendbarPeriod.W1,
+  };
+  if (normalized === '2H') {
+    const hourly = await fetchCandles(pair, '1h');
+    if (!hourly) return null;
+    const grouped = new Map<number, Candle[]>();
+    for (const candle of hourly) {
+      const hour = new Date(candle.timestamp).getUTCHours();
+      const bucket = Math.floor(hour / 2) * 2;
+      const key = Date.UTC(new Date(candle.timestamp).getUTCFullYear(), new Date(candle.timestamp).getUTCMonth(), new Date(candle.timestamp).getUTCDate(), bucket);
+      grouped.set(key, [...(grouped.get(key) || []), candle]);
+    }
+    return [...grouped.entries()].sort((a, b) => a[0] - b[0]).map(([time, candles]) => ({
+      timestamp: new Date(time).toISOString(),
+      open: candles[0].open,
+      high: Math.max(...candles.map(candle => candle.high)),
+      low: Math.min(...candles.map(candle => candle.low)),
+      close: candles[candles.length - 1].close,
+    }));
+  }
+  const period = periods[normalized];
+  if (!period) return null;
+
+  try {
+    const client = await getClient();
+    if (!symbolsCache) symbolsCache = await client.getSymbols();
+    const symbol = symbolsCache.find((item: any) => item.symbolName === pair || item.name === pair || item.symbol === pair);
+    if (!symbol) return null;
+    const response = await client.raw.market.getTrendbars({ symbolId: symbol.symbolId, period, count: 100 });
+    const bars = Array.isArray(response) ? response : response?.trendbars || [];
+    return bars.map((bar: any) => decodeTrendbar(bar, Number(symbol.digits ?? 5))).filter((bar: Candle | null): bar is Candle => Boolean(bar));
+  } catch (error: any) {
+    if (!error?.message?.includes('terminated')) console.error(`[MarketFeed] ${pair} ${normalized} error:`, error.message || error);
+    return null;
+  }
+}
+
 /**
  * Fetch large historical dataset with pagination.
  * Fetches up to `count` candles by walking backwards in time in chunks of 1000.

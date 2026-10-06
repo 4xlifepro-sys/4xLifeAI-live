@@ -11,11 +11,16 @@ import {
 } from "./server/signal-builder.js";
 import { predictNewsFromCalendar } from "./server/news-prediction.js";
 import { analyzeChartWithGemini } from "./server/gemini-chart-analyzer.js";
+import { extractCopilotSignal, validateCopilotSignal } from "./server/copilot-signal-parser.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { startScanner, scannerState, latestMarketState, rejectionStats } from "./server/scanner.js";
+import { fetchCandlesForTimeframe } from './server/live-market-feed.js';
+import { analyzeStrategyMarket, DEFAULT_STRATEGY_CONFIG, validateStrategyConfig } from './server/strategy-engine.js';
+import { activateStrategyPreset, createStrategyPreset, listStrategyPresets, readStrategyConfig, writeStrategyConfig } from './server/strategy-config.js';
+import { getLatestStrategyAnalyses, getStrategyWorkerState, startStrategyWorker } from './server/strategy-worker.js';
 import { startSessionMessaging, sendSessionUpdate } from "./server/sessionMessaging.js";
 import { supabase } from './server/supabase.js';
 import { formatFreeTpHitMessage, sendTelegramMessage, sendTelegramOutcomeToVipAndFree, sendTelegramToVipAndFree } from './server/telegram.js';
@@ -85,9 +90,44 @@ function sanitizeUnverifiedTimeframes(value: unknown, verifiedTimeframes: Set<st
   }).join(' ').replace(/\s+/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim();
 }
 
-async function readVisibleTimeframes(ai: any, image1: ChartImage, image2: ChartImage | null): Promise<{ image1: string | null; image2: string | null }> {
+function normalizeVisiblePrice(value: unknown): string | null {
+  const raw = String(value || '').trim().replace(/\s+/g, '');
+  if (!/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,8})?$/.test(raw)) return null;
+  const normalized = raw.replace(/,/g, '');
+  const price = Number(normalized);
+  return Number.isFinite(price) && price > 0 ? normalized : null;
+}
+
+function timeframeMinutes(value: string | null): number | null {
+  const match = String(value || '').match(/^(\d+)(MO|M|H|D|W)$/);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unitMinutes: Record<string, number> = { M: 1, H: 60, D: 1440, W: 10080, MO: 43200 };
+  return amount > 0 ? amount * unitMinutes[match[2]] : null;
+}
+
+function chartPricePrecision(pair: unknown): number {
+  const normalizedPair = String(pair || '').toUpperCase();
+  if (normalizedPair.includes('JPY')) return 3;
+  if (normalizedPair.includes('XAU') || normalizedPair.includes('XAG')) return 3;
+  if (/BTC|ETH|SOL/.test(normalizedPair)) return 2;
+  return 5;
+}
+
+function calculateRTargets(direction: string, entry: number, stopLoss: number, pair: unknown): { tp1: string; tp2: string; tp3: string } {
+  const risk = Math.abs(entry - stopLoss);
+  const sign = direction === 'BUY' ? 1 : -1;
+  const precision = chartPricePrecision(pair);
+  return {
+    tp1: (entry + sign * risk).toFixed(precision),
+    tp2: (entry + sign * risk * 2).toFixed(precision),
+    tp3: (entry + sign * risk * 3).toFixed(precision),
+  };
+}
+
+async function readVisibleChartHeaderData(ai: any, image1: ChartImage, image2: ChartImage | null): Promise<{ image1: string | null; image2: string | null; image1Close: string | null; image2Close: string | null }> {
   const parts: any[] = [
-    { text: `Read ONLY the timeframe selector/label visibly printed in the upper-left chart header of each attached screenshot. The crop is a magnified upper-left header region, not a full chart. In TradingView headers, the interval appears between the instrument name and broker, for example “Euro / U.S. Dollar · 15 · Pepperstone” means 15M and “Euro / U.S. Dollar · 5 · Pepperstone” means 5M. Treat a bare 1, 5, 15, or 30 directly after the instrument name as minutes, not hours. Copy each image's visible interval exactly and normalize to 1M, 5M, 15M, 1H, 4H, 1D, etc. Do not use price values, dates, candles, or information from the other image to guess. Return JSON only: {"image1":"<recognized timeframe or UNREADABLE>","image2":"<recognized timeframe or UNREADABLE>"}. Image 1 is the first attached crop; image 2 is the second. If the second image is absent, set image2 to UNREADABLE. Do not return a timeframe not visibly shown.` },
+    { text: `Read the chart header in each magnified crop. Extract TWO fields per image: (1) the visible timeframe selector and (2) the active/current candle Close value explicitly labeled C in the OHLC header. In an OHLC row, the price immediately after the C label is the close. Never take a price from the right price scale, colored horizontal lines, manually drawn levels, indicator labels, bid/ask boxes, or another part of the chart. Only return a close when the number is visibly attached to the C label; otherwise return UNREADABLE. For TradingView headers, the timeframe appears between the instrument name and broker, e.g. “Euro / U.S. Dollar · 15 · Pepperstone” means 15M and “Euro / U.S. Dollar · 5 · Pepperstone” means 5M. Treat bare 1, 5, 15, or 30 as minutes. Return JSON only: {"image1":{"timeframe":"<normalized timeframe or UNREADABLE>","close":"<exact C value or UNREADABLE>"},"image2":{"timeframe":"<normalized timeframe or UNREADABLE>","close":"<exact C value or UNREADABLE>"}}. Image 1 and image 2 refer to the crops in attachment order. If image 2 is absent, set both image2 fields to UNREADABLE. Never infer or invent a value.` },
     { inlineData: { mimeType: image1.mimeType, data: image1.data } },
   ];
   if (image2) parts.push({ inlineData: { mimeType: image2.mimeType, data: image2.data } });
@@ -99,11 +139,13 @@ async function readVisibleTimeframes(ai: any, image1: ChartImage, image2: ChartI
     });
     const result = JSON.parse(response.text || '{}');
     return {
-      image1: normalizeVisibleTimeframe(result.image1),
-      image2: image2 ? normalizeVisibleTimeframe(result.image2) : null,
+      image1: normalizeVisibleTimeframe(result.image1?.timeframe),
+      image2: image2 ? normalizeVisibleTimeframe(result.image2?.timeframe) : null,
+      image1Close: normalizeVisiblePrice(result.image1?.close),
+      image2Close: image2 ? normalizeVisiblePrice(result.image2?.close) : null,
     };
   } catch {
-    return { image1: null, image2: null };
+    return { image1: null, image2: null, image1Close: null, image2Close: null };
   }
 }
 
@@ -571,6 +613,7 @@ async function startServer() {
 
   // Start the background scanner
   await startScanner();
+  startStrategyWorker();
 
   // Start session-based motivational messaging (every 4-6 hours during trading sessions)
   startSessionMessaging();
@@ -1318,14 +1361,20 @@ async function startServer() {
     const direction = trade;
     const entry = num(analysis.entry);
     const sl = num(analysis.stopLoss);
-    const tp1 = num(analysis.tp1);
-    const tp2 = num(analysis.tp2);
-    const tp3 = num(analysis.tp3);
     const confidence = Math.min(80, Math.max(0, Number(analysis.confidence) || 0));
 
-    if (entry === null || sl === null || tp1 === null || tp2 === null || tp3 === null) {
-      return { ok: false, error: 'Missing required price levels' };
+    if (entry === null || sl === null) {
+      return { ok: false, error: 'Missing required Entry or Stop Loss price' };
     }
+    const screenshotPrice = num(analysis.screenshotMarketPrice);
+    if (screenshotPrice === null || entry !== screenshotPrice) {
+      return { ok: false, error: 'Entry must exactly match the active candle close read from the screenshot' };
+    }
+
+    const targetPrices = calculateRTargets(direction, entry, sl, pair);
+    const tp1 = Number(targetPrices.tp1);
+    const tp2 = Number(targetPrices.tp2);
+    const tp3 = Number(targetPrices.tp3);
     if (confidence < 65) {
       return { ok: false, error: 'Confidence below 65: setup must remain WAITING' };
     }
@@ -1495,6 +1544,99 @@ async function startServer() {
     (req as any).user = user;
     next();
   };
+
+  app.get('/api/admin/strategy/config', requireAdmin, async (_req, res) => {
+    const [stored, presetsResult] = await Promise.all([readStrategyConfig(), listStrategyPresets()]);
+    res.json({
+      config: stored.config,
+      storageReady: stored.storageReady,
+      storageError: stored.error,
+      presets: presetsResult.presets,
+      presetError: presetsResult.error || null,
+      worker: getStrategyWorkerState(),
+    });
+  });
+
+  app.get('/api/strategy/analysis', requireAuth, async (_req, res) => {
+    const stored = await readStrategyConfig();
+    if (!stored.storageReady) return res.status(503).json({ analyses: [], error: stored.error || 'Strategy storage is unavailable.' });
+    const result = await getLatestStrategyAnalyses(stored.config.allowedSymbols);
+    if (result.error) return res.status(503).json({ analyses: [], error: result.error });
+    res.json({ active: stored.config.active, analyses: result.analyses });
+  });
+
+  app.put('/api/admin/strategy/config', requireAdmin, async (req, res) => {
+    const checked = validateStrategyConfig(req.body?.config);
+    if (checked.ok === false) return res.status(400).json({ error: checked.errors.join(' ') });
+    const stored = await readStrategyConfig();
+    if (!stored.storageReady) return res.status(503).json({ error: stored.error || 'Strategy storage is not ready.' });
+    const saved = await writeStrategyConfig(checked.config, (req as any).user?.id, stored.config.active, null);
+    if (saved.error || !saved.config) return res.status(503).json({ error: saved.error || 'Strategy could not be saved.' });
+    res.json({ success: true, config: saved.config });
+  });
+
+  app.post('/api/admin/strategy/activate', requireAdmin, async (req, res) => {
+    const checked = validateStrategyConfig(req.body?.config);
+    if (checked.ok === false) return res.status(400).json({ error: checked.errors.join(' ') });
+    const saved = await writeStrategyConfig(checked.config, (req as any).user?.id, true, null);
+    if (saved.error || !saved.config) return res.status(503).json({ error: saved.error || 'Strategy could not be activated.' });
+    res.json({ success: true, config: saved.config, message: 'Strategy is active for signal generation only; no broker orders are placed.' });
+  });
+
+  app.post('/api/admin/strategy/deactivate', requireAdmin, async (req, res) => {
+    const stored = await readStrategyConfig();
+    if (!stored.storageReady) return res.status(503).json({ error: stored.error || 'Strategy storage is not ready.' });
+    const checked = validateStrategyConfig(req.body?.config || stored.config);
+    if (checked.ok === false) return res.status(400).json({ error: checked.errors.join(' ') });
+    const saved = await writeStrategyConfig(checked.config, (req as any).user?.id, false, null);
+    if (saved.error || !saved.config) return res.status(503).json({ error: saved.error || 'Strategy could not be deactivated.' });
+    res.json({ success: true, config: saved.config });
+  });
+
+  app.get('/api/admin/strategy/presets', requireAdmin, async (_req, res) => {
+    const result = await listStrategyPresets();
+    if (result.error) return res.status(503).json({ error: result.error });
+    res.json({ presets: result.presets });
+  });
+
+  app.post('/api/admin/strategy/presets', requireAdmin, async (req, res) => {
+    const result = await createStrategyPreset(req.body?.name, req.body?.description, req.body?.config, (req as any).user?.id);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json({ success: true, preset: result.preset });
+  });
+
+  app.post('/api/admin/strategy/presets/:id/activate', requireAdmin, async (req, res) => {
+    const result = await activateStrategyPreset(req.params.id, (req as any).user?.id);
+    if (result.error || !result.config) return res.status(400).json({ error: result.error || 'Preset could not be activated.' });
+    res.json({ success: true, config: result.config });
+  });
+
+  app.post('/api/admin/strategy/test', requireAdmin, async (req, res) => {
+    const checked = validateStrategyConfig({ ...req.body?.config, active: true });
+    if (checked.ok === false) return res.status(400).json({ error: checked.errors.join(' ') });
+    const pair = String(req.body?.symbol || '').trim().toUpperCase();
+    if (!pair || !checked.config.allowedSymbols.includes(pair)) return res.status(400).json({ error: 'Choose a symbol enabled by this strategy.' });
+    if (!process.env.CTRADER_ACCESS_TOKEN || !process.env.CTRADER_ACCOUNT_ID) return res.status(503).json({ error: 'cTrader live market data is not connected.' });
+    const candles: Record<string, any[]> = {};
+    for (const timeframe of checked.config.timeframes.filter(item => item.enabled)) {
+      candles[timeframe.timeframe] = await fetchCandlesForTimeframe(pair, timeframe.timeframe) || [];
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+    const analysis = analyzeStrategyMarket(pair, candles, checked.config);
+    const userId = (req as any).user?.id;
+    let persistenceWarning: string | null = null;
+    if (supabase && userId) {
+      const { error } = await supabase.from('strategy_test_results').insert({
+        user_id: userId,
+        symbol: pair,
+        strategy_version: checked.config.version,
+        test_config: checked.config,
+        result: analysis,
+      });
+      if (error) persistenceWarning = `Test ran, but its history could not be saved: ${error.message}`;
+    }
+    res.json({ success: true, analysis, persistenceWarning });
+  });
 
   app.post("/api/payments", requireAuth, async (req, res) => {
     if (!supabase) return res.status(500).json({ error: "4x System Error" });
@@ -1941,17 +2083,20 @@ async function startServer() {
       const base64Data2 = image2?.data || '';
       const timeframeImage1 = (timeframeImageBase64 && parseChartImage(timeframeImageBase64)) || image1;
       const timeframeImage2 = (timeframeImageBase64_2 && parseChartImage(timeframeImageBase64_2)) || image2;
-      const visibleTimeframes = await readVisibleTimeframes(ai, timeframeImage1, timeframeImage2);
+      const chartHeaderData = await readVisibleChartHeaderData(ai, timeframeImage1, timeframeImage2);
+      const visibleTimeframes = chartHeaderData;
 
       // Fetch the free Forex Factory high-impact calendar for the news bias
       const calendarEvents = await getEconomicCalendar();
       const tz = typeof timezone === 'string' && timezone ? timezone : undefined;
       const calendarBlock = buildCalendarPromptBlock(calendarEvents, tz);
+      const chartHeaderNotice = `Focused chart-header OCR: IMAGE #1 timeframe=${chartHeaderData.image1 || 'UNREADABLE'}, active candle C=${chartHeaderData.image1Close || 'UNREADABLE'}; IMAGE #2 timeframe=${chartHeaderData.image2 || 'UNREADABLE'}, active candle C=${chartHeaderData.image2Close || 'UNREADABLE'}.`;
       
       const chartAnalyzerPrompt = `You are 4xLifeAI Chart Analyzer, an expert institutional price action analyst specialized in generating actionable trading signals.
 
 HIGH-IMPACT ECONOMIC CALENDAR (red-folder events only, ${tz ? "times in the USER'S LOCAL time" : 'times in GMT/UTC'}):
 ${calendarBlock}
+${chartHeaderNotice}
 
 ${base64Data2 ? `TWO-CHART MODE — TWO screenshots are attached:
 IMAGE #1 (first image) = the primary chart.
@@ -1959,7 +2104,7 @@ IMAGE #2 (second image) = a second chart for the same instrument.
 Read each timeframe from the visible label in the top-left chart header. For TradingView headers, “Euro / U.S. Dollar · 15 · Pepperstone” means 15M and “Euro / U.S. Dollar · 5 · Pepperstone” means 5M. Put both detected intervals in timeframe in image order, such as "15M/5M". Do not assume IMAGE #1 or IMAGE #2 has a particular timeframe.
 ` : `SINGLE-CHART MODE — read the timeframe from the visible label in the top-left chart header. For example, “Euro / U.S. Dollar · 15 · Pepperstone” means 15M. Put the detected interval in timeframe. Do not infer or assume a timeframe.`}Analyze the trading chart screenshot(s) using professional price action methodology.
 
-IMPORTANT: Analyze every attached screenshot in full and use the visible chart evidence for market structure, trend, support/resistance, stop loss, and setup. For Entry, use the latest readable current-price marker from the screenshot with the lowest readable timeframe label; if timeframe labels are unreadable, use IMAGE #1. Do not substitute a live market quote for that screenshot price.
+IMPORTANT: Analyze every attached screenshot in full for structure, trend, support/resistance, stop loss, and setup. For Entry, use the exact C value reported by the focused chart-header OCR above for the screenshot with the lowest verified timeframe. The header's active-candle Close is the screenshot market price. Ignore horizontal drawings and all price-scale labels for Entry. Never substitute a live market quote.
 
 Determine:
 1. Trend (Bullish/Bearish/Range)
@@ -2008,8 +2153,8 @@ CRITICAL RULES FOR SIGNAL GENERATION:
 - For strong downtrends with lower lows: Return SELL if trend is bearish and structure is clear (breakout or pullback both valid)
 - Stop Loss must be beyond the nearest valid swing high/low
 - Never place SL inside market noise
-- ENTRY PRICE RULE: extract the latest visible market price from the current-price marker on the screenshot with the lowest readable timeframe. If timeframe labels are unreadable, use IMAGE #1. Return it as screenshotMarketPrice and use the same value for Entry. Never substitute an external/live quote or a support/resistance, pullback, or stop-order trigger price as Entry. A pending trigger belongs only in triggerPrice.
-- If the chart does not show a readable current price, set screenshotMarketPrice and entry to "N/A", trade to WAIT, and explain that the price is unreadable. Never infer or invent the current price.
+- ENTRY PRICE RULE: the server will set Entry from the focused header OCR's active candle C value for the image with the lowest verified timeframe. Do not replace that value with a horizontal drawing, price-scale label, trigger price, support/resistance, or live quote. A pending trigger belongs only in triggerPrice.
+- If the focused header OCR cannot read the active candle C value, the server sets Entry and risk targets to N/A and forces WAIT. Never infer or invent the current price.
 - ENTRY TYPE RULE: use BUY STOP or SELL STOP only to describe a separate pending trigger, and put that trigger in triggerPrice. Use IMMEDIATE BUY or IMMEDIATE SELL when the screenshot shows a completed directional close and price remains near the valid setup. The Entry field still remains the screenshotMarketPrice.
 - Avoid entries directly AT support/resistance; better entries are fresh breakouts or pullbacks to key levels
 - Never place SL inside market noise
@@ -2135,13 +2280,6 @@ Return the analysis in this exact JSON format:
           : undefined;
         analysis.newsBigMove = analysis.newsHasEvent && analysis.newsBigMove === true;
 
-        const screenshotMarketPrice = Number(analysis.screenshotMarketPrice);
-        analysis.screenshotMarketPrice = Number.isFinite(screenshotMarketPrice) && screenshotMarketPrice > 0
-          ? screenshotMarketPrice.toString()
-          : 'N/A';
-
-        analysis.entry = analysis.screenshotMarketPrice;
-
         const analysisTimeframes = normalizeAnalysisTimeframes(analysis.timeframe);
         const verifiedImage1 = visibleTimeframes.image1 || analysisTimeframes.image1;
         const verifiedImage2 = base64Data2 ? visibleTimeframes.image2 || analysisTimeframes.image2 : null;
@@ -2151,6 +2289,59 @@ Return the analysis in this exact JSON format:
         analysis.timeframe = base64Data2
           ? `${image1Timeframe}/${image2Timeframe}`
           : image1Timeframe;
+
+        let screenshotMarketPrice: string | null = chartHeaderData.image1Close;
+        if (base64Data2) {
+          const image1Minutes = timeframeMinutes(chartHeaderData.image1);
+          const image2Minutes = timeframeMinutes(chartHeaderData.image2);
+          screenshotMarketPrice = image1Minutes !== null && image2Minutes !== null
+            ? image1Minutes <= image2Minutes ? chartHeaderData.image1Close : chartHeaderData.image2Close
+            : null;
+        }
+        const modelEntry = normalizeVisiblePrice(analysis.entry);
+        const modelScreenshotPrice = normalizeVisiblePrice(analysis.screenshotMarketPrice);
+        const currentEntry = screenshotMarketPrice === null ? null : Number(screenshotMarketPrice);
+        analysis.screenshotMarketPrice = screenshotMarketPrice || 'N/A';
+        analysis.entry = screenshotMarketPrice || 'N/A';
+
+        if (currentEntry === null) {
+          analysis.trade = 'WAIT';
+          analysis.stopLoss = 'N/A';
+          analysis.tp1 = 'N/A';
+          analysis.tp2 = 'N/A';
+          analysis.tp3 = 'N/A';
+          analysis.riskReward = 'N/A';
+          analysis.warnings = `Entry blocked: the active candle C value was not clearly readable in the focused header of the lowest-timeframe chart. ${analysis.warnings || ''}`.trim();
+        } else {
+          const stopLossText = normalizeVisiblePrice(analysis.stopLoss);
+          const stopLoss = stopLossText === null ? null : Number(stopLossText);
+          const requestedDirection = String(analysis.trade || '').toUpperCase();
+          const targetDirection = requestedDirection === 'BUY' || requestedDirection === 'SELL'
+            ? requestedDirection
+            : stopLoss !== null && stopLoss > currentEntry ? 'SELL' : 'BUY';
+          const stopIsValid = stopLoss !== null && (targetDirection === 'BUY' ? stopLoss < currentEntry : stopLoss > currentEntry);
+
+          if (!stopIsValid) {
+            analysis.trade = 'WAIT';
+            analysis.stopLoss = stopLossText || 'N/A';
+            analysis.tp1 = 'N/A';
+            analysis.tp2 = 'N/A';
+            analysis.tp3 = 'N/A';
+            analysis.riskReward = 'N/A';
+            analysis.warnings = `Entry blocked: the chart-based Stop Loss is missing, equal to Entry, or on the wrong side of the current screenshot price. ${analysis.warnings || ''}`.trim();
+          } else {
+            analysis.stopLoss = stopLossText;
+            const targets = calculateRTargets(targetDirection, currentEntry, stopLoss, analysis.instrument);
+            analysis.tp1 = targets.tp1;
+            analysis.tp2 = targets.tp2;
+            analysis.tp3 = targets.tp3;
+            analysis.riskReward = '1:3';
+            if (modelEntry !== screenshotMarketPrice || modelScreenshotPrice !== screenshotMarketPrice) {
+              analysis.warnings = `Entry corrected from the model's estimate to the focused OHLC C price ${screenshotMarketPrice}; all R targets were recalculated from this exact screenshot Entry and Stop Loss. ${analysis.warnings || ''}`.trim();
+            }
+          }
+        }
+
         for (const field of ['trend', 'marketStructure', 'reasoning', 'warnings']) {
           if (typeof analysis[field] === 'string') {
             analysis[field] = sanitizeUnverifiedTimeframes(analysis[field], verifiedTimeframes)
@@ -2367,6 +2558,184 @@ Return the analysis in this exact JSON format:
     } catch (e: any) {
       console.error('[signal-builder/history] error:', e);
       res.status(500).json({ error: e.message || 'Failed to load history' });
+    }
+  });
+
+  // ---- Copilot Signal: paste TradingView Copilot analysis → extract → review → publish ----
+
+  app.post("/api/admin/copilot-signal/analyze", requireAdmin, async (req, res) => {
+    try {
+      const text = String(req.body?.text || '').trim();
+      if (!text) return res.status(400).json({ error: 'Paste the complete Copilot analysis first.' });
+      const extraction = extractCopilotSignal(text);
+      const validation = validateCopilotSignal(extraction);
+      const understood = Boolean(extraction.pair || extraction.direction || extraction.entry || extraction.sl);
+      if (!understood) {
+        return res.status(422).json({
+          error: 'Could not reliably extract a signal.',
+          hint: 'Please check that the complete Copilot analysis was pasted.',
+          extraction,
+          missing: validation.missing,
+        });
+      }
+      res.json({ success: true, extraction, missing: validation.missing });
+    } catch (e: any) {
+      console.error('[copilot-signal/analyze] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to analyze pasted text' });
+    }
+  });
+
+  app.post("/api/admin/copilot-signal/publish", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const adminEmail = String((req as any).user?.email || '');
+      const payload = req.body?.extraction || {};
+      const originalCopilotText = String(req.body?.originalText || '');
+
+      const candidate = {
+        pair: String(payload.pair || '').trim(),
+        timeframe: String(payload.timeframe || '').trim(),
+        direction: payload.direction,
+        signalType: payload.signalType,
+        entry: Number(payload.entry),
+        trigger: payload.trigger ? String(payload.trigger) : undefined,
+        triggerPrice: payload.triggerPrice != null ? Number(payload.triggerPrice) : undefined,
+        sl: Number(payload.sl),
+        tp1: payload.tp1 != null && payload.tp1 !== '' ? Number(payload.tp1) : undefined,
+        tp2: payload.tp2 != null && payload.tp2 !== '' ? Number(payload.tp2) : undefined,
+        tp3: payload.tp3 != null && payload.tp3 !== '' ? Number(payload.tp3) : undefined,
+        confidence: payload.confidence != null && payload.confidence !== '' ? Number(payload.confidence) : undefined,
+        trend: payload.trend ? String(payload.trend) : undefined,
+        strategy: String(payload.strategy || '').trim(),
+        reason: payload.reason ? String(payload.reason) : undefined,
+        status: payload.status,
+      };
+
+      const pair = candidate.pair.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const validation = validateCopilotSignal({ ...candidate, pair });
+      if (!validation.ok) {
+        return res.status(400).json({ error: 'SIGNAL INCOMPLETE — missing: ' + validation.missing.join(', '), missing: validation.missing });
+      }
+
+      const isStop = candidate.signalType === 'BUY STOP' || candidate.signalType === 'SELL STOP';
+      const dbStatus = isStop ? 'WAITING_TRIGGER' : 'LIVE';
+      const confidence = Math.min(80, Math.max(0, Math.round(candidate.confidence)));
+      const tier = confidence >= 75 ? 'Strong' : confidence >= 70 ? 'Good' : confidence >= 65 ? 'Valid' : 'Reject';
+      const now = new Date().toISOString();
+      const isLong = candidate.direction === 'BUY';
+
+      const signalPayload: any = {
+        id: randomUUID(),
+        pair,
+        direction: candidate.direction,
+        bias: isLong ? 'BULLISH' : 'BEARISH',
+        score: confidence,
+        tier,
+        confidence: Math.min(10, Math.max(1, Math.round(confidence / 10))),
+        entry: candidate.entry,
+        entry_price: candidate.entry,
+        sl: candidate.sl,
+        original_sl: candidate.sl,
+        tp1: candidate.tp1 ?? null,
+        tp2: candidate.tp2 ?? null,
+        tp3: candidate.tp3 ?? null,
+        timeframe: candidate.timeframe,
+        signal_type: candidate.signalType,
+        trigger_price: candidate.triggerPrice ?? null,
+        trend: candidate.trend ?? null,
+        strategy: candidate.strategy,
+        analysis_reason: candidate.reason ?? null,
+        original_copilot_text: originalCopilotText,
+        created_at: now,
+        timestamp: now,
+        status: dbStatus,
+        is_active: true,
+        result: null,
+        pips_won: null,
+        pips_lost: null,
+      };
+
+      // Close any previous active signal for this pair, matching the existing publish flow.
+      await supabase
+        .from('signals')
+        .update({ status: 'CLOSED', is_active: false, closed_at: now, result: 'CANCELLED' })
+        .eq('pair', pair)
+        .in('status', ['LIVE', 'TP1_HIT', 'TP2_HIT'])
+        .eq('is_active', true);
+
+      const { data: inserted, error: insertError } = await supabase.from('signals').insert([signalPayload]).select('*').maybeSingle();
+      if (insertError) {
+        if (/signal_type|trigger_price|original_copilot_text|timeframe|strategy|schema cache/i.test(insertError.message)) {
+          return res.status(503).json({ error: 'Database migration required: apply copilot-signal-migration.sql (and required-migrations.sql) to Supabase before publishing Copilot signals.' });
+        }
+        return res.status(500).json({ error: insertError.message });
+      }
+
+      // Notify both Telegram channels, consistent with the rest of the platform.
+      let telegramSent = false;
+      try {
+        const emoji = isLong ? '🟢' : '🔴';
+        const tpLines = [
+          candidate.tp1 != null ? `TP1: ${candidate.tp1}` : null,
+          candidate.tp2 != null ? `TP2: ${candidate.tp2}` : null,
+          candidate.tp3 != null ? `TP3: ${candidate.tp3}` : null,
+        ].filter(Boolean).join('\n');
+        telegramSent = await sendTelegramToVipAndFree(
+          `${emoji} <b>4xLifeAI SIGNAL</b>\n\n`
+          + `Pair: ${pair}\n`
+          + `Signal: ${candidate.signalType}\n`
+          + `Timeframe: ${candidate.timeframe}\n\n`
+          + `Entry: ${candidate.entry}\n`
+          + (isStop && candidate.trigger ? `Trigger: ${candidate.trigger}\n` : '')
+          + `SL: ${candidate.sl}\n`
+          + `${tpLines}\n`
+          + `Confidence: ${confidence}/80\n`
+          + `Strategy: ${candidate.strategy}\n\n`
+          + `Status: ${isStop ? 'WAITING FOR TRIGGER' : 'ACTIVE'}`,
+        );
+      } catch (telegramError: any) {
+        console.error('[copilot-signal/publish] telegram notification failed:', telegramError?.message || telegramError);
+      }
+
+      const { MANUAL_OVERRIDE_PAIRS } = await import('./server/scanner.js');
+      MANUAL_OVERRIDE_PAIRS.add(pair);
+
+      res.json({ success: true, signal: inserted || signalPayload, telegramSent });
+    } catch (e: any) {
+      console.error('[copilot-signal/publish] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to publish signal' });
+    }
+  });
+
+  app.post("/api/admin/copilot-signal/:id/status", requireAdmin, async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: "Database unavailable" });
+      const requested = String(req.body?.status || '').toUpperCase();
+      const allowed: Record<string, { status: string; isActive: boolean; result: string | null }> = {
+        'WAITING FOR TRIGGER': { status: 'WAITING_TRIGGER', isActive: true, result: null },
+        'ACTIVE': { status: 'LIVE', isActive: true, result: null },
+        'TP1 HIT': { status: 'TP1_HIT', isActive: true, result: null },
+        'TP2 HIT': { status: 'TP2_HIT', isActive: true, result: null },
+        'TP3 HIT': { status: 'TP3_HIT', isActive: false, result: 'TP3' },
+        'SL HIT': { status: 'STOP_LOSS_HIT', isActive: false, result: 'SL' },
+        'CANCELLED': { status: 'CLOSED', isActive: false, result: 'CANCELLED' },
+        'EXPIRED': { status: 'CLOSED', isActive: false, result: 'EXPIRED' },
+      };
+      const mapped = allowed[requested];
+      if (!mapped) return res.status(400).json({ error: 'Invalid status. Allowed: ' + Object.keys(allowed).join(', ') });
+      const now = new Date().toISOString();
+      const update: any = { status: mapped.status, is_active: mapped.isActive, updated_at: now };
+      if (!mapped.isActive) {
+        update.closed_at = now;
+        update.result = mapped.result;
+      }
+      const { data: updated, error } = await supabase.from('signals').update(update).eq('id', req.params.id).select('*').maybeSingle();
+      if (error) return res.status(500).json({ error: error.message });
+      if (!updated) return res.status(404).json({ error: 'Signal not found' });
+      res.json({ success: true, signal: updated });
+    } catch (e: any) {
+      console.error('[copilot-signal/status] error:', e);
+      res.status(500).json({ error: e.message || 'Failed to update status' });
     }
   });
 

@@ -262,6 +262,12 @@ export default function ChartAnalyzer() {
         setResult(current => current ? {
           ...current,
           entry: String(data.signal.entry_price),
+          screenshotMarketPrice: String(data.signal.entry_price),
+          stopLoss: String(data.signal.sl),
+          tp1: String(data.signal.tp1),
+          tp2: String(data.signal.tp2),
+          tp3: String(data.signal.tp3),
+          riskReward: '1:3',
         } : current);
       }
       setPublishMessage('Published to Today Signals, All Signals, and Engine Signal.');
@@ -574,7 +580,7 @@ export default function ChartAnalyzer() {
                 {result.trade.toUpperCase() === 'SELL' && '🔽 Use these prices to SELL'}
                 {result.trade.toUpperCase() === 'WAIT' && '⏸️ Wait for a better setup - do NOT trade now'}
               </p>
-              <p className="text-xs text-slate-500">Entry uses the visible current-price marker from the lowest-timeframe screenshot. Screenshot price: {result.screenshotMarketPrice || 'Unavailable'}.</p>
+              <p className="text-xs text-slate-500">Entry is locked to the active candle’s C close in the lowest-timeframe chart header. Screenshot close: {result.screenshotMarketPrice || 'Unavailable'}.</p>
 
               {result.trade.toUpperCase() === 'WAIT' && (
                 <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 flex items-start gap-2.5">
