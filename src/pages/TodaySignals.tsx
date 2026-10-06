@@ -164,12 +164,14 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
             >
               <div className="p-4 border-b border-[#1A2332] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-[#070B12]">
                 <div className="flex items-center gap-3">
-                  <h3 className="text-lg font-bold text-white tracking-tight">{signal.pair}</h3>
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    {signal.pair}{signal.timeframe ? ` · ${signal.timeframe}` : ''}
+                  </h3>
                   <span className={cn(
                     "px-2 py-0.5 rounded text-xs font-medium uppercase",
                     signal.direction === 'LONG' || signal.direction === 'BUY' ? "bg-[#00E08A]/10 text-[#00E08A]" : "bg-[#FF4D6D]/10 text-[#FF4D6D]"
                   )}>
-                    {signal.direction}
+                    {signal.signal_type || signal.direction}
                   </span>
                 </div>
                 {(() => {
@@ -178,6 +180,8 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     const isBreakeven = Boolean(signal.breakeven_at);
                     const liveLabel = signal.breakeven_at
                       ? 'SL AT ENTRY - ACTIVE'
+                      : signal.status === 'WAITING_TRIGGER'
+                      ? 'WAITING FOR TRIGGER'
                       : signal.status === 'TP2_HIT'
                       ? 'TP2 SECURED - WAITING TP3'
                       : signal.status === 'TP1_HIT'
@@ -278,6 +282,12 @@ CONFIDENCE: ${signal.aiConfidence ? signal.aiConfidence + '%' : '-'}`;
                     <p className="text-[#F5A524] font-medium">{signal.aiConfidence ? `${signal.aiConfidence}%` : '-'}</p>
                   </div>
                 </div>
+                {(signal.strategy || signal.analysis_reason) && (
+                  <div className="space-y-1 border-t border-[#1A2332] pt-3">
+                    {signal.strategy && <p className="text-xs font-semibold text-[#C8D0DC]">Strategy: {signal.strategy}</p>}
+                    {signal.analysis_reason && <p className="text-xs leading-relaxed text-[#8A95A5]">{signal.analysis_reason}</p>}
+                  </div>
+                )}
                 {signal.news_event && signal.news_prediction && (
                   <div className="rounded-lg border border-amber-400/30 bg-amber-500/5 px-3 py-3">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">

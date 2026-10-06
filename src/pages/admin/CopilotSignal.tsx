@@ -11,7 +11,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 type Direction = 'BUY' | 'SELL';
-type SignalType = 'BUY' | 'SELL' | 'BUY STOP' | 'SELL STOP';
+type SignalType = 'BUY' | 'SELL' | 'BUY STOP' | 'SELL STOP' | 'BUY LIMIT' | 'SELL LIMIT';
 
 interface Extraction {
   pair?: string;
@@ -33,7 +33,7 @@ interface Extraction {
 }
 
 const STATUSES = ['WAITING FOR TRIGGER', 'ACTIVE', 'TP1 HIT', 'TP2 HIT', 'TP3 HIT', 'SL HIT', 'CANCELLED', 'EXPIRED'];
-const DIRECTIONS: SignalType[] = ['BUY', 'SELL', 'BUY STOP', 'SELL STOP'];
+const DIRECTIONS: SignalType[] = ['BUY', 'SELL', 'BUY STOP', 'SELL STOP', 'BUY LIMIT', 'SELL LIMIT'];
 const TIMEFRAMES = ['1M', '3M', '5M', '15M', '30M', '1H', '2H', '4H', '1D', '1W'];
 
 function num(v: number | string | undefined): number | undefined {
@@ -66,6 +66,7 @@ export default function CopilotSignal() {
   const [hint, setHint] = useState('');
   const [notice, setNotice] = useState('');
   const [publishedId, setPublishedId] = useState<string | null>(null);
+  const [confirmNoConfidence, setConfirmNoConfidence] = useState(false);
 
   const update = (patch: Partial<Extraction>) => {
     setExtraction((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -82,15 +83,16 @@ export default function CopilotSignal() {
     if (!num(extraction.sl)) list.push('SL');
     if (!num(extraction.tp1)) list.push('TP1');
     const conf = extraction.confidence;
-    if (conf === undefined || conf === null || conf === '' || !Number.isFinite(Number(conf))) list.push('CONFIDENCE');
-    else if (Number(conf) < 0 || Number(conf) > 80) list.push('CONFIDENCE (must be 0-80)');
+    if (conf === undefined || conf === null || conf === '' || !Number.isFinite(Number(conf))) {
+      if (!confirmNoConfidence) list.push('CONFIDENCE (admin confirmation required)');
+    } else if (Number(conf) < 0 || Number(conf) > 80) list.push('CONFIDENCE (must be 0-80)');
     if (!extraction.strategy?.trim()) list.push('STRATEGY');
     if (!STATUSES.includes(extraction.status)) list.push('STATUS');
     if (extraction.status === 'NO TRADE' || extraction.status === 'WAITING') list.push(`TRADE DECISION (Copilot returned ${extraction.status})`);
     if (extraction.direction === 'BUY' && num(extraction.sl) !== undefined && num(extraction.entry) !== undefined && (num(extraction.sl) as number) >= (num(extraction.entry) as number)) list.push('SL (must be below Entry for BUY)');
     if (extraction.direction === 'SELL' && num(extraction.sl) !== undefined && num(extraction.entry) !== undefined && (num(extraction.sl) as number) <= (num(extraction.entry) as number)) list.push('SL (must be above Entry for SELL)');
     return list;
-  }, [extraction]);
+  }, [extraction, confirmNoConfidence]);
 
   const priceModified = useMemo(() => {
     if (!extraction || !original) return false;
@@ -107,6 +109,7 @@ export default function CopilotSignal() {
     setHint('');
     setNotice('');
     setPublishedId(null);
+    setConfirmNoConfidence(false);
     if (!text.trim()) {
       setError('Paste the complete Copilot analysis first.');
       return;
@@ -149,7 +152,7 @@ export default function CopilotSignal() {
       const res = await fetch('/api/admin/copilot-signal/publish', {
         method: 'POST',
         headers: await authHeaders(),
-        body: JSON.stringify({ extraction, originalText: text }),
+        body: JSON.stringify({ extraction, originalText: text, confidenceAbsentConfirmed: confirmNoConfidence }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -175,6 +178,7 @@ export default function CopilotSignal() {
     setNotice('');
     setPublishedId(null);
     setEditMode(false);
+    setConfirmNoConfidence(false);
   };
 
   const isBuy = extraction?.direction === 'BUY';
@@ -312,6 +316,17 @@ export default function CopilotSignal() {
                 <div className="mt-1 text-xs text-[#8A95A5]">Click EDIT to fill missing fields manually, or paste a more complete analysis.</div>
               </div>
             )}
+            {extraction.confidence == null && (
+              <label className="mt-4 flex items-start gap-3 rounded-xl border border-[#FFB020]/30 bg-[#FFB020]/10 p-4 text-sm text-[#FFB020]">
+                <input
+                  type="checkbox"
+                  checked={confirmNoConfidence}
+                  onChange={(event) => setConfirmNoConfidence(event.target.checked)}
+                  className="mt-1 accent-[#39ff14]"
+                />
+                <span>I confirm Copilot did not provide a numeric confidence score. Publish as NOT PROVIDED; do not infer one.</span>
+              </label>
+            )}
             {priceModified && (
               <div className="mt-4 rounded-xl p-3 text-sm font-bold bg-[#FFB020]/10 border border-[#FFB020]/30 text-[#FFB020] flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" />
@@ -349,7 +364,11 @@ export default function CopilotSignal() {
                   value={extraction.signalType || ''}
                   onChange={(e) => {
                     const st = e.target.value as SignalType;
-                    update({ signalType: st, direction: st.startsWith('BUY') ? 'BUY' : 'SELL' });
+                    update({
+                      signalType: st,
+                      direction: st.startsWith('BUY') ? 'BUY' : 'SELL',
+                      status: /(?:STOP|LIMIT)$/.test(st) ? 'WAITING FOR TRIGGER' : 'ACTIVE',
+                    });
                   }}
                   className="w-full bg-[#0D1017] border border-[#202735] rounded-xl p-3 text-white focus:outline-none focus:border-[#00E08A]/50"
                 >

@@ -788,8 +788,8 @@ async function startServer() {
       newsReason: d.news_reason || d.newsReason,
           entry: d.entry_price,
           timestamp: d.created_at,
-          aiConfidence: (d.confidence || 0) * 10,
-          score: d.score || ((d.confidence || 0) * 10),
+          aiConfidence: d.aiConfidence ?? ((d.confidence || 0) * 10),
+          score: d.score ?? d.aiConfidence ?? ((d.confidence || 0) * 10),
         }));
       }
 
@@ -866,8 +866,8 @@ async function startServer() {
           breakeven_at: d.breakeven_at,
           entry: d.entry_price,
           timestamp: d.created_at,
-          aiConfidence: (d.confidence || 0) * 10,
-          score: d.score || ((d.confidence || 0) * 10),
+          aiConfidence: d.aiConfidence ?? ((d.confidence || 0) * 10),
+          score: d.score ?? d.aiConfidence ?? ((d.confidence || 0) * 10),
         })));
         return;
       }
@@ -1255,9 +1255,15 @@ async function startServer() {
         news_prediction: d.news_prediction,
         news_probability: d.news_probability,
         news_reason: d.news_reason,
+        timeframe: d.timeframe,
+        signal_type: d.signal_type,
+        trigger_price: d.trigger_price,
+        strategy: d.strategy,
+        trend: d.trend,
+        analysis_reason: d.analysis_reason,
         confidence: d.confidence,
-        aiConfidence: (d.confidence || 0) * 10,
-        score: d.score || d.confidence,
+        aiConfidence: d.aiConfidence ?? ((d.confidence || 0) * 10),
+        score: d.score ?? d.aiConfidence ?? ((d.confidence || 0) * 10),
         status: d.status,
         is_active: d.is_active,
         result: d.result,
@@ -2612,15 +2618,16 @@ Return the analysis in this exact JSON format:
       };
 
       const pair = candidate.pair.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const validation = validateCopilotSignal({ ...candidate, pair });
+      const confidenceAbsentConfirmed = req.body?.confidenceAbsentConfirmed === true;
+      const validation = validateCopilotSignal({ ...candidate, pair }, confidenceAbsentConfirmed);
       if (!validation.ok) {
         return res.status(400).json({ error: 'SIGNAL INCOMPLETE — missing: ' + validation.missing.join(', '), missing: validation.missing });
       }
 
-      const isStop = candidate.signalType === 'BUY STOP' || candidate.signalType === 'SELL STOP';
-      const dbStatus = isStop ? 'WAITING_TRIGGER' : 'LIVE';
-      const confidence = Math.min(80, Math.max(0, Math.round(candidate.confidence)));
-      const tier = confidence >= 75 ? 'Strong' : confidence >= 70 ? 'Good' : confidence >= 65 ? 'Valid' : 'Reject';
+      const isPending = candidate.signalType === 'BUY STOP' || candidate.signalType === 'SELL STOP' || candidate.signalType === 'BUY LIMIT' || candidate.signalType === 'SELL LIMIT';
+      const dbStatus = isPending ? 'WAITING_TRIGGER' : 'LIVE';
+      const confidence = candidate.confidence == null ? null : Math.min(80, Math.max(0, Math.round(candidate.confidence)));
+      const tier = confidence == null ? 'Unrated' : confidence >= 75 ? 'Strong' : confidence >= 70 ? 'Good' : confidence >= 65 ? 'Valid' : 'Reject';
       const now = new Date().toISOString();
       const isLong = candidate.direction === 'BUY';
 
@@ -2631,7 +2638,8 @@ Return the analysis in this exact JSON format:
         bias: isLong ? 'BULLISH' : 'BEARISH',
         score: confidence,
         tier,
-        confidence: Math.min(10, Math.max(1, Math.round(confidence / 10))),
+        confidence: confidence == null ? null : Math.min(10, Math.max(1, Math.round(confidence / 10))),
+        aiConfidence: confidence,
         entry: candidate.entry,
         entry_price: candidate.entry,
         sl: candidate.sl,
@@ -2686,12 +2694,12 @@ Return the analysis in this exact JSON format:
           + `Signal: ${candidate.signalType}\n`
           + `Timeframe: ${candidate.timeframe}\n\n`
           + `Entry: ${candidate.entry}\n`
-          + (isStop && candidate.trigger ? `Trigger: ${candidate.trigger}\n` : '')
+          + (isPending && candidate.trigger ? `Trigger: ${candidate.trigger}\n` : '')
           + `SL: ${candidate.sl}\n`
           + `${tpLines}\n`
-          + `Confidence: ${confidence}/80\n`
+          + `Confidence: ${confidence == null ? 'NOT PROVIDED' : `${confidence}/80`}\n`
           + `Strategy: ${candidate.strategy}\n\n`
-          + `Status: ${isStop ? 'WAITING FOR TRIGGER' : 'ACTIVE'}`,
+          + `Status: ${isPending ? 'WAITING FOR TRIGGER' : 'ACTIVE'}`,
         );
       } catch (telegramError: any) {
         console.error('[copilot-signal/publish] telegram notification failed:', telegramError?.message || telegramError);

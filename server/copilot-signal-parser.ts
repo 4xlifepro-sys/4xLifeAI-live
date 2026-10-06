@@ -3,7 +3,7 @@
 // No AI calls, no scraping, no price calculation — pure text parsing only.
 
 export type CopilotDirection = 'BUY' | 'SELL';
-export type CopilotSignalType = 'BUY' | 'SELL' | 'BUY STOP' | 'SELL STOP';
+export type CopilotSignalType = 'BUY' | 'SELL' | 'BUY STOP' | 'SELL STOP' | 'BUY LIMIT' | 'SELL LIMIT';
 export type CopilotStatus = 'WAITING FOR TRIGGER' | 'ACTIVE' | 'WAITING' | 'NO TRADE';
 
 export interface CopilotSignalExtraction {
@@ -100,22 +100,23 @@ function extractDirectionAndType(text: string): { direction?: CopilotDirection; 
   // NO TRADE always wins — never publish it as a trade.
   if (/\bNO[\s\-]?TRADE\b/.test(upper)) return { blocked: 'NO TRADE' };
 
-  // Labeled trade decision first: "Trade: BUY", "Signal: SELL", "Direction: LONG"
+  // Labeled decision first: "Decision: BUY LIMIT", "Signal: SELL STOP", "Direction: LONG"
   const labeled = firstMatch(upper, [
-    new RegExp(String.raw`\b(?:TRADE|SIGNAL|DIRECTION|DECISION|BIAS|POSITION)\s*[:\-]?\s*(BUY\s*STOP|SELL\s*STOP|BUY|SELL|LONG|SHORT|WAIT|WAITING)\b`),
+    new RegExp(String.raw`\b(?:TRADE|SIGNAL|DIRECTION|DECISION|BIAS|POSITION)\s*[:\-]?\s*(BUY\s*(?:STOP|LIMIT)|SELL\s*(?:STOP|LIMIT)|BUY|SELL|LONG|SHORT|WAIT|WAITING)\b`),
   ]);
   const candidates: string[] = [];
   if (labeled) candidates.push(labeled);
-  // Then any explicit signal-type mention anywhere
   if (/\bBUY\s*STOP\b/.test(upper)) candidates.push('BUY STOP');
   if (/\bSELL\s*STOP\b/.test(upper)) candidates.push('SELL STOP');
+  if (/\bBUY\s*LIMIT\b/.test(upper)) candidates.push('BUY LIMIT');
+  if (/\bSELL\s*LIMIT\b/.test(upper)) candidates.push('SELL LIMIT');
 
   let signalType: CopilotSignalType | undefined;
   let direction: CopilotDirection | undefined;
   for (const c of candidates) {
     const v = c.replace(/\s+/g, ' ').trim();
-    if (v === 'BUY STOP') { signalType = 'BUY STOP'; direction = 'BUY'; break; }
-    if (v === 'SELL STOP') { signalType = 'SELL STOP'; direction = 'SELL'; break; }
+    if (v === 'BUY STOP' || v === 'BUY LIMIT') { signalType = v; direction = 'BUY'; break; }
+    if (v === 'SELL STOP' || v === 'SELL LIMIT') { signalType = v; direction = 'SELL'; break; }
     if (v === 'BUY' || v === 'LONG') { direction = 'BUY'; break; }
     if (v === 'SELL' || v === 'SHORT') { direction = 'SELL'; break; }
     if (v === 'WAIT' || v === 'WAITING') return { blocked: 'WAITING' };
@@ -134,7 +135,7 @@ function extractDirectionAndType(text: string): { direction?: CopilotDirection; 
 function extractLabeledPrice(text: string, labels: string[]): number | undefined {
   const labelAlt = labels.join('|');
   const patterns = [
-    new RegExp(String.raw`\b(?:${labelAlt})\s*[:\-]?\s*(${PRICE})\b`, 'i'),
+    new RegExp(String.raw`\b(?:${labelAlt})\s*[:\-@]?\s*(${PRICE})\b`, 'i'),
     new RegExp(String.raw`\b(${PRICE})\s*\(?\s*(?:${labelAlt})\)?\b`, 'i'),
   ];
   const raw = firstMatch(text, patterns);
@@ -143,7 +144,7 @@ function extractLabeledPrice(text: string, labels: string[]): number | undefined
 
 function extractTrigger(text: string): { trigger?: string; triggerPrice?: number } {
   // "5M close above 0.69828", "closes below 0.698", "trigger at 0.69830"
-  const closeRe = new RegExp(String.raw`(\S+\s+)?(?:close|closes|closing)\s+(above|below)\s+(${PRICE})`, 'i');
+  const closeRe = new RegExp(String.raw`(?:trigger(?:\s+condition)?\s*[:\-]?\s*|only\s+after\s+|buy\s+only\s+after\s+|sell\s+only\s+after\s+)(?:(\S+)\s+)?(?:close|closes|closing)\s+(above|below)\s+(${PRICE})`, 'i');
   const closeM = text.match(closeRe);
   if (closeM) {
     const prefix = (closeM[1] || '').trim().toUpperCase();
@@ -217,12 +218,14 @@ function extractReason(text: string): string | undefined {
     const reason = labeled[1].split(/\n+/)[0].trim();
     if (reason) return reason;
   }
+  const verdict = text.match(/\bVERDICT\s*[—–:\-]\s*([^\n]+)/i);
+  if (verdict) return verdict[1].trim();
   return undefined;
 }
 
 export function extractCopilotSignal(text: string): CopilotSignalExtraction {
   const { direction, signalType, blocked } = extractDirectionAndType(text);
-  const entry = extractLabeledPrice(text, ['ENTRY', 'ENTRY PRICE', 'ENTER', 'BUY AT', 'SELL AT', 'LONG AT', 'SHORT AT', 'OPEN']);
+  const entry = extractLabeledPrice(text, ['ENTRY', 'ENTRY PRICE', 'ENTER', 'BUY LIMIT', 'SELL LIMIT', 'BUY AT', 'SELL AT', 'LONG AT', 'SHORT AT', 'OPEN']);
   const sl = extractLabeledPrice(text, ['SL', 'STOP LOSS', 'STOP-LOSS', 'STOP', 'ST']);
   const tp1 = extractLabeledPrice(text, ['TP1', 'TP 1', 'T1', 'TARGET 1', 'FIRST TARGET', 'TP']);
   const tp2 = extractLabeledPrice(text, ['TP2', 'TP 2', 'T2', 'TARGET 2', 'SECOND TARGET', 'MAIN TARGET']);
@@ -233,7 +236,7 @@ export function extractCopilotSignal(text: string): CopilotSignalExtraction {
   let status: CopilotStatus;
   if (blocked === 'NO TRADE') status = 'NO TRADE';
   else if (blocked === 'WAITING') status = 'WAITING';
-  else if (signalType === 'BUY STOP' || signalType === 'SELL STOP') status = 'WAITING FOR TRIGGER';
+  else if (signalType === 'BUY STOP' || signalType === 'SELL STOP' || signalType === 'BUY LIMIT' || signalType === 'SELL LIMIT') status = 'WAITING FOR TRIGGER';
   else if (direction) status = 'ACTIVE';
   else status = 'WAITING';
 
@@ -258,7 +261,7 @@ export function extractCopilotSignal(text: string): CopilotSignalExtraction {
   };
 }
 
-export function validateCopilotSignal(e: Partial<CopilotSignalExtraction>): { ok: boolean; missing: string[] } {
+export function validateCopilotSignal(e: Partial<CopilotSignalExtraction>, allowMissingConfidence = false): { ok: boolean; missing: string[] } {
   const missing: string[] = [];
   if (!e.pair) missing.push('SYMBOL');
   if (!e.timeframe) missing.push('TIMEFRAME');
@@ -267,8 +270,9 @@ export function validateCopilotSignal(e: Partial<CopilotSignalExtraction>): { ok
   if (!e.entry) missing.push('ENTRY');
   if (!e.sl) missing.push('SL');
   if (!e.tp1) missing.push('TP1');
-  if (e.confidence == null) missing.push('CONFIDENCE');
-  else if (e.confidence < 0 || e.confidence > 80) missing.push('CONFIDENCE (must be 0-80)');
+  if (e.confidence == null) {
+    if (!allowMissingConfidence) missing.push('CONFIDENCE');
+  } else if (e.confidence < 0 || e.confidence > 80) missing.push('CONFIDENCE (must be 0-80)');
   if (!e.strategy) missing.push('STRATEGY');
   if (!e.status || !['WAITING FOR TRIGGER', 'ACTIVE', 'TP1 HIT', 'TP2 HIT', 'TP3 HIT', 'SL HIT', 'CANCELLED', 'EXPIRED'].includes(e.status)) {
     missing.push('STATUS');
