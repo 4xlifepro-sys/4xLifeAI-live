@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Home as HomeIcon, User, Share2, Sparkles, Cpu, LifeBuoy, Activity, LogOut, Shield, MoreVertical, Menu, X, Scan, Calculator } from 'lucide-react';
+import { LayoutDashboard, Home as HomeIcon, User, Share2, Sparkles, Cpu, LifeBuoy, Activity, LogOut, Shield, MoreVertical, Menu, X, Scan, Calculator, KeyRound } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -22,6 +22,7 @@ import Plans from './pages/Plans';
 import AICoach from './pages/AICoach';
 import ChartAnalyzer from './pages/ChartAnalyzer';
 import Support from './pages/Support';
+import License from './pages/License';
 import Signals from './pages/Signals';
 import TodaySignals from './pages/TodaySignals';
 import Calculators from './pages/Calculators';
@@ -110,11 +111,13 @@ function GlobalLayout() {
     { path: '/calculators', label: 'Calculators', icon: Calculator },
     { path: '/plans', label: 'Plans', icon: Sparkles },
     { path: '/ai-coach', label: 'AI Coach', icon: Cpu },
+    { path: '/license', label: 'License', icon: KeyRound },
     { path: '/account', label: 'Account', icon: User },
     ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: Shield }] : []),
   ] : [
     { path: '/', label: 'Home', icon: HomeIcon },
     { path: '/plans', label: 'Plans', icon: Sparkles },
+    { path: '/license', label: 'License', icon: KeyRound },
     { path: '/support', label: 'Support', icon: LifeBuoy },
   ];
 
@@ -125,6 +128,7 @@ function GlobalLayout() {
     { path: '/calculators', label: 'Calculators', icon: Calculator },
     { path: '/plans', label: 'Plans', icon: Sparkles },
     { path: '/ai-coach', label: 'AI Coach', icon: Cpu },
+    { path: '/license', label: 'License', icon: KeyRound },
     { path: '/account', label: 'Account', icon: User },
     ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: Shield }] : []),
     { path: '/trades', label: 'Trade Monitor', icon: Activity },
@@ -134,6 +138,7 @@ function GlobalLayout() {
   ] : [
     { path: '/', label: 'Home', icon: HomeIcon },
     { path: '/plans', label: 'Plans', icon: Sparkles },
+    { path: '/license', label: 'License', icon: KeyRound },
     { path: '/support', label: 'Support', icon: LifeBuoy },
   ];
 
@@ -383,6 +388,7 @@ function GlobalLayout() {
           <Route path="/" element={<Home />} />
           <Route path="/plans" element={<Plans />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/license" element={<License />} />
           
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
