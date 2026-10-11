@@ -72,6 +72,33 @@ export default function License() {
       <p className="text-center text-xs text-[#5D6B80] mt-10">
         Warning: trading involves risk. A license gives access to the software — it does not guarantee profit.
       </p>
+
+      <div className="mt-12">
+        <h2 className="text-xl font-bold text-white text-center mb-6">Subscription Plans</h2>
+        <div className="grid sm:grid-cols-3 gap-4">
+          {[
+            { name: 'Starter', price: '$15', features: ['All 9 strategies', '1 MT5 account', 'EA file download'] },
+            { name: 'Pro', price: '$25', features: ['All 9 strategies', '1 MT5 account', 'Priority support'] },
+            { name: 'VIP', price: '$40', features: ['All 9 strategies', '2 MT5 accounts', 'Priority support'] },
+          ].map((p, i) => (
+            <div key={p.name} className={`rounded-2xl border p-6 bg-[#0B0F16] text-center ${i === 1 ? 'border-cyan-500/40' : 'border-[#202735]'}`}>
+              <div className="text-sm font-bold tracking-widest text-[#8A95A5] uppercase">{p.name}</div>
+              <div className="text-3xl font-black text-white mt-2">{p.price}<span className="text-sm font-normal text-[#8A95A5]"> / month</span></div>
+              <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                {p.features.map(f => (
+                  <li key={f} className="flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-sm text-[#8A95A5] mt-6">
+          To subscribe, visit the <a href="/plans" className="text-cyan-400 underline">Plans page</a> to pay.
+          After your payment is confirmed, the seller activates your license and it appears in the Customer Portal above.
+        </p>
+      </div>
     </div>
   );
 }
